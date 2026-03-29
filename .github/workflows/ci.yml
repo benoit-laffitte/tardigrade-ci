@@ -88,6 +88,18 @@ jobs:
         run: |
           make docker-scan
 
+      - name: Smoke-check image binaries
+        run: |
+          docker run --rm --entrypoint /usr/local/bin/tardigrade-server tardigrade-server:local --help >/dev/null 2>&1 || {
+            echo "tardigrade-server binary failed to execute inside image";
+            exit 1;
+          }
+
+          docker run --rm --entrypoint /usr/local/bin/tardigrade-worker tardigrade-worker:local --help >/dev/null 2>&1 || {
+            echo "tardigrade-worker binary failed to execute inside image";
+            exit 1;
+          }
+
   pipeline-summary-gate:
     name: Pipeline Summary Gate
     runs-on: ubuntu-latest

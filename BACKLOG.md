@@ -77,9 +77,9 @@ Definition of done:
 
 Goal: make Tardigrade CI clearly usable for Rust, Python, Java, and other stacks with first-class examples and execution defaults.
 
-- [ ] `TECH-01` Define technology profile model (language/runtime/build strategy metadata).
-- [ ] `TECH-02` Provide built-in profile catalog for Rust, Python, Java, Node, and Go.
-- [ ] `TECH-03` Add pipeline examples for each profile in docs (`docs/pipeline-recipes.md`).
+- [x] `TECH-01` Define technology profile model (language/runtime/build strategy metadata).
+- [x] `TECH-02` Provide built-in profile catalog for Rust, Python, Java, Node, and Go.
+- [-] `TECH-03` Add pipeline examples for each profile in docs (`docs/pipeline-recipes.md`).
 - [ ] `TECH-04` Add validation hints/recommendations (non-blocking) for common language pitfalls.
 - [ ] `TECH-05` Add end-to-end smoke matrix (at least Rust + Python + Java templates).
 - [ ] `TECH-06` Document onboarding flow for adding a new stack profile.
