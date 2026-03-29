@@ -60,6 +60,50 @@ stages:
         command: ["mvn", "-B", "test"]
 ```
 
+## Node.js project
+
+```yaml
+version: 1
+stages:
+  - name: deps
+    steps:
+      - name: npm-ci
+        image: "node:20-bookworm"
+        command: ["npm", "ci"]
+  - name: build
+    steps:
+      - name: npm-build
+        image: "node:20-bookworm"
+        command: ["npm", "run", "build"]
+  - name: verify
+    steps:
+      - name: npm-test
+        image: "node:20-bookworm"
+        command: ["npm", "test"]
+```
+
+## Go project
+
+```yaml
+version: 1
+stages:
+  - name: deps
+    steps:
+      - name: go-mod-download
+        image: "golang:1.24-bookworm"
+        command: ["go", "mod", "download"]
+  - name: build
+    steps:
+      - name: go-build
+        image: "golang:1.24-bookworm"
+        command: ["go", "build", "./..."]
+  - name: verify
+    steps:
+      - name: go-test
+        image: "golang:1.24-bookworm"
+        command: ["go", "test", "./..."]
+```
+
 ## Mixed stack (Rust backend + Python checks + Java contract tests)
 
 ```yaml
