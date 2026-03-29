@@ -87,7 +87,7 @@ Goal: make Redis the default production scheduler path and reduce file-backed us
 - [x] `SCHED-03` Remove file-backed scheduler from runtime fallback path.
 - [x] `SCHED-04` Add startup diagnostics when production prerequisites are missing.
 - [x] `SCHED-05` Update deployment manifests and docs to reflect Redis-first behavior.
-- [-] `SCHED-06` Add migration notes for users still relying on file-backed queue in clustered runs.
+- [x] `SCHED-06` Add migration notes for users still relying on file-backed queue in clustered runs.
 
 Definition of done:
 

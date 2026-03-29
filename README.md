@@ -112,6 +112,10 @@ Runtime mode is read from config file under `[runtime]`:
 
 `TARDIGRADE_QUEUE_FILE` is deprecated and ignored.
 
+Migration notes for Redis-first scheduler rollout:
+
+- [docs/scheduler-migration.md](docs/scheduler-migration.md)
+
 ## Test
 
 env -u https_proxy -u http_proxy -u PXY_FAB_FONC cargo test --workspace
