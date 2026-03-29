@@ -380,6 +380,93 @@ async fn run_job_is_eventually_marked_success() {
 }
 
 #[tokio::test]
+/// Ensures Rust/Python/Java pipeline templates can be created and executed end-to-end.
+async fn run_smoke_matrix_templates_are_eventually_successful() {
+    let app = tardigrade_api::build_router(tardigrade_api::ApiState::new("tardigrade-ci-test"));
+
+    let templates = vec![
+        (
+            "rust",
+            "version: 1\nstages:\n  - name: build\n    steps:\n      - name: cargo-build\n        image: \"rust:1.94\"\n        command:\n          - cargo\n          - build\n          - --workspace\n",
+        ),
+        (
+            "python",
+            "version: 1\nstages:\n  - name: verify\n    steps:\n      - name: pytest\n        image: \"python:3.12\"\n        command:\n          - pytest\n          - -q\n",
+        ),
+        (
+            "java",
+            "version: 1\nstages:\n  - name: verify\n    steps:\n      - name: maven-test\n        image: \"maven:3.9-eclipse-temurin-21\"\n        command:\n          - mvn\n          - -B\n          - test\n",
+        ),
+    ];
+
+    for (stack_name, pipeline_yaml) in templates {
+        let create_body = CreateJobRequestBody {
+            name: format!("smoke-{stack_name}"),
+            repository_url: format!("https://example.com/{stack_name}.git"),
+            pipeline_path: "pipeline.yml".to_string(),
+            pipeline_yaml: Some(pipeline_yaml.to_string()),
+        };
+
+        let create_response = app
+            .clone()
+            .oneshot(json_request("/jobs", &create_body))
+            .await
+            .expect("create response");
+        assert_eq!(create_response.status(), StatusCode::CREATED);
+        let created: CreateJobResponse = read_json_body(create_response).await;
+
+        let run_response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri(format!("/jobs/{}/run", created.job.id))
+                    .body(Body::empty())
+                    .expect("valid run request"),
+            )
+            .await
+            .expect("run response");
+        assert_eq!(run_response.status(), StatusCode::CREATED);
+        let run_payload: RunJobResponse = read_json_body(run_response).await;
+
+        let mut final_status = JobStatus::Pending;
+        for _ in 0..20 {
+            let list_response = app
+                .clone()
+                .oneshot(
+                    Request::builder()
+                        .method("GET")
+                        .uri("/builds")
+                        .body(Body::empty())
+                        .expect("valid list builds request"),
+                )
+                .await
+                .expect("list builds response");
+
+            let listed: ListBuildsResponse = read_json_body(list_response).await;
+            let build = listed
+                .builds
+                .iter()
+                .find(|b| b.id == run_payload.build.id)
+                .expect("created build should exist");
+            final_status = build.status.clone();
+
+            if final_status == JobStatus::Success {
+                break;
+            }
+
+            tokio::time::sleep(std::time::Duration::from_millis(15)).await;
+        }
+
+        assert_eq!(
+            final_status,
+            JobStatus::Success,
+            "smoke matrix stack should complete successfully: {stack_name}"
+        );
+    }
+}
+
+#[tokio::test]
 async fn external_worker_can_claim_and_complete_build() {
     let state = tardigrade_api::ApiState::with_components_and_mode(
         "tardigrade-ci-test",
