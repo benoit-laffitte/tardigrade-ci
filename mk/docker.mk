@@ -1,0 +1,19 @@
+# Container image build and scan targets.
+
+.PHONY: docker-build-server docker-build-worker docker-build docker-scan
+
+docker-build-server: ## Build tardigrade server image
+	$(DOCKER) build -f $(SERVER_DOCKERFILE) -t $(SERVER_IMAGE) .
+
+docker-build-worker: ## Build tardigrade worker image
+	$(DOCKER) build -f $(WORKER_DOCKERFILE) -t $(WORKER_IMAGE) .
+
+docker-build: docker-build-server docker-build-worker ## Build all Docker images
+
+docker-scan: docker-build ## Scan built images (high/critical) with Trivy if available
+	@if command -v "$(TRIVY)" >/dev/null 2>&1; then \
+		$(TRIVY) image --severity HIGH,CRITICAL --exit-code 1 "$(SERVER_IMAGE)"; \
+		$(TRIVY) image --severity HIGH,CRITICAL --exit-code 1 "$(WORKER_IMAGE)"; \
+	else \
+		echo "trivy not found; skipping docker-scan"; \
+	fi

@@ -6,12 +6,12 @@ This file is the delivery backlog derived from the current roadmap.
 
 - From now on, priorities are reminded at the start of backlog-related discussions.
 - Every new feature request must be tracked in this file before implementation.
-- New entries should use an ID with this format: `FEAT-XXX`.
+- New entries should use an epic prefix-based ID (examples: `INDUS-201`, `DSL-01`, `SCM-03`).
 - Each new entry must include: goal, scope, status, and acceptance criteria.
 
 ### Priority reminder (current)
 
-1. Epic 4 (`SCHED-*`) to lock production behavior.
+1. Epic 0 (`INDUS-*`) industrialization and build orchestration.
 2. Epic 1 (`DSL-*`) to formalize pipeline contract.
 3. Epic 2 (`SCM-*`) for external trigger automation.
 4. Epic 3 (`PLUG-*`) for extension safety model.
@@ -24,6 +24,35 @@ This file is the delivery backlog derived from the current roadmap.
 - `[x]` done
 
 ## Prioritized epics
+
+### Epic 0: Industrialization and build orchestration
+
+Goal: provide one consistent command surface to build/test/package the full project (Rust, Node, Docker).
+
+Refinement decisions:
+
+- MVP includes `make ci` from day one.
+- `bootstrap` remains Rust-only at this stage.
+- `test-fast` runs unit tests only; `test-all` runs unit + integration scope.
+- Docker scope includes image builds and security scan.
+- Make setup is modular (`Makefile` + included `.mk` files).
+
+- [x] `INDUS-201` Add modular Make structure (`Makefile` + `mk/*.mk`) and root command entrypoints.
+- [x] `INDUS-202` Add proxy-safe defaults across all Make targets (matching repository conventions).
+- [x] `INDUS-203` Add Rust-only bootstrap target (`make bootstrap`).
+- [x] `INDUS-204` Add quality targets (`make lint`, `make fmt-check`, `make clippy`).
+- [x] `INDUS-205` Add test matrix targets: `make test-fast` (unit only) and `make test-all` (unit + integration).
+- [x] `INDUS-206` Add Node/dashboard targets via `xtask` (`make dashboard-lint`, `make dashboard-build`).
+- [x] `INDUS-207` Add Docker targets for server/worker build + security scan.
+- [x] `INDUS-208` Add `make ci` as canonical local/CI aggregate target.
+- [x] `INDUS-209` Add discoverability target and docs (`make help` + README command matrix).
+- [x] `INDUS-210` Wire CI pipeline to call Make targets as canonical entrypoints.
+
+Definition of done:
+
+- A new contributor can run one command to bootstrap and one command to run the full CI-equivalent flow.
+- CI and local developer workflows use the same Make entrypoints.
+- Rust, Node, and Docker builds are reproducible from repository root.
 
 ### Epic 1: Pipeline DSL (YAML) parser and validator
 
@@ -117,7 +146,7 @@ Definition of done:
 
 ## Suggested delivery order
 
-1. Epic 4 (`SCHED-*`) to lock production behavior.
+1. Epic 0 (`INDUS-*`) to standardize build/test/package workflows.
 2. Epic 1 (`DSL-*`) to formalize pipeline contract.
 3. Epic 2 (`SCM-*`) for external trigger automation.
 4. Epic 3 (`PLUG-*`) for extension safety model.

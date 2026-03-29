@@ -120,6 +120,23 @@ Migration notes for Redis-first scheduler rollout:
 
 env -u https_proxy -u http_proxy -u PXY_FAB_FONC cargo test --workspace
 
+## Make Commands
+
+Unified automation entrypoints from repository root:
+
+- `make help` (list available targets)
+- `make bootstrap` (Rust dependencies prefetch)
+- `make lint` (Rust fmt + clippy)
+- `make test-fast` (Rust unit tests only)
+- `make test-all` (full Rust workspace tests)
+- `make dashboard-install` (frontend dependencies via `xtask`)
+- `make dashboard-lint` (frontend lint via `xtask`)
+- `make dashboard-build` (frontend build via `xtask`)
+- `make build` (Rust + dashboard build)
+- `make docker-build` (server + worker images)
+- `make docker-scan` (Trivy image scan when available)
+- `make ci` (local CI-equivalent aggregate)
+
 Coverage (line threshold gate, default 75%):
 
 ./scripts/coverage.sh
