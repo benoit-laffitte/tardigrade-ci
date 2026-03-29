@@ -91,6 +91,29 @@ async function api(path, init = {}) {
   return payload;
 }
 
+// Executes one GraphQL operation and returns the data payload.
+async function graphql(query, variables = {}) {
+  const response = await fetch("/graphql", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ query, variables }),
+  });
+
+  const payload = await response.json();
+
+  if (!response.ok) {
+    throw new Error(`${response.status} ${JSON.stringify(payload)}`);
+  }
+
+  if (payload.errors && payload.errors.length > 0) {
+    throw new Error(payload.errors.map((entry) => entry.message).join(" | "));
+  }
+
+  return payload.data;
+}
+
 // Renders jobs list and binds run action for each job entry.
 function renderJobs(jobs) {
   jobsList.innerHTML = "";
@@ -307,18 +330,53 @@ function startEventStream() {
 // Pulls full dashboard state from API and refreshes all panels.
 async function refreshAll() {
   try {
-    const [jobsPayload, buildsPayload, workersPayload, metricsPayload, deadLetterPayload] = await Promise.all([
-      api("/jobs"),
-      api("/builds"),
-      api("/workers"),
-      api("/metrics"),
-      api("/dead-letter-builds"),
-    ]);
-    renderJobs(jobsPayload.jobs);
-    renderBuilds(buildsPayload.builds);
-    renderWorkers(workersPayload.workers);
-    renderMetrics(metricsPayload);
-    renderDeadLetterBuilds(deadLetterPayload.builds || []);
+    const data = await graphql(
+      `query DashboardSnapshot {
+        dashboard_snapshot {
+          jobs {
+            id
+            name
+            repository_url
+            pipeline_path
+            created_at
+          }
+          builds {
+            id
+            job_id
+            status
+            queued_at
+            started_at
+            finished_at
+            logs
+          }
+          workers {
+            id
+            active_builds
+            status
+            last_seen_at
+          }
+          metrics {
+            reclaimed_total
+            retry_requeued_total
+            ownership_conflicts_total
+            dead_letter_total
+          }
+          dead_letter_builds {
+            id
+            job_id
+            status
+            queued_at
+          }
+        }
+      }`
+    );
+
+    const snapshot = data.dashboard_snapshot;
+    renderJobs(snapshot.jobs || []);
+    renderBuilds(snapshot.builds || []);
+    renderWorkers(snapshot.workers || []);
+    renderMetrics(snapshot.metrics || null);
+    renderDeadLetterBuilds(snapshot.dead_letter_builds || []);
   } catch (error) {
     log(`Echec du rafraichissement: ${error.message}`, "error");
   }
@@ -327,8 +385,15 @@ async function refreshAll() {
 // Triggers run endpoint for one job and refreshes UI.
 async function runJob(id, name) {
   try {
-    const payload = await api(`/jobs/${id}/run`, { method: "POST", body: "{}" });
-    log(`Build ${payload.build.id.slice(0, 8)} lance pour ${name}`, "ok");
+    const data = await graphql(
+      `mutation RunJob($jobId: ID!) {
+        run_job(jobId: $jobId) {
+          id
+        }
+      }`,
+      { jobId: id }
+    );
+    log(`Build ${data.run_job.id.slice(0, 8)} lance pour ${name}`, "ok");
     await refreshAll();
   } catch (error) {
     log(`Impossible de lancer le job ${name}: ${error.message}`, "error");
@@ -338,7 +403,14 @@ async function runJob(id, name) {
 // Triggers cancel endpoint for one build and refreshes UI.
 async function cancelBuild(buildId) {
   try {
-    await api(`/builds/${buildId}/cancel`, { method: "POST", body: "{}" });
+    await graphql(
+      `mutation CancelBuild($buildId: ID!) {
+        cancel_build(buildId: $buildId) {
+          id
+        }
+      }`,
+      { buildId }
+    );
     log(`Build ${buildId.slice(0, 8)} annule`, "ok");
     await refreshAll();
   } catch (error) {
@@ -354,12 +426,17 @@ jobForm.addEventListener("submit", async (event) => {
   createMessage.textContent = "Creation en cours...";
 
   try {
-    const response = await api("/jobs", {
-      method: "POST",
-      body: JSON.stringify(payload),
-    });
-    createMessage.textContent = `Job ${response.job.name} cree.`;
-    log(`Nouveau job ${response.job.name} (${response.job.id.slice(0, 8)})`, "ok");
+    const data = await graphql(
+      `mutation CreateJob($input: GqlCreateJobInput!) {
+        create_job(input: $input) {
+          id
+          name
+        }
+      }`,
+      { input: payload }
+    );
+    createMessage.textContent = `Job ${data.create_job.name} cree.`;
+    log(`Nouveau job ${data.create_job.name} (${data.create_job.id.slice(0, 8)})`, "ok");
     jobForm.reset();
     await refreshAll();
   } catch (error) {

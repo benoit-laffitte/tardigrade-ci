@@ -5,6 +5,8 @@ edition = "2024"
 
 [dependencies]
 axum.workspace = true
+async-graphql.workspace = true
+async-graphql-axum.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 tracing.workspace = true

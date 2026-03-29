@@ -93,6 +93,8 @@ env -u https_proxy -u http_proxy -u PXY_FAB_FONC cargo test --workspace postgres
 
 ## API (Step 1)
 
+- POST /graphql (GraphQL endpoint)
+- GET /graphql (GraphQL Playground UI)
 - GET /health
 - GET /live
 - GET /ready
@@ -105,6 +107,12 @@ env -u https_proxy -u http_proxy -u PXY_FAB_FONC cargo test --workspace postgres
 - GET /workers
 - POST /workers/{worker_id}/claim
 - POST /workers/{worker_id}/builds/{id}/complete
+
+GraphQL snapshot example (single request for dashboard panels):
+
+curl -X POST http://127.0.0.1:8080/graphql \
+	-H 'content-type: application/json' \
+	-d '{"query":"query { dashboard_snapshot { jobs { id name } builds { id status } workers { id status active_builds } metrics { reclaimed_total retry_requeued_total ownership_conflicts_total dead_letter_total } dead_letter_builds { id status } } }"}'
 
 Worker claim example:
 

@@ -1,12 +1,18 @@
+use async_graphql::{
+    Context, EmptySubscription, Enum, Error as GraphQLError, ID, InputObject, Object, Schema,
+    SimpleObject,
+    http::{GraphQLPlaygroundConfig, playground_source},
+};
+use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
 use axum::{
-    Json, Router,
+    Extension, Json, Router,
     extract::{Path, State},
     http::StatusCode,
-    response::sse::{Event, KeepAlive, Sse},
+    response::{Html, sse::{Event, KeepAlive, Sse}},
     routing::{get, post},
 };
 use tardigrade_executor::WorkerExecutor;
-use tardigrade_core::{BuildRecord, JobDefinition};
+use tardigrade_core::{BuildRecord, JobDefinition, JobStatus};
 use serde::{Deserialize, Serialize};
 use chrono::{DateTime, Utc};
 use std::{collections::{HashMap, HashSet}, sync::{Arc, Mutex}};
@@ -182,6 +188,370 @@ pub struct LiveEvent {
     pub build_id: Option<Uuid>,
     pub worker_id: Option<String>,
     pub at: DateTime<Utc>,
+}
+
+/// GraphQL schema serving CI query and mutation operations.
+type CiGraphQLSchema = Schema<QueryRoot, MutationRoot, EmptySubscription>;
+
+/// GraphQL query root exposing read-oriented CI operations.
+pub struct QueryRoot;
+
+/// GraphQL mutation root exposing write-oriented CI operations.
+pub struct MutationRoot;
+
+/// GraphQL projection for health endpoint response.
+#[derive(Clone, SimpleObject)]
+#[graphql(rename_fields = "snake_case")]
+struct GqlHealthResponse {
+    status: String,
+    service: String,
+}
+
+/// GraphQL projection for liveness endpoint response.
+#[derive(Clone, SimpleObject)]
+#[graphql(rename_fields = "snake_case")]
+struct GqlLiveResponse {
+    status: String,
+}
+
+/// GraphQL projection for readiness endpoint response.
+#[derive(Clone, SimpleObject)]
+#[graphql(rename_fields = "snake_case")]
+struct GqlReadyResponse {
+    status: String,
+}
+
+/// GraphQL enum mirroring runtime build lifecycle statuses.
+#[derive(Clone, Copy, Eq, PartialEq, Enum)]
+enum GqlJobStatus {
+    Pending,
+    Running,
+    Success,
+    Failed,
+    Canceled,
+}
+
+/// GraphQL projection for persisted job definitions.
+#[derive(Clone, SimpleObject)]
+#[graphql(rename_fields = "snake_case")]
+struct GqlJobDefinition {
+    id: ID,
+    name: String,
+    repository_url: String,
+    pipeline_path: String,
+    created_at: String,
+}
+
+/// GraphQL projection for persisted build records.
+#[derive(Clone, SimpleObject)]
+#[graphql(rename_fields = "snake_case")]
+struct GqlBuildRecord {
+    id: ID,
+    job_id: ID,
+    status: GqlJobStatus,
+    queued_at: String,
+    started_at: Option<String>,
+    finished_at: Option<String>,
+    logs: Vec<String>,
+}
+
+/// GraphQL projection for worker telemetry card.
+#[derive(Clone, SimpleObject)]
+#[graphql(rename_fields = "snake_case")]
+struct GqlWorkerInfo {
+    id: String,
+    active_builds: usize,
+    status: String,
+    last_seen_at: String,
+}
+
+/// GraphQL projection for runtime reliability counters.
+#[derive(Clone, SimpleObject)]
+#[graphql(rename_fields = "snake_case")]
+struct GqlRuntimeMetrics {
+    reclaimed_total: u64,
+    retry_requeued_total: u64,
+    ownership_conflicts_total: u64,
+    dead_letter_total: u64,
+}
+
+/// GraphQL projection grouping dashboard panels into a single payload.
+#[derive(Clone, SimpleObject)]
+#[graphql(rename_fields = "snake_case")]
+struct GqlDashboardSnapshot {
+    jobs: Vec<GqlJobDefinition>,
+    builds: Vec<GqlBuildRecord>,
+    workers: Vec<GqlWorkerInfo>,
+    metrics: GqlRuntimeMetrics,
+    dead_letter_builds: Vec<GqlBuildRecord>,
+}
+
+/// Worker-reported terminal status accepted by GraphQL completion mutation.
+#[derive(Clone, Copy, Eq, PartialEq, Enum)]
+enum GqlWorkerBuildStatus {
+    Success,
+    Failed,
+}
+
+/// GraphQL input used by create_job mutation.
+#[derive(InputObject)]
+#[graphql(rename_fields = "snake_case")]
+struct GqlCreateJobInput {
+    name: String,
+    repository_url: String,
+    pipeline_path: String,
+}
+
+impl From<JobStatus> for GqlJobStatus {
+    fn from(value: JobStatus) -> Self {
+        match value {
+            JobStatus::Pending => Self::Pending,
+            JobStatus::Running => Self::Running,
+            JobStatus::Success => Self::Success,
+            JobStatus::Failed => Self::Failed,
+            JobStatus::Canceled => Self::Canceled,
+        }
+    }
+}
+
+impl From<JobDefinition> for GqlJobDefinition {
+    fn from(value: JobDefinition) -> Self {
+        Self {
+            id: ID(value.id.to_string()),
+            name: value.name,
+            repository_url: value.repository_url,
+            pipeline_path: value.pipeline_path,
+            created_at: value.created_at.to_rfc3339(),
+        }
+    }
+}
+
+impl From<BuildRecord> for GqlBuildRecord {
+    fn from(value: BuildRecord) -> Self {
+        Self {
+            id: ID(value.id.to_string()),
+            job_id: ID(value.job_id.to_string()),
+            status: value.status.into(),
+            queued_at: value.queued_at.to_rfc3339(),
+            started_at: value.started_at.map(|dt| dt.to_rfc3339()),
+            finished_at: value.finished_at.map(|dt| dt.to_rfc3339()),
+            logs: value.logs,
+        }
+    }
+}
+
+impl From<WorkerInfo> for GqlWorkerInfo {
+    fn from(value: WorkerInfo) -> Self {
+        Self {
+            id: value.id,
+            active_builds: value.active_builds,
+            status: value.status,
+            last_seen_at: value.last_seen_at.to_rfc3339(),
+        }
+    }
+}
+
+impl From<RuntimeMetricsResponse> for GqlRuntimeMetrics {
+    fn from(value: RuntimeMetricsResponse) -> Self {
+        Self {
+            reclaimed_total: value.reclaimed_total,
+            retry_requeued_total: value.retry_requeued_total,
+            ownership_conflicts_total: value.ownership_conflicts_total,
+            dead_letter_total: value.dead_letter_total,
+        }
+    }
+}
+
+fn parse_id_as_uuid(id: &ID) -> Result<Uuid, GraphQLError> {
+    Uuid::parse_str(id.as_str()).map_err(|_| GraphQLError::new("invalid UUID id"))
+}
+
+fn gql_err_from_api(err: ApiError) -> GraphQLError {
+    GraphQLError::new(format!("request failed with status {}", err.status_code().as_u16()))
+}
+
+#[Object(rename_fields = "snake_case")]
+impl QueryRoot {
+    /// Returns service identity and health status.
+    async fn health(&self, ctx: &Context<'_>) -> GqlHealthResponse {
+        let state = ctx.data_unchecked::<ApiState>();
+        GqlHealthResponse {
+            status: "ok".to_string(),
+            service: state.service_name.clone(),
+        }
+    }
+
+    /// Returns process liveness status.
+    async fn live(&self) -> GqlLiveResponse {
+        GqlLiveResponse {
+            status: "alive".to_string(),
+        }
+    }
+
+    /// Returns readiness status after dependency checks.
+    async fn ready(&self, ctx: &Context<'_>) -> Result<GqlReadyResponse, GraphQLError> {
+        let state = ctx.data_unchecked::<ApiState>();
+        state
+            .service
+            .is_ready()
+            .await
+            .map_err(gql_err_from_api)?;
+        Ok(GqlReadyResponse {
+            status: "ready".to_string(),
+        })
+    }
+
+    /// Returns jobs list sorted by creation time.
+    async fn jobs(&self, ctx: &Context<'_>) -> Result<Vec<GqlJobDefinition>, GraphQLError> {
+        let state = ctx.data_unchecked::<ApiState>();
+        let jobs = state.service.list_jobs().await.map_err(gql_err_from_api)?;
+        Ok(jobs.into_iter().map(Into::into).collect())
+    }
+
+    /// Returns builds list sorted by queue time.
+    async fn builds(&self, ctx: &Context<'_>) -> Result<Vec<GqlBuildRecord>, GraphQLError> {
+        let state = ctx.data_unchecked::<ApiState>();
+        let builds = state.service.list_builds().await.map_err(gql_err_from_api)?;
+        Ok(builds.into_iter().map(Into::into).collect())
+    }
+
+    /// Returns worker telemetry and current load.
+    async fn workers(&self, ctx: &Context<'_>) -> Result<Vec<GqlWorkerInfo>, GraphQLError> {
+        let state = ctx.data_unchecked::<ApiState>();
+        let workers = state.service.list_workers().map_err(gql_err_from_api)?;
+        Ok(workers.into_iter().map(Into::into).collect())
+    }
+
+    /// Returns runtime reliability counters.
+    async fn metrics(&self, ctx: &Context<'_>) -> GqlRuntimeMetrics {
+        let state = ctx.data_unchecked::<ApiState>();
+        state.service.metrics_snapshot().into()
+    }
+
+    /// Returns builds currently moved to dead-letter set.
+    async fn dead_letter_builds(&self, ctx: &Context<'_>) -> Result<Vec<GqlBuildRecord>, GraphQLError> {
+        let state = ctx.data_unchecked::<ApiState>();
+        let builds = state
+            .service
+            .list_dead_letter_builds()
+            .await
+            .map_err(gql_err_from_api)?;
+        Ok(builds.into_iter().map(Into::into).collect())
+    }
+
+    /// Returns full dashboard snapshot in a single request.
+    async fn dashboard_snapshot(&self, ctx: &Context<'_>) -> Result<GqlDashboardSnapshot, GraphQLError> {
+        let state = ctx.data_unchecked::<ApiState>();
+        let jobs = state.service.list_jobs().await.map_err(gql_err_from_api)?;
+        let builds = state.service.list_builds().await.map_err(gql_err_from_api)?;
+        let workers = state.service.list_workers().map_err(gql_err_from_api)?;
+        let dead_letter_builds = state
+            .service
+            .list_dead_letter_builds()
+            .await
+            .map_err(gql_err_from_api)?;
+
+        Ok(GqlDashboardSnapshot {
+            jobs: jobs.into_iter().map(Into::into).collect(),
+            builds: builds.into_iter().map(Into::into).collect(),
+            workers: workers.into_iter().map(Into::into).collect(),
+            metrics: state.service.metrics_snapshot().into(),
+            dead_letter_builds: dead_letter_builds.into_iter().map(Into::into).collect(),
+        })
+    }
+}
+
+#[Object(rename_fields = "snake_case")]
+impl MutationRoot {
+    /// Creates one job definition and persists it.
+    async fn create_job(
+        &self,
+        ctx: &Context<'_>,
+        input: GqlCreateJobInput,
+    ) -> Result<GqlJobDefinition, GraphQLError> {
+        let state = ctx.data_unchecked::<ApiState>();
+        let job = state
+            .service
+            .create_job(CreateJobRequest {
+                name: input.name,
+                repository_url: input.repository_url,
+                pipeline_path: input.pipeline_path,
+            })
+            .await
+            .map_err(gql_err_from_api)?;
+        Ok(job.into())
+    }
+
+    /// Enqueues one build for the specified job id.
+    async fn run_job(&self, ctx: &Context<'_>, job_id: ID) -> Result<GqlBuildRecord, GraphQLError> {
+        let state = ctx.data_unchecked::<ApiState>();
+        let job_uuid = parse_id_as_uuid(&job_id)?;
+        let build = state
+            .service
+            .run_job(job_uuid)
+            .await
+            .map_err(gql_err_from_api)?;
+
+        if state.run_embedded_worker {
+            let service = state.service.clone();
+            tokio::spawn(async move {
+                let _ = service.process_next_build().await;
+            });
+        }
+
+        Ok(build.into())
+    }
+
+    /// Cancels one build by id.
+    async fn cancel_build(&self, ctx: &Context<'_>, build_id: ID) -> Result<GqlBuildRecord, GraphQLError> {
+        let state = ctx.data_unchecked::<ApiState>();
+        let build_uuid = parse_id_as_uuid(&build_id)?;
+        let build = state
+            .service
+            .cancel_build(build_uuid)
+            .await
+            .map_err(gql_err_from_api)?;
+        Ok(build.into())
+    }
+
+    /// Claims one build for worker and marks it running.
+    async fn worker_claim_build(
+        &self,
+        ctx: &Context<'_>,
+        worker_id: String,
+    ) -> Result<Option<GqlBuildRecord>, GraphQLError> {
+        let state = ctx.data_unchecked::<ApiState>();
+        let build = state
+            .service
+            .claim_build_for_worker(&worker_id)
+            .await
+            .map_err(gql_err_from_api)?;
+        Ok(build.map(Into::into))
+    }
+
+    /// Completes one worker-owned build and applies retry/dead-letter policy.
+    async fn worker_complete_build(
+        &self,
+        ctx: &Context<'_>,
+        worker_id: String,
+        build_id: ID,
+        status: GqlWorkerBuildStatus,
+        log_line: Option<String>,
+    ) -> Result<GqlBuildRecord, GraphQLError> {
+        let state = ctx.data_unchecked::<ApiState>();
+        let build_uuid = parse_id_as_uuid(&build_id)?;
+        let status = match status {
+            GqlWorkerBuildStatus::Success => WorkerBuildStatus::Success,
+            GqlWorkerBuildStatus::Failed => WorkerBuildStatus::Failed,
+        };
+
+        let build = state
+            .service
+            .complete_build_for_worker(&worker_id, build_uuid, status, log_line)
+            .await
+            .map_err(gql_err_from_api)?;
+        Ok(build.into())
+    }
 }
 
 impl ApiState {
@@ -797,12 +1167,17 @@ impl ApiError {
 
 /// Builds the full HTTP router for CI control-plane API.
 pub fn build_router(state: ApiState) -> Router {
+    let graphql_schema = Schema::build(QueryRoot, MutationRoot, EmptySubscription)
+        .data(state.clone())
+        .finish();
+
     // Router keeps control-plane endpoints grouped by capability:
     // liveness/readiness, jobs/builds, workers, and operations telemetry.
     Router::new()
         .route("/health", get(health))
         .route("/live", get(live))
         .route("/ready", get(ready))
+        .route("/graphql", get(graphql_playground).post(graphql_handler))
         .route("/events", get(events))
         .route("/metrics", get(metrics))
         .route("/dead-letter-builds", get(dead_letter_builds))
@@ -816,7 +1191,21 @@ pub fn build_router(state: ApiState) -> Router {
             "/workers/{worker_id}/builds/{id}/complete",
             post(worker_complete_build),
         )
+        .layer(Extension(graphql_schema))
         .with_state(state)
+}
+
+/// Serves GraphQL playground for interactive schema exploration.
+async fn graphql_playground() -> Html<String> {
+    Html(playground_source(GraphQLPlaygroundConfig::new("/graphql")))
+}
+
+/// Executes one GraphQL request against CI schema.
+async fn graphql_handler(
+    Extension(schema): Extension<CiGraphQLSchema>,
+    req: GraphQLRequest,
+) -> GraphQLResponse {
+    schema.execute(req.into_inner()).await.into()
 }
 
 /// Returns service identity and basic health signal.
