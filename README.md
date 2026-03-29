@@ -9,7 +9,7 @@ This workspace is a starting point for building an enterprise-grade open-source 
 - crates/core: domain model for jobs, pipeline runs, and statuses.
 - crates/scheduler: queueing and scheduling abstractions.
 - crates/executor: worker execution logic abstraction.
-- crates/storage: persistence abstractions and in-memory implementation.
+- crates/storage: persistence abstractions with in-memory and PostgreSQL implementations.
 - crates/plugins: plugin contract and registry.
 - crates/auth: authentication primitives.
 
@@ -33,7 +33,7 @@ This workspace is a starting point for building an enterprise-grade open-source 
 - Cluster-resilient operation with durable state and object storage.
 - Configurable behavior by environment, organization, and project.
 
-Current state is a bootstrap baseline with in-memory adapters that preserve API contracts while preparing the control-plane/data-plane split.
+Current state is a bootstrap baseline with pluggable adapters: in-memory for local bootstrap, plus PostgreSQL storage and Redis queue backends for distributed deployments.
 
 ## Run
 
@@ -212,26 +212,8 @@ Stop cluster:
 - docker compose down
 - ./scripts/dev-down.sh
 
-## Roadmap (next)
+## Backlog
 
-1. Add pipeline DSL (YAML) parser and validator.
-2. Persist jobs and builds in SQLite/PostgreSQL.
-3. Add webhook triggers and SCM polling.
-4. Replace file-backed queue with a managed broker backend (Redis Streams, NATS JetStream, or RabbitMQ).
-5. Add plugin loading and permissions model.
+Roadmap items are now decomposed into an actionable backlog in:
 
-## Backlog (Queue Reliability)
-
-- [x] Redis-backed queue scheduler (distributed claim/ack/requeue).
-- [x] Worker ownership check on build completion (409 on mismatch).
-- [x] Stale lease reclaim with configurable timeout (`TARDIGRADE_WORKER_LEASE_TIMEOUT_SECS`).
-- [x] Runtime metrics API (`GET /metrics`) with:
-	- `reclaimed_total`
-	- `retry_requeued_total`
-	- `ownership_conflicts_total`
-	- `dead_letter_total`
-- [x] Dashboard panel displaying runtime metrics in real time.
-- [x] Real-time event stream (`GET /events`) wired to dashboard live feed.
-- [ ] Retry policy refinement (configurable caps per job profile).
-- [x] Dead-letter flow for builds exceeding max retries (`GET /dead-letter-builds`) visible in dashboard.
-- [ ] Metrics persistence/export (Prometheus/OpenTelemetry).
+- [BACKLOG.md](BACKLOG.md)
