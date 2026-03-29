@@ -33,6 +33,8 @@ This workspace is a starting point for building an enterprise-grade open-source 
 - Cluster-resilient operation with durable state and object storage.
 - Configurable behavior by environment, organization, and project.
 
+Current DSL runtime model is technology-agnostic: each pipeline step defines its own container image and command, so one pipeline can mix Rust, Python, Java, Node, or any stack available as an OCI image.
+
 Current state is a bootstrap baseline with pluggable adapters: in-memory for local bootstrap, plus PostgreSQL storage and Redis queue backends for distributed deployments.
 
 ## Run
@@ -115,6 +117,10 @@ Runtime mode is read from config file under `[runtime]`:
 Migration notes for Redis-first scheduler rollout:
 
 - [docs/scheduler-migration.md](docs/scheduler-migration.md)
+
+Multi-technology pipeline recipes (Rust, Python, Java, mixed stacks):
+
+- [docs/pipeline-recipes.md](docs/pipeline-recipes.md)
 
 ## Test
 

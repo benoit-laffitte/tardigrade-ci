@@ -11,11 +11,12 @@ This file is the delivery backlog derived from the current roadmap.
 
 ### Priority reminder (current)
 
-1. Epic 1 (`DSL-*`) to formalize pipeline contract.
-2. Epic 2 (`SCM-*`) for external trigger automation.
-3. Epic 3 (`PLUG-*`) for extension safety model.
-4. Reliability follow-ups (`REL-*`) as hardening milestones.
-5. Epic 0 (`INDUS-*`) hardening follow-ups.
+1. Epic 1b (`TECH-*`) to make multi-technology support explicit and productized.
+2. Epic 1 (`DSL-*`) to formalize pipeline contract.
+3. Epic 2 (`SCM-*`) for external trigger automation.
+4. Epic 3 (`PLUG-*`) for extension safety model.
+5. Reliability follow-ups (`REL-*`) as hardening milestones.
+6. Epic 0 (`INDUS-*`) hardening follow-ups.
 
 ## Status legend
 
@@ -59,9 +60,9 @@ Definition of done:
 
 Goal: make pipeline definitions explicit, validated, and versioned.
 
-- [ ] `DSL-01` Define pipeline schema (`version`, `stages`, `steps`, retry policy hooks).
-- [ ] `DSL-02` Add YAML parser/validator crate integration (`serde_yaml` + structural validation).
-- [ ] `DSL-03` Add API validation path for pipeline files before build enqueue.
+- [x] `DSL-01` Define pipeline schema (`version`, `stages`, `steps`, retry policy hooks).
+- [x] `DSL-02` Add YAML parser/validator crate integration (`serde_yaml` + structural validation).
+- [-] `DSL-03` Add API validation path for pipeline files before build enqueue.
 - [ ] `DSL-04` Add clear error model for invalid pipeline definitions (HTTP + GraphQL surfaces).
 - [ ] `DSL-05` Add tests for valid/invalid DSL samples and edge cases.
 - [ ] `DSL-06` Document DSL format with examples in docs/README.
@@ -71,6 +72,23 @@ Definition of done:
 - Pipeline file can be parsed and validated deterministically.
 - Invalid definitions return actionable errors.
 - Tests cover happy path and common failure modes.
+
+### Epic 1b: Multi-technology pipeline execution profiles
+
+Goal: make Tardigrade CI clearly usable for Rust, Python, Java, and other stacks with first-class examples and execution defaults.
+
+- [ ] `TECH-01` Define technology profile model (language/runtime/build strategy metadata).
+- [ ] `TECH-02` Provide built-in profile catalog for Rust, Python, Java, Node, and Go.
+- [ ] `TECH-03` Add pipeline examples for each profile in docs (`docs/pipeline-recipes.md`).
+- [ ] `TECH-04` Add validation hints/recommendations (non-blocking) for common language pitfalls.
+- [ ] `TECH-05` Add end-to-end smoke matrix (at least Rust + Python + Java templates).
+- [ ] `TECH-06` Document onboarding flow for adding a new stack profile.
+
+Definition of done:
+
+- A user can bootstrap a valid pipeline quickly for at least Rust, Python, and Java.
+- Multi-stack behavior is documented with copy/paste-ready pipeline examples.
+- Validation and test matrix reduce regressions across supported stacks.
 
 ### Epic 2: Webhook triggers and SCM polling
 
@@ -147,8 +165,9 @@ Definition of done:
 
 ## Suggested delivery order
 
-1. Epic 1 (`DSL-*`) to formalize pipeline contract.
-2. Epic 2 (`SCM-*`) for external trigger automation.
-3. Epic 3 (`PLUG-*`) for extension safety model.
-4. Reliability follow-ups (`REL-*`) as hardening milestones.
-5. Epic 0 (`INDUS-*`) hardening follow-ups.
+1. Epic 1b (`TECH-*`) to productize multi-technology support.
+2. Epic 1 (`DSL-*`) to formalize pipeline contract.
+3. Epic 2 (`SCM-*`) for external trigger automation.
+4. Epic 3 (`PLUG-*`) for extension safety model.
+5. Reliability follow-ups (`REL-*`) as hardening milestones.
+6. Epic 0 (`INDUS-*`) hardening follow-ups.

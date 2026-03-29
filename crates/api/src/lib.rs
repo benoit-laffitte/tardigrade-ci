@@ -12,7 +12,7 @@ use axum::{
     routing::{get, post},
 };
 use tardigrade_executor::WorkerExecutor;
-use tardigrade_core::{BuildRecord, JobDefinition, JobStatus};
+use tardigrade_core::{BuildRecord, JobDefinition, JobStatus, PipelineDefinition, PipelineDslError};
 use serde::{Deserialize, Serialize};
 use chrono::{DateTime, Utc};
 use std::{collections::{HashMap, HashSet}, sync::{Arc, Mutex}};
@@ -89,6 +89,7 @@ pub struct CreateJobRequest {
     pub name: String,
     pub repository_url: String,
     pub pipeline_path: String,
+    pub pipeline_yaml: Option<String>,
 }
 
 /// Response payload containing the created job.
@@ -300,6 +301,7 @@ struct GqlCreateJobInput {
     name: String,
     repository_url: String,
     pipeline_path: String,
+    pipeline_yaml: Option<String>,
 }
 
 impl From<JobStatus> for GqlJobStatus {
@@ -367,7 +369,31 @@ fn parse_id_as_uuid(id: &ID) -> Result<Uuid, GraphQLError> {
 }
 
 fn gql_err_from_api(err: ApiError) -> GraphQLError {
-    GraphQLError::new(format!("request failed with status {}", err.status_code().as_u16()))
+    match err {
+        ApiError::InvalidPipeline(message) => GraphQLError::new(message),
+        _ => GraphQLError::new(format!("request failed with status {}", err.status_code().as_u16())),
+    }
+}
+
+/// Converts DSL parser/validator failures into API-level invalid pipeline errors.
+fn map_pipeline_error(error: PipelineDslError) -> ApiError {
+    match error {
+        PipelineDslError::Yaml(message) => {
+            ApiError::InvalidPipeline(format!("invalid pipeline YAML: {message}"))
+        }
+        PipelineDslError::Validation(issues) => {
+            let summary = issues
+                .iter()
+                .take(3)
+                .map(|issue| format!("{}: {}", issue.field, issue.message))
+                .collect::<Vec<_>>()
+                .join("; ");
+            let suffix = if issues.len() > 3 { " (additional issues omitted)" } else { "" };
+            ApiError::InvalidPipeline(format!(
+                "pipeline validation failed: {summary}{suffix}"
+            ))
+        }
+    }
 }
 
 #[Object(rename_fields = "snake_case")]
@@ -476,6 +502,7 @@ impl MutationRoot {
                 name: input.name,
                 repository_url: input.repository_url,
                 pipeline_path: input.pipeline_path,
+                pipeline_yaml: input.pipeline_yaml,
             })
             .await
             .map_err(gql_err_from_api)?;
@@ -757,6 +784,14 @@ impl CiService {
             || payload.pipeline_path.trim().is_empty()
         {
             return Err(ApiError::BadRequest);
+        }
+
+        if let Some(pipeline_yaml) = payload.pipeline_yaml.as_ref() {
+            if pipeline_yaml.trim().is_empty() {
+                return Err(ApiError::BadRequest);
+            }
+
+            PipelineDefinition::from_yaml_str(pipeline_yaml).map_err(map_pipeline_error)?;
         }
 
         let job = JobDefinition::new(payload.name, payload.repository_url, payload.pipeline_path);
@@ -1146,6 +1181,7 @@ impl CiService {
 /// Internal service-layer error taxonomy converted to HTTP codes at the edge.
 enum ApiError {
     BadRequest,
+    InvalidPipeline(String),
     NotFound,
     Conflict,
     Internal,
@@ -1156,6 +1192,7 @@ impl ApiError {
     fn status_code(&self) -> StatusCode {
         match self {
             Self::BadRequest => StatusCode::BAD_REQUEST,
+            Self::InvalidPipeline(_) => StatusCode::UNPROCESSABLE_ENTITY,
             Self::NotFound => StatusCode::NOT_FOUND,
             Self::Conflict => StatusCode::CONFLICT,
             Self::Internal => StatusCode::INTERNAL_SERVER_ERROR,

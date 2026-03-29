@@ -6,4 +6,5 @@ edition = "2024"
 [dependencies]
 chrono.workspace = true
 serde.workspace = true
+serde_yaml = "0.9"
 uuid.workspace = true
