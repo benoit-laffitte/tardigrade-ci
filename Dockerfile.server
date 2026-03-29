@@ -8,11 +8,8 @@ COPY config ./config
 
 RUN apt-get update \
 	&& apt-get install -y --no-install-recommends ca-certificates \
-	&& rm -rf /var/lib/apt/lists/* \
-	&& mkdir -p /usr/local/share/ca-certificates/maif \
-	&& for f in /app/certs/*.pem; do cp "$f" "/usr/local/share/ca-certificates/maif/$(basename "${f%.pem}").crt"; done \
-	&& update-ca-certificates
-
+	&& rm -rf /var/lib/apt/lists/* 
+	
 RUN cargo build --release -p tardigrade-server
 
 FROM debian:bookworm-slim
