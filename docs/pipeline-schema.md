@@ -1,4 +1,4 @@
-# Pipeline Schema v1 (Draft)
+# Pipeline Schema v1
 
 This document defines the first version of the CI pipeline schema.
 
@@ -55,8 +55,33 @@ stages:
           backoff_ms: 1500
 ```
 
+## Validation behavior
+
+- YAML parsing failures return an `invalid_pipeline` error with a human-readable parser message.
+- Structural validation failures return an `invalid_pipeline` error with machine-readable `details`.
+- Validation is deterministic: the same input produces the same issue set ordering.
+
+Example validation details payload:
+
+```json
+{
+  "code": "invalid_pipeline",
+  "message": "pipeline validation failed: version: expected schema version 1",
+  "details": [
+    {
+      "field": "version",
+      "message": "expected schema version 1"
+    },
+    {
+      "field": "stages[0].steps[0].retry.max_attempts",
+      "message": "must be greater than zero"
+    }
+  ]
+}
+```
+
 ## Notes
 
 - This schema definition is the contract layer only.
 - YAML parsing and structural validation are implemented in `tardigrade-core`.
-- API-level validation surface and error mapping are covered by follow-up backlog items (`DSL-03+`).
+- API-level validation and error mapping are enforced on both REST and GraphQL create-job paths.

@@ -201,6 +201,17 @@ curl -X POST http://127.0.0.1:8080/jobs \
 	-H 'content-type: application/json' \
 	-d '{"name":"build-api-inline","repository_url":"https://example.com/api.git","pipeline_path":"pipelines/api.yml","pipeline_yaml":"version: 1\nstages:\n  - name: build\n    steps:\n      - name: cargo-build\n        image: \"rust:1.94\"\n        command:\n          - cargo\n          - build"}'
 
+Pipeline DSL reference and examples:
+
+- [docs/pipeline-schema.md](docs/pipeline-schema.md)
+- [docs/pipeline-recipes.md](docs/pipeline-recipes.md)
+
+Invalid pipeline behavior:
+
+- REST `POST /jobs` returns `422 Unprocessable Entity` with `code=invalid_pipeline` for invalid YAML/schema.
+- GraphQL `create_job` returns an error with `extensions.code=invalid_pipeline` and optional `extensions.details`.
+- Blank `pipeline_yaml` is rejected as a bad request.
+
 List jobs:
 
 curl http://127.0.0.1:8080/jobs

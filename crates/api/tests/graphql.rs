@@ -204,3 +204,86 @@ async fn graphql_create_job_with_structurally_invalid_pipeline_yaml_returns_deta
             .any(|issue| issue["field"].as_str() == Some("version"))
     );
 }
+
+#[tokio::test]
+/// Ensures blank inline pipeline content returns a bad request style GraphQL error.
+async fn graphql_create_job_with_blank_pipeline_yaml_returns_bad_request_error() {
+    let app = tardigrade_api::build_router(tardigrade_api::ApiState::new("tardigrade-ci-test"));
+
+    let response = app
+        .oneshot(graphql_request(
+            r#"
+            mutation Create($input: GqlCreateJobInput!) {
+              create_job(input: $input) {
+                id
+              }
+            }
+            "#,
+            json!({
+                "input": {
+                    "name": "build-graphql-blank-yaml",
+                    "repository_url": "https://example.com/repo.git",
+                    "pipeline_path": "pipeline.yml",
+                    "pipeline_yaml": "   \n\t"
+                }
+            }),
+        ))
+        .await
+        .expect("create job response");
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let payload = read_json(response).await;
+
+    let errors = payload["errors"].as_array().expect("graphql errors array");
+    assert!(!errors.is_empty());
+    let message = errors[0]["message"].as_str().expect("error message");
+    assert!(message.contains("status 400"));
+}
+
+#[tokio::test]
+/// Ensures retry policy constraint failures are exposed in GraphQL error details.
+async fn graphql_create_job_with_invalid_retry_policy_returns_retry_field_details() {
+    let app = tardigrade_api::build_router(tardigrade_api::ApiState::new("tardigrade-ci-test"));
+
+    let response = app
+        .oneshot(graphql_request(
+            r#"
+            mutation Create($input: GqlCreateJobInput!) {
+              create_job(input: $input) {
+                id
+              }
+            }
+            "#,
+            json!({
+                "input": {
+                    "name": "build-graphql-invalid-retry",
+                    "repository_url": "https://example.com/repo.git",
+                    "pipeline_path": "pipeline.yml",
+                    "pipeline_yaml": "version: 1\nstages:\n  - name: build\n    steps:\n      - name: cargo-build\n        image: \"rust:1.94\"\n        command:\n          - cargo\n          - build\n        retry:\n          max_attempts: 0\n          backoff_ms: 0"
+                }
+            }),
+        ))
+        .await
+        .expect("create job response");
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let payload = read_json(response).await;
+
+    let errors = payload["errors"].as_array().expect("graphql errors array");
+    assert!(!errors.is_empty());
+    assert_eq!(errors[0]["extensions"]["code"], "invalid_pipeline");
+
+    let details = errors[0]["extensions"]["details"]
+        .as_array()
+        .expect("validation details array");
+    assert!(
+        details.iter().any(|issue| {
+            issue["field"].as_str() == Some("stages[0].steps[0].retry.max_attempts")
+        })
+    );
+    assert!(
+        details.iter().any(|issue| {
+            issue["field"].as_str() == Some("stages[0].steps[0].retry.backoff_ms")
+        })
+    );
+}

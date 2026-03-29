@@ -241,6 +241,62 @@ async fn create_job_with_structurally_invalid_pipeline_yaml_returns_details() {
 }
 
 #[tokio::test]
+/// Ensures blank inline pipeline content is rejected as a malformed request body.
+async fn create_job_with_blank_pipeline_yaml_returns_bad_request() {
+    let app = tardigrade_api::build_router(tardigrade_api::ApiState::new("tardigrade-ci-test"));
+
+    let invalid_body = CreateJobRequestBody {
+        name: "build-blank-yaml".to_string(),
+        repository_url: "https://example.com/repo.git".to_string(),
+        pipeline_path: "pipeline.yml".to_string(),
+        pipeline_yaml: Some("   \n\t".to_string()),
+    };
+
+    let response = app
+        .oneshot(json_request("/jobs", &invalid_body))
+        .await
+        .expect("create response");
+
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+/// Ensures retry policy constraints are surfaced in invalid-pipeline details.
+async fn create_job_with_invalid_retry_policy_returns_retry_field_details() {
+    let app = tardigrade_api::build_router(tardigrade_api::ApiState::new("tardigrade-ci-test"));
+
+    let invalid_body = CreateJobRequestBody {
+        name: "build-invalid-retry".to_string(),
+        repository_url: "https://example.com/repo.git".to_string(),
+        pipeline_path: "pipeline.yml".to_string(),
+        pipeline_yaml: Some(
+            "version: 1\nstages:\n  - name: build\n    steps:\n      - name: cargo-build\n        image: \"rust:1.94\"\n        command:\n          - cargo\n          - build\n        retry:\n          max_attempts: 0\n          backoff_ms: 0\n"
+                .to_string(),
+        ),
+    };
+
+    let response = app
+        .oneshot(json_request("/jobs", &invalid_body))
+        .await
+        .expect("create response");
+
+    assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    let payload: Value = read_json_body(response).await;
+    let details = payload["details"].as_array().expect("details array");
+
+    assert!(
+        details.iter().any(|issue| {
+            issue["field"].as_str() == Some("stages[0].steps[0].retry.max_attempts")
+        })
+    );
+    assert!(
+        details.iter().any(|issue| {
+            issue["field"].as_str() == Some("stages[0].steps[0].retry.backoff_ms")
+        })
+    );
+}
+
+#[tokio::test]
 async fn cancel_unknown_build_returns_not_found() {
     let app = tardigrade_api::build_router(tardigrade_api::ApiState::new("tardigrade-ci-test"));
     let unknown_id = Uuid::new_v4();
