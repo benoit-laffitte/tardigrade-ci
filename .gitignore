@@ -1,0 +1,6 @@
+target/
+Cargo.lock
+.env
+.vscode/*.log
+certs
+.DS_Store

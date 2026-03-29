@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Tardigrade CI Console</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <!-- Decorative atmospheric layers for visual identity -->
+    <div class="bg-orb orb-1"></div>
+    <div class="bg-orb orb-2"></div>
+    <div class="bg-orb orb-3"></div>
+    <div class="bg-grid"></div>
+    <div class="bg-scanline"></div>
+
+    <main class="shell">
+      <!-- Top status strip and global context -->
+      <section class="hud-strip reveal" style="--delay: 0s">
+        <span>Deck: CI-01</span>
+        <span>Channel: Build Control</span>
+        <span id="stardateLabel">Stardate: --.--</span>
+      </section>
+
+      <header class="hero">
+        <!-- Product identity and mission context -->
+        <div class="hero-copy-wrap">
+          <div class="logo-shell" aria-hidden="true">
+            <img class="tardi-logo" src="/tardigrade-logo.png" alt="" />
+          </div>
+          <div class="hero-copy">
+            <p class="eyebrow">Bridge Control Plane</p>
+            <h1>Tardigrade CI Console</h1>
+            <p class="subtitle">
+              Interface tactique pour creer des jobs, lancer des builds et
+              piloter les executions en temps reel.
+            </p>
+          </div>
+        </div>
+        <!-- Primary operator actions and realtime connection status -->
+        <div class="hero-actions">
+          <div id="streamStatus" class="status-chip disconnected">Realtime Offline</div>
+          <button id="refreshBtn" class="btn btn-ghost">Synchroniser</button>
+        </div>
+      </header>
+
+      <!-- Main operational workspace: control form + runtime views -->
+      <section class="grid">
+        <article class="panel panel-form reveal" style="--delay: 0.02s">
+          <!-- Control surface for creating new job definitions -->
+          <h2>Nouveau Job</h2>
+          <form id="jobForm" class="form">
+            <label>
+              Nom du job
+              <input id="name" name="name" placeholder="build-api" required />
+            </label>
+            <label>
+              Depot git
+              <input
+                id="repository_url"
+                name="repository_url"
+                placeholder="https://example.com/project.git"
+                required
+              />
+            </label>
+            <label>
+              Pipeline file
+              <input
+                id="pipeline_path"
+                name="pipeline_path"
+                placeholder="pipelines/api.yml"
+                required
+              />
+            </label>
+            <button type="submit" class="btn btn-primary">Initier le job</button>
+          </form>
+          <p id="createMessage" class="hint"></p>
+        </article>
+
+        <article class="panel reveal" style="--delay: 0.12s">
+          <!-- Inventory of jobs available for execution -->
+          <div class="panel-head">
+            <h2>Jobs</h2>
+            <span id="jobsCount" class="pill">0</span>
+          </div>
+          <div id="jobsList" class="list"></div>
+        </article>
+
+        <article class="panel reveal" style="--delay: 0.22s">
+          <!-- Timeline-oriented build execution overview -->
+          <div class="panel-head">
+            <h2>Builds</h2>
+            <span id="buildsCount" class="pill">0</span>
+          </div>
+          <div id="buildsList" class="list"></div>
+        </article>
+
+        <article class="panel reveal" style="--delay: 0.28s">
+          <!-- Worker fleet observability panel -->
+          <div class="panel-head">
+            <h2>Workers</h2>
+            <span id="workersCount" class="pill">0</span>
+          </div>
+          <div id="workersList" class="list"></div>
+        </article>
+
+        <article class="panel panel-metrics reveal" style="--delay: 0.3s">
+          <!-- Reliability and queue-health runtime counters -->
+          <div class="panel-head">
+            <h2>Runtime Metrics</h2>
+            <span class="pill">live</span>
+          </div>
+          <div class="metrics-grid">
+            <div class="metric-card">
+              <p class="metric-label">Reclaims</p>
+              <p id="metricReclaims" class="metric-value">0</p>
+            </div>
+            <div class="metric-card">
+              <p class="metric-label">Retry Requeues</p>
+              <p id="metricRetries" class="metric-value">0</p>
+            </div>
+            <div class="metric-card">
+              <p class="metric-label">Ownership Conflicts</p>
+              <p id="metricConflicts" class="metric-value">0</p>
+            </div>
+            <div class="metric-card">
+              <p class="metric-label">Dead-letter</p>
+              <p id="metricDeadLetter" class="metric-value">0</p>
+            </div>
+          </div>
+        </article>
+
+        <article class="panel reveal" style="--delay: 0.31s">
+          <!-- Dead-letter queue visibility for failed terminal builds -->
+          <div class="panel-head">
+            <h2>Dead-letter Builds</h2>
+            <span id="deadLetterCount" class="pill">0</span>
+          </div>
+          <div id="deadLetterList" class="list"></div>
+        </article>
+
+        <article class="panel panel-events reveal" style="--delay: 0.315s">
+          <!-- Realtime operational event feed backed by SSE -->
+          <div class="panel-head">
+            <h2>Evenements Live</h2>
+            <span id="eventCount" class="pill">0</span>
+          </div>
+          <div id="eventsList" class="list events-list"></div>
+        </article>
+      </section>
+
+      <!-- Chronological console logs for operator feedback -->
+      <section class="panel console reveal" style="--delay: 0.32s">
+        <h2>Journal de bord</h2>
+        <pre id="logBox" aria-live="polite"></pre>
+      </section>
+    </main>
+
+    <template id="jobTemplate">
+      <!-- Reusable row structure for job list rendering -->
+      <div class="list-item job-item">
+        <div>
+          <p class="item-title"></p>
+          <p class="item-subtitle"></p>
+        </div>
+        <div class="actions">
+          <button class="btn btn-small btn-secondary run-btn">Run</button>
+        </div>
+      </div>
+    </template>
+
+    <template id="buildTemplate">
+      <!-- Reusable row structure for build list rendering -->
+      <div class="list-item build-item">
+        <div>
+          <p class="item-title"></p>
+          <p class="item-subtitle"></p>
+        </div>
+        <div class="actions">
+          <span class="status"></span>
+          <button class="btn btn-small btn-warning cancel-btn">Cancel</button>
+        </div>
+      </div>
+    </template>
+
+    <template id="workerTemplate">
+      <!-- Reusable row structure for worker list rendering -->
+      <div class="list-item worker-item">
+        <div>
+          <p class="item-title"></p>
+          <p class="item-subtitle"></p>
+        </div>
+        <div class="actions">
+          <span class="status worker-status"></span>
+        </div>
+      </div>
+    </template>
+
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>

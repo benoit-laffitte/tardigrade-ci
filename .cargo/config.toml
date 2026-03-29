@@ -1,0 +1,2 @@
+[registries]
+cargo-public = { index = "sparse+https://index.crates.io/" }

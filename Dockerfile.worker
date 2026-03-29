@@ -1,0 +1,26 @@
+FROM rust:1.87-bookworm AS builder
+WORKDIR /app
+
+COPY Cargo.toml Cargo.lock ./
+COPY crates ./crates
+COPY config ./config
+COPY certs ./certs
+
+RUN apt-get update \
+	&& apt-get install -y --no-install-recommends ca-certificates \
+	&& rm -rf /var/lib/apt/lists/* \
+	&& mkdir -p /usr/local/share/ca-certificates/maif \
+	&& for f in /app/certs/*.pem; do cp "$f" "/usr/local/share/ca-certificates/maif/$(basename "${f%.pem}").crt"; done \
+	&& update-ca-certificates
+
+RUN cargo build --release -p tardigrade-worker
+
+FROM debian:bookworm-slim
+RUN useradd -m -u 10001 appuser
+WORKDIR /app
+COPY --from=builder /app/target/release/tardigrade-worker /usr/local/bin/tardigrade-worker
+
+ENV TARDIGRADE_SERVER_URL=http://tardigrade-server:8080
+ENV TARDIGRADE_WORKER_ID=worker-1
+USER appuser
+CMD ["tardigrade-worker"]
