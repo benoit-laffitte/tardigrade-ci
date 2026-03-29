@@ -4,7 +4,7 @@ WORKDIR /app
 COPY Cargo.toml Cargo.lock ./
 COPY crates ./crates
 COPY config ./config
-COPY certs ./certs
+# COPY certs ./certs
 
 RUN apt-get update \
 	&& apt-get install -y --no-install-recommends ca-certificates \
