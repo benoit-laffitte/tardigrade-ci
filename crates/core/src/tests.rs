@@ -351,3 +351,105 @@ fn built_in_technology_profiles_are_unique_and_valid() {
         assert!(profile.validate().is_ok());
     }
 }
+
+#[test]
+/// Ensures non-blocking hints detect common technology-specific CI pitfalls.
+fn pipeline_validation_hints_detect_common_pitfalls() {
+    let yaml = r#"
+version: 1
+stages:
+  - name: rust
+    steps:
+      - name: cargo-build
+        image: "rust:1.94"
+        command: ["cargo", "build", "--workspace"]
+  - name: python
+    steps:
+      - name: pip-install
+        image: "python:3.12"
+        command: ["pip", "install", "pytest"]
+  - name: java
+    steps:
+      - name: maven-test
+        image: "maven:3.9-eclipse-temurin-21"
+        command: ["mvn", "test"]
+  - name: node
+    steps:
+      - name: npm-install
+        image: "node:20-bookworm"
+        command: ["npm", "install"]
+  - name: go
+    steps:
+      - name: go-test
+        image: "golang:1.24-bookworm"
+        command: ["go", "test"]
+"#;
+
+    let pipeline = PipelineDefinition::from_yaml_str(yaml).expect("pipeline should parse");
+    let hints = pipeline.validation_hints();
+
+    assert!(hints.iter().any(
+        |hint| hint.message.contains("--locked") && hint.field == "stages[0].steps[0].command"
+    ));
+    assert!(
+        hints
+            .iter()
+            .any(|hint| hint.message.contains("requirements")
+                && hint.field == "stages[1].steps[0].command")
+    );
+    assert!(
+        hints
+            .iter()
+            .any(|hint| hint.message.contains("-B") && hint.field == "stages[2].steps[0].command")
+    );
+    assert!(
+        hints
+            .iter()
+            .any(|hint| hint.message.contains("npm ci")
+                && hint.field == "stages[3].steps[0].command")
+    );
+    assert!(
+        hints.iter().any(
+            |hint| hint.message.contains("./...") && hint.field == "stages[4].steps[0].command"
+        )
+    );
+}
+
+#[test]
+/// Ensures best-practice commands do not emit non-blocking hints.
+fn pipeline_validation_hints_are_empty_for_best_practices() {
+    let yaml = r#"
+version: 1
+stages:
+  - name: rust
+    steps:
+      - name: cargo-build
+        image: "rust:1.94"
+        command: ["cargo", "build", "--workspace", "--locked"]
+  - name: python
+    steps:
+      - name: pip-install
+        image: "python:3.12"
+        command: ["pip", "install", "-r", "requirements.txt"]
+  - name: java
+    steps:
+      - name: maven-test
+        image: "maven:3.9-eclipse-temurin-21"
+        command: ["mvn", "-B", "test"]
+  - name: node
+    steps:
+      - name: npm-install
+        image: "node:20-bookworm"
+        command: ["npm", "ci"]
+  - name: go
+    steps:
+      - name: go-test
+        image: "golang:1.24-bookworm"
+        command: ["go", "test", "./..."]
+"#;
+
+    let pipeline = PipelineDefinition::from_yaml_str(yaml).expect("pipeline should parse");
+    let hints = pipeline.validation_hints();
+
+    assert!(hints.is_empty());
+}

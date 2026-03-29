@@ -115,6 +115,13 @@ pub struct PipelineValidationIssue {
     pub message: String,
 }
 
+/// One non-blocking recommendation emitted for pipeline quality improvements.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct PipelineValidationHint {
+    pub field: String,
+    pub message: String,
+}
+
 /// Error returned when parsing or validating pipeline DSL input.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PipelineDslError {
@@ -306,6 +313,125 @@ impl PipelineDefinition {
             Err(issues)
         }
     }
+
+    /// Returns non-blocking recommendations for common technology-specific pitfalls.
+    pub fn validation_hints(&self) -> Vec<PipelineValidationHint> {
+        let mut hints = Vec::new();
+
+        for (stage_idx, stage) in self.stages.iter().enumerate() {
+            for (step_idx, step) in stage.steps.iter().enumerate() {
+                let command_field = format!("stages[{stage_idx}].steps[{step_idx}].command");
+
+                if is_rust_step(step)
+                    && step_command_starts_with(step, &["cargo", "build"])
+                    && !step_command_contains(step, "--locked")
+                {
+                    hints.push(PipelineValidationHint {
+                        field: command_field.clone(),
+                        message: "Rust build should include --locked for deterministic dependency resolution".to_string(),
+                    });
+                }
+
+                if is_python_step(step)
+                    && (step_command_starts_with(step, &["pip", "install"])
+                        || step_uses_python_pip_install(step))
+                    && !step_command_contains(step, "-r")
+                {
+                    hints.push(PipelineValidationHint {
+                        field: command_field.clone(),
+                        message:
+                            "Python dependency install should prefer requirements lock file via -r"
+                                .to_string(),
+                    });
+                }
+
+                if is_java_step(step)
+                    && step_command_starts_with(step, &["mvn"])
+                    && !step_command_contains(step, "-B")
+                {
+                    hints.push(PipelineValidationHint {
+                        field: command_field.clone(),
+                        message: "Maven command should include -B for non-interactive CI execution"
+                            .to_string(),
+                    });
+                }
+
+                if is_node_step(step) && step_command_starts_with(step, &["npm", "install"]) {
+                    hints.push(PipelineValidationHint {
+                        field: command_field.clone(),
+                        message:
+                            "Node dependency install should prefer npm ci for reproducible installs"
+                                .to_string(),
+                    });
+                }
+
+                if is_go_step(step)
+                    && step_command_starts_with(step, &["go", "test"])
+                    && !step_command_contains(step, "./...")
+                {
+                    hints.push(PipelineValidationHint {
+                        field: command_field,
+                        message: "Go test should usually target ./... to cover all modules"
+                            .to_string(),
+                    });
+                }
+            }
+        }
+
+        hints
+    }
+}
+
+/// Detects whether one step is likely to run Rust toolchain commands.
+fn is_rust_step(step: &PipelineStep) -> bool {
+    step.image.contains("rust") || step.command.first().is_some_and(|token| token == "cargo")
+}
+
+/// Detects whether one step is likely to run Python toolchain commands.
+fn is_python_step(step: &PipelineStep) -> bool {
+    step.image.contains("python")
+        || step
+            .command
+            .first()
+            .is_some_and(|token| token == "pip" || token == "python" || token == "pytest")
+}
+
+/// Detects whether one step is likely to run Java/Maven toolchain commands.
+fn is_java_step(step: &PipelineStep) -> bool {
+    step.image.contains("maven") || step.command.first().is_some_and(|token| token == "mvn")
+}
+
+/// Detects whether one step is likely to run Node.js/NPM commands.
+fn is_node_step(step: &PipelineStep) -> bool {
+    step.image.contains("node") || step.command.first().is_some_and(|token| token == "npm")
+}
+
+/// Detects whether one step is likely to run Go toolchain commands.
+fn is_go_step(step: &PipelineStep) -> bool {
+    step.image.contains("golang") || step.command.first().is_some_and(|token| token == "go")
+}
+
+/// Returns true when one command starts with the expected token sequence.
+fn step_command_starts_with(step: &PipelineStep, expected_prefix: &[&str]) -> bool {
+    step.command
+        .iter()
+        .take(expected_prefix.len())
+        .map(String::as_str)
+        .eq(expected_prefix.iter().copied())
+}
+
+/// Returns true when one token is present in command arguments.
+fn step_command_contains(step: &PipelineStep, token: &str) -> bool {
+    step.command.iter().any(|entry| entry == token)
+}
+
+/// Returns true when command is equivalent to `python -m pip install ...`.
+fn step_uses_python_pip_install(step: &PipelineStep) -> bool {
+    step.command.len() >= 4
+        && step.command[0] == "python"
+        && step.command[1] == "-m"
+        && step.command[2] == "pip"
+        && step.command[3] == "install"
 }
 
 impl PipelineStage {
