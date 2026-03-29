@@ -1,0 +1,12 @@
+{
+  "terminal.integrated.profiles.osx": {
+    "bash (neutral tardigrade)": {
+      "path": "bash",
+      "args": [
+        "-lc",
+        "switch_to_neutral_env.sh --apply >/dev/null 2>&1 || true; exec bash -l"
+      ]
+    }
+  },
+  "terminal.integrated.defaultProfile.osx": "bash (neutral tardigrade)"
+}
