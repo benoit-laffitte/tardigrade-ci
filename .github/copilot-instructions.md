@@ -30,6 +30,8 @@
 - Keep changes minimal, focused, and aligned with the current modular architecture.
 - Preserve existing public APIs unless a change request requires otherwise.
 - Add or update tests when behavior changes.
+- Keep tests out of production source files: do not place inline `mod tests { ... }` blocks in main implementation files.
+- Prefer dedicated test files (for example `src/tests.rs`) or crate-level integration tests in `tests/`.
 - Keep documentation and examples in sync with implementation changes.
 - Code must be correctly commented:
 	- Add clear comments for non-obvious logic, decisions, edge cases, and invariants.
