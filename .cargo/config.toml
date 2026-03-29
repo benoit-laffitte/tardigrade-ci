@@ -1,2 +1,10 @@
 [registries]
 cargo-public = { index = "sparse+https://index.crates.io/" }
+
+[alias]
+xtask = "run -p tardigrade-xtask --"
+dashboard = "run -p tardigrade-xtask -- dashboard"
+dashboard-install = "run -p tardigrade-xtask -- dashboard install"
+dashboard-lint = "run -p tardigrade-xtask -- dashboard lint"
+dashboard-build = "run -p tardigrade-xtask -- dashboard build"
+dashboard-dev = "run -p tardigrade-xtask -- dashboard dev"

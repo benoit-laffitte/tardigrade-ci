@@ -45,6 +45,28 @@ Modern UI console:
 
 Open http://127.0.0.1:8080/
 
+Frontend dashboard subproject (React + TypeScript + Vite + Apollo + Oxlint):
+
+- cd crates/server/dashboard
+- env -u https_proxy -u http_proxy -u PXY_FAB_FONC npm install
+- env -u https_proxy -u http_proxy -u PXY_FAB_FONC npm run dev
+
+Centralized workflow with Cargo (Node + Rust via one tool):
+
+- env -u https_proxy -u http_proxy -u PXY_FAB_FONC cargo dashboard-install
+- env -u https_proxy -u http_proxy -u PXY_FAB_FONC cargo dashboard-lint
+- env -u https_proxy -u http_proxy -u PXY_FAB_FONC cargo dashboard-build
+- env -u https_proxy -u http_proxy -u PXY_FAB_FONC cargo dashboard-dev
+
+The Cargo aliases call `crates/xtask`, which runs npm with public registry (`https://registry.npmjs.org/`) and bypasses user proxy settings.
+
+Build dashboard assets served by Rust server:
+
+- cd crates/server/dashboard
+- env -u https_proxy -u http_proxy -u PXY_FAB_FONC npm run build
+
+The Vite build outputs to `crates/server/static` (`index.html`, `app.js`, `styles.css`) and the Axum server embeds these files at compile time.
+
 Run server with durable queue state on disk:
 
 TARDIGRADE_QUEUE_FILE=.tardigrade/queue-state.json \
