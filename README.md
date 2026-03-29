@@ -86,6 +86,14 @@ Cloud-friendly runtime env vars:
 
 env -u https_proxy -u http_proxy -u PXY_FAB_FONC cargo test --workspace
 
+Coverage (line threshold gate, default 75%):
+
+./scripts/coverage.sh
+
+Coverage with explicit threshold:
+
+./scripts/coverage.sh 80
+
 PostgreSQL persistence integration test (optional):
 
 TARDIGRADE_TEST_DATABASE_URL=postgres://tardigrade:tardigrade@127.0.0.1:5432/tardigrade \

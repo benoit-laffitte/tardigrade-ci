@@ -36,6 +36,15 @@
 				"--workspace"
 			],
 			"group": "build"
+		},
+		{
+			"label": "Coverage Gate (75%)",
+			"type": "shell",
+			"command": "./scripts/coverage.sh",
+			"args": [
+				"75"
+			],
+			"group": "test"
 		}
 	]
 }

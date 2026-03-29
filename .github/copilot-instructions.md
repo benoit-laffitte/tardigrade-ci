@@ -35,6 +35,7 @@
 	- Add clear comments for non-obvious logic, decisions, edge cases, and invariants.
 	- Prefer intent-focused comments over line-by-line narration.
 	- Avoid redundant comments that repeat self-explanatory code.
+- each function, structure and test must be commented
 
 ### Collaboration Guidelines
 - Work through tasks systematically and report progress concisely.
