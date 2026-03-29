@@ -698,10 +698,8 @@ impl CiService {
             .reclaim_stale(self.worker_lease_timeout)
             .map_err(|_| ApiError::Internal)?;
 
-        if !reclaimed.is_empty() {
-            if let Ok(mut metrics) = self.metrics.lock() {
-                metrics.reclaimed_total += reclaimed.len() as u64;
-            }
+        if !reclaimed.is_empty() && let Ok(mut metrics) = self.metrics.lock() {
+            metrics.reclaimed_total += reclaimed.len() as u64;
         }
 
         for build_id in reclaimed {

@@ -132,9 +132,7 @@ impl Scheduler for InMemoryScheduler {
     /// Pops queue head and records worker lease in in-flight map.
     fn claim_next(&self, worker_id: &str) -> Option<Uuid> {
         let mut state = self.state.lock().expect("scheduler queue poisoned");
-        let Some(build_id) = state.queue.pop_front() else {
-            return None;
-        };
+        let build_id = state.queue.pop_front()?;
 
         state.in_flight.insert(
             build_id,
