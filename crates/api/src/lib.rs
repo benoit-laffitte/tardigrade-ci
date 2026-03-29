@@ -1,6 +1,6 @@
 use async_graphql::{
-    Context, EmptySubscription, Enum, Error as GraphQLError, ID, InputObject, Object, Schema,
-    SimpleObject,
+    Context, EmptySubscription, Enum, Error as GraphQLError, ErrorExtensions, ID, InputObject,
+    Object, Schema, SimpleObject, Value as GraphQLValue,
     http::{GraphQLPlaygroundConfig, playground_source},
 };
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
@@ -387,7 +387,20 @@ fn parse_id_as_uuid(id: &ID) -> Result<Uuid, GraphQLError> {
 
 fn gql_err_from_api(err: ApiError) -> GraphQLError {
     match err {
-        ApiError::InvalidPipeline { message, .. } => GraphQLError::new(message),
+        ApiError::InvalidPipeline { message, details } => {
+            GraphQLError::new(message).extend_with(|_, extensions| {
+                extensions.set("code", "invalid_pipeline");
+                if let Some(issues) = details {
+                    let details_json = match serde_json::to_value(issues) {
+                        Ok(value) => value,
+                        Err(_) => serde_json::Value::Null,
+                    };
+                    if let Ok(details_value) = GraphQLValue::from_json(details_json) {
+                        extensions.set("details", details_value);
+                    }
+                }
+            })
+        }
         _ => GraphQLError::new(format!(
             "request failed with status {}",
             err.status_code().as_u16()

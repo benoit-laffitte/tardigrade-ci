@@ -159,4 +159,48 @@ async fn graphql_create_job_with_invalid_pipeline_yaml_returns_error() {
     assert!(!errors.is_empty());
     let message = errors[0]["message"].as_str().expect("error message");
     assert!(message.contains("invalid pipeline YAML"));
+    assert_eq!(errors[0]["extensions"]["code"], "invalid_pipeline");
+}
+
+#[tokio::test]
+async fn graphql_create_job_with_structurally_invalid_pipeline_yaml_returns_details() {
+    let app = tardigrade_api::build_router(tardigrade_api::ApiState::new("tardigrade-ci-test"));
+
+    let response = app
+        .oneshot(graphql_request(
+            r#"
+            mutation Create($input: GqlCreateJobInput!) {
+              create_job(input: $input) {
+                id
+              }
+            }
+            "#,
+            json!({
+                "input": {
+                    "name": "build-graphql-invalid-structure",
+                    "repository_url": "https://example.com/repo.git",
+                    "pipeline_path": "pipeline.yml",
+                    "pipeline_yaml": "version: 2\nstages:\n  - name: \"\"\n    steps:\n      - name: \"\"\n        image: \"\"\n        command: []"
+                }
+            }),
+        ))
+        .await
+        .expect("create job response");
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let payload = read_json(response).await;
+
+    let errors = payload["errors"].as_array().expect("graphql errors array");
+    assert!(!errors.is_empty());
+    assert_eq!(errors[0]["extensions"]["code"], "invalid_pipeline");
+
+    let details = errors[0]["extensions"]["details"]
+        .as_array()
+        .expect("validation details array");
+    assert!(!details.is_empty());
+    assert!(
+        details
+            .iter()
+            .any(|issue| issue["field"].as_str() == Some("version"))
+    );
 }
