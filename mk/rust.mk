@@ -1,6 +1,6 @@
 # Rust-centric targets.
 
-.PHONY: bootstrap fmt-check clippy lint test-fast test-all test build-rust
+.PHONY: bootstrap fmt-check clippy lint test-fast test-all test build-rust build-rust-release-images
 
 bootstrap: ## Prefetch Rust dependencies for local development
 	$(NO_PROXY_ENV) $(CARGO) fetch
@@ -23,3 +23,6 @@ test: test-all ## Alias for full test suite
 
 build-rust: ## Build Rust workspace artifacts
 	$(NO_PROXY_ENV) $(CARGO) build --workspace
+
+build-rust-release-images: ## Build release binaries used by runtime-only Docker images
+	$(NO_PROXY_ENV) $(CARGO) build --release -p tardigrade-server -p tardigrade-worker

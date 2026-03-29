@@ -48,7 +48,7 @@ Refinement decisions:
 - [x] `INDUS-208` Add `make ci` as canonical local/CI aggregate target.
 - [x] `INDUS-209` Add discoverability target and docs (`make help` + README command matrix).
 - [x] `INDUS-210` Wire CI pipeline to call Make targets as canonical entrypoints.
-- [ ] `INDUS-211` Remove CI redundancy by replacing full `make ci` control rerun with a lightweight pipeline-summary gate.
+- [x] `INDUS-211` Remove CI redundancy by replacing full `make ci` control rerun with a lightweight pipeline-summary gate.
 
 Definition of done:
 
