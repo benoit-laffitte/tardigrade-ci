@@ -205,6 +205,7 @@ Pipeline DSL reference and examples:
 
 - [docs/pipeline-schema.md](docs/pipeline-schema.md)
 - [docs/pipeline-recipes.md](docs/pipeline-recipes.md)
+- [docs/technology-profile-onboarding.md](docs/technology-profile-onboarding.md)
 
 Invalid pipeline behavior:
 
