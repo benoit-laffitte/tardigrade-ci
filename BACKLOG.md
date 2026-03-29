@@ -11,11 +11,11 @@ This file is the delivery backlog derived from the current roadmap.
 
 ### Priority reminder (current)
 
-1. Epic 0 (`INDUS-*`) industrialization and build orchestration.
-2. Epic 1 (`DSL-*`) to formalize pipeline contract.
-3. Epic 2 (`SCM-*`) for external trigger automation.
-4. Epic 3 (`PLUG-*`) for extension safety model.
-5. Reliability follow-ups (`REL-*`) as hardening milestones.
+1. Epic 1 (`DSL-*`) to formalize pipeline contract.
+2. Epic 2 (`SCM-*`) for external trigger automation.
+3. Epic 3 (`PLUG-*`) for extension safety model.
+4. Reliability follow-ups (`REL-*`) as hardening milestones.
+5. Epic 0 (`INDUS-*`) hardening follow-ups.
 
 ## Status legend
 
@@ -47,6 +47,7 @@ Refinement decisions:
 - [x] `INDUS-208` Add `make ci` as canonical local/CI aggregate target.
 - [x] `INDUS-209` Add discoverability target and docs (`make help` + README command matrix).
 - [x] `INDUS-210` Wire CI pipeline to call Make targets as canonical entrypoints.
+- [ ] `INDUS-211` Remove CI redundancy by replacing full `make ci` control rerun with a lightweight pipeline-summary gate.
 
 Definition of done:
 
@@ -146,8 +147,8 @@ Definition of done:
 
 ## Suggested delivery order
 
-1. Epic 0 (`INDUS-*`) to standardize build/test/package workflows.
-2. Epic 1 (`DSL-*`) to formalize pipeline contract.
-3. Epic 2 (`SCM-*`) for external trigger automation.
-4. Epic 3 (`PLUG-*`) for extension safety model.
-5. Reliability follow-ups (`REL-*`) as hardening milestones.
+1. Epic 1 (`DSL-*`) to formalize pipeline contract.
+2. Epic 2 (`SCM-*`) for external trigger automation.
+3. Epic 3 (`PLUG-*`) for extension safety model.
+4. Reliability follow-ups (`REL-*`) as hardening milestones.
+5. Epic 0 (`INDUS-*`) hardening follow-ups.
