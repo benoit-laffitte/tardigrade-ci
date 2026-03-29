@@ -5,10 +5,8 @@ use uuid::Uuid;
 /// Verifies queue state survives process restart with file-backed scheduler.
 #[test]
 fn file_backed_scheduler_persists_queue_state() {
-    let state_file = std::env::temp_dir().join(format!(
-        "tardigrade-scheduler-{}.json",
-        Uuid::new_v4()
-    ));
+    let state_file =
+        std::env::temp_dir().join(format!("tardigrade-scheduler-{}.json", Uuid::new_v4()));
 
     let first_build = Uuid::new_v4();
     let second_build = Uuid::new_v4();
@@ -16,7 +14,9 @@ fn file_backed_scheduler_persists_queue_state() {
     {
         let scheduler = FileBackedScheduler::open(&state_file).expect("open scheduler");
         scheduler.enqueue(first_build).expect("enqueue first build");
-        scheduler.enqueue(second_build).expect("enqueue second build");
+        scheduler
+            .enqueue(second_build)
+            .expect("enqueue second build");
 
         let claimed = scheduler
             .claim_next("worker-a")
@@ -226,12 +226,8 @@ fn file_backed_scheduler_reports_worker_loads() {
     scheduler.enqueue(build_a).expect("enqueue build a");
     scheduler.enqueue(build_b).expect("enqueue build b");
 
-    let claimed_a = scheduler
-        .claim_next("worker-a")
-        .expect("claim build a");
-    let claimed_b = scheduler
-        .claim_next("worker-a")
-        .expect("claim build b");
+    let claimed_a = scheduler.claim_next("worker-a").expect("claim build a");
+    let claimed_b = scheduler.claim_next("worker-a").expect("claim build b");
     assert_eq!(claimed_a, build_a);
     assert_eq!(claimed_b, build_b);
 

@@ -103,7 +103,11 @@ pub struct BuildRecord {
 
 impl JobDefinition {
     /// Creates a new job definition with generated id and creation timestamp.
-    pub fn new(name: impl Into<String>, repository_url: impl Into<String>, pipeline_path: impl Into<String>) -> Self {
+    pub fn new(
+        name: impl Into<String>,
+        repository_url: impl Into<String>,
+        pipeline_path: impl Into<String>,
+    ) -> Self {
         Self {
             id: Uuid::new_v4(),
             name: name.into(),

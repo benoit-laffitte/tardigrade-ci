@@ -370,7 +370,8 @@ impl Scheduler for RedisScheduler {
     /// Reads lease owner from redis in-flight hash.
     fn in_flight_owner(&self, build_id: Uuid) -> Result<Option<String>> {
         let mut connection = self.connection.lock().expect("redis queue poisoned");
-        let encoded: Option<String> = connection.hget(self.in_flight_key.as_str(), build_id.to_string())?;
+        let encoded: Option<String> =
+            connection.hget(self.in_flight_key.as_str(), build_id.to_string())?;
         let owner = encoded
             .and_then(|payload| serde_json::from_str::<InFlightEntry>(&payload).ok())
             .map(|entry| entry.worker_id);

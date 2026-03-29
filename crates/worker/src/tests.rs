@@ -1,7 +1,6 @@
 use super::{
-    ClaimStep, WorkerApi, claim_step, claim_url, complete_step, complete_url,
-    completion_body, load_worker_config, parse_poll_ms, resolve_server_url,
-    resolve_worker_id,
+    ClaimStep, WorkerApi, claim_step, claim_url, complete_step, complete_url, completion_body,
+    load_worker_config, parse_poll_ms, resolve_server_url, resolve_worker_id,
 };
 use anyhow::{Result, anyhow};
 use async_trait::async_trait;
@@ -83,7 +82,10 @@ fn worker_config_defaults_are_stable() {
 
 #[test]
 fn worker_config_uses_provided_values() {
-    assert_eq!(resolve_server_url(Some("http://ci.internal:8080")), "http://ci.internal:8080");
+    assert_eq!(
+        resolve_server_url(Some("http://ci.internal:8080")),
+        "http://ci.internal:8080"
+    );
     assert_eq!(resolve_worker_id(Some("worker-a")), "worker-a");
     assert_eq!(parse_poll_ms(Some("500")), 500);
 }
@@ -105,8 +107,7 @@ fn load_worker_config_produces_valid_values() {
 fn worker_urls_are_built_consistently() {
     let server_url = "http://127.0.0.1:8080";
     let worker_id = "worker-a";
-    let build_id = Uuid::parse_str("00000000-0000-0000-0000-000000000123")
-        .expect("valid uuid");
+    let build_id = Uuid::parse_str("00000000-0000-0000-0000-000000000123").expect("valid uuid");
 
     assert_eq!(
         claim_url(server_url, worker_id),

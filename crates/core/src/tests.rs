@@ -8,12 +8,20 @@ fn pipeline_definition_v1_sets_version_and_stages() {
     let build_step = PipelineStep::new(
         "build",
         "rust:1.94",
-        vec!["cargo".to_string(), "build".to_string(), "--workspace".to_string()],
+        vec![
+            "cargo".to_string(),
+            "build".to_string(),
+            "--workspace".to_string(),
+        ],
     );
     let test_step = PipelineStep::new(
         "test",
         "rust:1.94",
-        vec!["cargo".to_string(), "test".to_string(), "--workspace".to_string()],
+        vec![
+            "cargo".to_string(),
+            "test".to_string(),
+            "--workspace".to_string(),
+        ],
     );
 
     let pipeline = PipelineDefinition::v1(vec![
@@ -135,24 +143,32 @@ stages:
         PipelineDslError::Validation(issues) => {
             assert!(issues.iter().any(|issue| issue.field == "version"));
             assert!(issues.iter().any(|issue| issue.field == "stages[0].name"));
-            assert!(issues
-                .iter()
-                .any(|issue| issue.field == "stages[0].steps[0].image"));
-            assert!(issues
-                .iter()
-                .any(|issue| issue.field == "stages[0].steps[0].retry.max_attempts"));
-            assert!(issues
-                .iter()
-                .any(|issue| issue.field == "stages[0].steps[0].retry.backoff_ms"));
-            assert!(issues
-                .iter()
-                .any(|issue| issue.field == "stages[2].name" && issue.message.contains("duplicate")));
+            assert!(
+                issues
+                    .iter()
+                    .any(|issue| issue.field == "stages[0].steps[0].image")
+            );
+            assert!(
+                issues
+                    .iter()
+                    .any(|issue| issue.field == "stages[0].steps[0].retry.max_attempts")
+            );
+            assert!(
+                issues
+                    .iter()
+                    .any(|issue| issue.field == "stages[0].steps[0].retry.backoff_ms")
+            );
+            assert!(issues.iter().any(
+                |issue| issue.field == "stages[2].name" && issue.message.contains("duplicate")
+            ));
             assert!(issues.iter().any(|issue| {
                 issue.field == "stages[2].steps[1].name" && issue.message.contains("duplicate")
             }));
-            assert!(issues
-                .iter()
-                .any(|issue| issue.field == "stages[2].steps[1].command[0]"));
+            assert!(
+                issues
+                    .iter()
+                    .any(|issue| issue.field == "stages[2].steps[1].command[0]")
+            );
         }
         PipelineDslError::Yaml(message) => {
             panic!("expected validation errors, got YAML error: {message}")
@@ -193,10 +209,14 @@ stages:
           - test
 "#;
 
-    let pipeline = PipelineDefinition::from_yaml_str(yaml).expect("mixed stack pipeline should parse");
+    let pipeline =
+        PipelineDefinition::from_yaml_str(yaml).expect("mixed stack pipeline should parse");
 
     assert_eq!(pipeline.stages.len(), 3);
     assert_eq!(pipeline.stages[0].steps[0].image, "rust:1.94");
     assert_eq!(pipeline.stages[1].steps[0].image, "python:3.12");
-    assert_eq!(pipeline.stages[2].steps[0].image, "maven:3.9-eclipse-temurin-21");
+    assert_eq!(
+        pipeline.stages[2].steps[0].image,
+        "maven:3.9-eclipse-temurin-21"
+    );
 }

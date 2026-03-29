@@ -2,17 +2,16 @@ use anyhow::{Result, anyhow};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use serde_json::Value;
-use tardigrade_core::{BuildRecord, JobDefinition, JobStatus};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
+use tardigrade_core::{BuildRecord, JobDefinition, JobStatus};
 use tokio_postgres::{NoTls, Row};
 use uuid::Uuid;
 
 /// Ordered schema migrations applied at startup for postgres-backed persistence.
-const MIGRATIONS: &[(&str, &str)] = &[
-    (
-        "001_init_jobs_builds",
-        r#"
+const MIGRATIONS: &[(&str, &str)] = &[(
+    "001_init_jobs_builds",
+    r#"
         CREATE TABLE IF NOT EXISTS jobs (
             id UUID PRIMARY KEY,
             name TEXT NOT NULL,
@@ -31,8 +30,7 @@ const MIGRATIONS: &[(&str, &str)] = &[
             logs JSONB NOT NULL DEFAULT '[]'::jsonb
         );
         "#,
-    ),
-];
+)];
 
 #[async_trait]
 pub trait Storage {
@@ -163,7 +161,7 @@ impl Storage for PostgresStorage {
         // Upsert keeps API semantics idempotent when the same aggregate is saved multiple times.
         self.client
             .execute(
-            r#"
+                r#"
             INSERT INTO jobs (id, name, repository_url, pipeline_path, created_at)
             VALUES ($1, $2, $3, $4, $5)
             ON CONFLICT (id) DO UPDATE
@@ -172,9 +170,15 @@ impl Storage for PostgresStorage {
                 pipeline_path = EXCLUDED.pipeline_path,
                 created_at = EXCLUDED.created_at
             "#,
-            &[&job.id, &job.name, &job.repository_url, &job.pipeline_path, &job.created_at],
-        )
-        .await?;
+                &[
+                    &job.id,
+                    &job.name,
+                    &job.repository_url,
+                    &job.pipeline_path,
+                    &job.created_at,
+                ],
+            )
+            .await?;
 
         Ok(())
     }
@@ -197,10 +201,10 @@ impl Storage for PostgresStorage {
         let rows = self
             .client
             .query(
-            "SELECT id, name, repository_url, pipeline_path, created_at FROM jobs",
-            &[],
-        )
-        .await?;
+                "SELECT id, name, repository_url, pipeline_path, created_at FROM jobs",
+                &[],
+            )
+            .await?;
 
         rows.into_iter().map(row_to_job).collect()
     }
@@ -212,7 +216,7 @@ impl Storage for PostgresStorage {
 
         self.client
             .execute(
-            r#"
+                r#"
             INSERT INTO builds (id, job_id, status, queued_at, started_at, finished_at, logs)
             VALUES ($1, $2, $3, $4, $5, $6, $7)
             ON CONFLICT (id) DO UPDATE
@@ -223,17 +227,17 @@ impl Storage for PostgresStorage {
                 finished_at = EXCLUDED.finished_at,
                 logs = EXCLUDED.logs
             "#,
-            &[
-                &build.id,
-                &build.job_id,
-                &status_to_str(&build.status),
-                &build.queued_at,
-                &build.started_at,
-                &build.finished_at,
-                &logs,
-            ],
-        )
-        .await?;
+                &[
+                    &build.id,
+                    &build.job_id,
+                    &status_to_str(&build.status),
+                    &build.queued_at,
+                    &build.started_at,
+                    &build.finished_at,
+                    &logs,
+                ],
+            )
+            .await?;
 
         Ok(())
     }
@@ -256,10 +260,10 @@ impl Storage for PostgresStorage {
         let rows = self
             .client
             .query(
-            "SELECT id, job_id, status, queued_at, started_at, finished_at, logs FROM builds",
-            &[],
-        )
-        .await?;
+                "SELECT id, job_id, status, queued_at, started_at, finished_at, logs FROM builds",
+                &[],
+            )
+            .await?;
 
         rows.into_iter().map(row_to_build).collect()
     }

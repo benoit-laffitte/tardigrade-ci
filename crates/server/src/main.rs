@@ -3,12 +3,12 @@ use axum::{
     response::{Html, IntoResponse},
     routing::get,
 };
-use tardigrade_api::{ApiState, build_router};
 use serde::Deserialize;
-use tardigrade_scheduler::RedisScheduler;
-use tardigrade_storage::{InMemoryStorage, PostgresStorage, Storage};
 use std::fs;
 use std::sync::Arc;
+use tardigrade_api::{ApiState, build_router};
+use tardigrade_scheduler::RedisScheduler;
+use tardigrade_storage::{InMemoryStorage, PostgresStorage, Storage};
 use tokio::net::TcpListener;
 use tracing::{info, warn};
 use tracing_subscriber::EnvFilter;
@@ -19,8 +19,6 @@ const INDEX_HTML: &str = include_str!("../static/index.html");
 const APP_JS: &str = include_str!("../static/app.js");
 /// Embedded dashboard stylesheet payload.
 const STYLES_CSS: &str = include_str!("../static/styles.css");
-/// Embedded dashboard logo payload.
-const TARDIGRADE_LOGO_PNG: &[u8] = include_bytes!("../static/tardigrade-logo.png");
 /// Sunset target for removing any legacy queue-file flows outside dev mode.
 const FILE_BACKED_PROD_DEPRECATION_TARGET: &str = "2026-09-30";
 
@@ -54,7 +52,10 @@ struct RuntimeSection {
 /// Parses runtime mode from TOML payload.
 fn parse_runtime_mode_from_toml(raw: &str) -> Result<RuntimeMode> {
     let config: ServerConfigFile = toml::from_str(raw).context("parse TOML configuration")?;
-    Ok(config.runtime.map(|runtime| runtime.mode).unwrap_or_default())
+    Ok(config
+        .runtime
+        .map(|runtime| runtime.mode)
+        .unwrap_or_default())
 }
 
 /// Loads runtime mode from config file path, defaulting to dev when file is missing.
@@ -78,19 +79,19 @@ async fn main() -> Result<()> {
         )
         .init();
 
-    let service_name = std::env::var("TARDIGRADE_SERVICE_NAME")
-        .unwrap_or_else(|_| "tardigrade-ci".to_string());
+    let service_name =
+        std::env::var("TARDIGRADE_SERVICE_NAME").unwrap_or_else(|_| "tardigrade-ci".to_string());
     let config_file = std::env::var("TARDIGRADE_CONFIG_FILE")
         .unwrap_or_else(|_| "config/example.toml".to_string());
     let runtime_mode = load_runtime_mode_from_config(&config_file)?;
-    let bind_addr = std::env::var("TARDIGRADE_BIND_ADDR")
-        .unwrap_or_else(|_| "0.0.0.0:8080".to_string());
+    let bind_addr =
+        std::env::var("TARDIGRADE_BIND_ADDR").unwrap_or_else(|_| "0.0.0.0:8080".to_string());
     let run_embedded_worker = std::env::var("TARDIGRADE_EMBEDDED_WORKER")
         .ok()
         .map(|v| !matches!(v.as_str(), "0" | "false" | "FALSE" | "False"))
         .unwrap_or(true);
-    let redis_prefix = std::env::var("TARDIGRADE_REDIS_PREFIX")
-        .unwrap_or_else(|_| "tardigrade".to_string());
+    let redis_prefix =
+        std::env::var("TARDIGRADE_REDIS_PREFIX").unwrap_or_else(|_| "tardigrade".to_string());
     let database_url = std::env::var("TARDIGRADE_DATABASE_URL").ok();
     let redis_url = std::env::var("TARDIGRADE_REDIS_URL").ok();
     let queue_file = std::env::var("TARDIGRADE_QUEUE_FILE").ok();
@@ -144,12 +145,16 @@ async fn main() -> Result<()> {
             None => Arc::new(tardigrade_scheduler::InMemoryScheduler::default()),
         },
     };
-    let state = ApiState::with_components_and_mode(service_name.clone(), storage, scheduler, run_embedded_worker);
+    let state = ApiState::with_components_and_mode(
+        service_name.clone(),
+        storage,
+        scheduler,
+        run_embedded_worker,
+    );
     let router = build_router(state)
         .route("/", get(index))
         .route("/app.js", get(app_js))
-        .route("/styles.css", get(styles_css))
-        .route("/tardigrade-logo.png", get(tardigrade_logo_png));
+        .route("/styles.css", get(styles_css));
 
     let listener = TcpListener::bind(&bind_addr).await?;
     info!(bind_addr = %bind_addr, run_embedded_worker, "server listening");
@@ -177,11 +182,6 @@ async fn app_js() -> impl IntoResponse {
 /// Serves dashboard stylesheet with explicit content type.
 async fn styles_css() -> impl IntoResponse {
     ([("content-type", "text/css; charset=utf-8")], STYLES_CSS)
-}
-
-/// Serves dashboard logo with explicit content type.
-async fn tardigrade_logo_png() -> impl IntoResponse {
-    ([("content-type", "image/png")], TARDIGRADE_LOGO_PNG)
 }
 
 /// Waits for termination signals and lets server shut down gracefully.

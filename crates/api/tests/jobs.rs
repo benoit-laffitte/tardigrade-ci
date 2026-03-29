@@ -2,15 +2,16 @@ use axum::{
     body::{Body, to_bytes},
     http::{Request, StatusCode, header},
 };
+use serde::{Serialize, de::DeserializeOwned};
+use serde_json::Value;
+use std::sync::Arc;
 use tardigrade_api::{
     CancelBuildResponse, ClaimBuildResponse, CompleteBuildRequest, CompleteBuildResponse,
-    CreateJobResponse, DeadLetterBuildsResponse, ListBuildsResponse, ListJobsResponse, ListWorkersResponse,
-    RuntimeMetricsResponse, RunJobResponse, ServiceSettings,
+    CreateJobResponse, DeadLetterBuildsResponse, ListBuildsResponse, ListJobsResponse,
+    ListWorkersResponse, RunJobResponse, RuntimeMetricsResponse, ServiceSettings,
     WorkerBuildStatus,
 };
 use tardigrade_core::JobStatus;
-use serde::{Serialize, de::DeserializeOwned};
-use std::sync::Arc;
 use tardigrade_scheduler::InMemoryScheduler;
 use tardigrade_storage::InMemoryStorage;
 use tower::ServiceExt;
@@ -21,6 +22,7 @@ struct CreateJobRequestBody {
     name: String,
     repository_url: String,
     pipeline_path: String,
+    pipeline_yaml: Option<String>,
 }
 
 #[tokio::test]
@@ -31,6 +33,7 @@ async fn create_and_list_jobs() {
         name: "build-backend".to_string(),
         repository_url: "https://example.com/repo.git".to_string(),
         pipeline_path: "pipeline.yml".to_string(),
+        pipeline_yaml: None,
     };
 
     let create_response = app
@@ -69,6 +72,7 @@ async fn run_and_cancel_build() {
         name: "build-api".to_string(),
         repository_url: "https://example.com/api.git".to_string(),
         pipeline_path: "pipelines/api.yml".to_string(),
+        pipeline_yaml: None,
     };
 
     let create_response = app
@@ -119,6 +123,7 @@ async fn create_job_with_empty_name_returns_bad_request() {
         name: "   ".to_string(),
         repository_url: "https://example.com/repo.git".to_string(),
         pipeline_path: "pipeline.yml".to_string(),
+        pipeline_yaml: None,
     };
 
     let response = app
@@ -149,6 +154,93 @@ async fn run_unknown_job_returns_not_found() {
 }
 
 #[tokio::test]
+async fn create_job_with_invalid_pipeline_yaml_returns_unprocessable_entity() {
+    let app = tardigrade_api::build_router(tardigrade_api::ApiState::new("tardigrade-ci-test"));
+
+    let invalid_body = CreateJobRequestBody {
+        name: "build-invalid-yaml".to_string(),
+        repository_url: "https://example.com/repo.git".to_string(),
+        pipeline_path: "pipeline.yml".to_string(),
+        pipeline_yaml: Some("version: [1\nstages: []".to_string()),
+    };
+
+    let response = app
+        .oneshot(json_request("/jobs", &invalid_body))
+        .await
+        .expect("create response");
+
+    assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    let payload: Value = read_json_body(response).await;
+    assert_eq!(payload["code"], "invalid_pipeline");
+    assert!(
+        payload["message"]
+            .as_str()
+            .expect("error message")
+            .contains("invalid pipeline YAML")
+    );
+    assert!(payload["details"].is_null());
+}
+
+#[tokio::test]
+async fn create_job_with_valid_pipeline_yaml_returns_created() {
+    let app = tardigrade_api::build_router(tardigrade_api::ApiState::new("tardigrade-ci-test"));
+
+    let valid_body = CreateJobRequestBody {
+        name: "build-valid-yaml".to_string(),
+        repository_url: "https://example.com/repo.git".to_string(),
+        pipeline_path: "pipeline.yml".to_string(),
+        pipeline_yaml: Some(
+            "version: 1\nstages:\n  - name: build\n    steps:\n      - name: cargo-build\n        image: \"rust:1.94\"\n        command:\n          - cargo\n          - build\n"
+                .to_string(),
+        ),
+    };
+
+    let response = app
+        .oneshot(json_request("/jobs", &valid_body))
+        .await
+        .expect("create response");
+
+    assert_eq!(response.status(), StatusCode::CREATED);
+}
+
+#[tokio::test]
+async fn create_job_with_structurally_invalid_pipeline_yaml_returns_details() {
+    let app = tardigrade_api::build_router(tardigrade_api::ApiState::new("tardigrade-ci-test"));
+
+    let invalid_body = CreateJobRequestBody {
+        name: "build-invalid-structure".to_string(),
+        repository_url: "https://example.com/repo.git".to_string(),
+        pipeline_path: "pipeline.yml".to_string(),
+        pipeline_yaml: Some(
+            "version: 2\nstages:\n  - name: \"\"\n    steps:\n      - name: \"\"\n        image: \"\"\n        command: []\n"
+                .to_string(),
+        ),
+    };
+
+    let response = app
+        .oneshot(json_request("/jobs", &invalid_body))
+        .await
+        .expect("create response");
+
+    assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    let payload: Value = read_json_body(response).await;
+    assert_eq!(payload["code"], "invalid_pipeline");
+    assert!(
+        payload["message"]
+            .as_str()
+            .expect("error message")
+            .contains("pipeline validation failed")
+    );
+    let details = payload["details"].as_array().expect("details array");
+    assert!(!details.is_empty());
+    assert!(
+        details
+            .iter()
+            .any(|issue| issue["field"].as_str() == Some("version"))
+    );
+}
+
+#[tokio::test]
 async fn cancel_unknown_build_returns_not_found() {
     let app = tardigrade_api::build_router(tardigrade_api::ApiState::new("tardigrade-ci-test"));
     let unknown_id = Uuid::new_v4();
@@ -175,6 +267,7 @@ async fn run_job_is_eventually_marked_success() {
         name: "build-worker".to_string(),
         repository_url: "https://example.com/worker.git".to_string(),
         pipeline_path: "pipelines/worker.yml".to_string(),
+        pipeline_yaml: None,
     };
 
     let create_response = app
@@ -244,6 +337,7 @@ async fn external_worker_can_claim_and_complete_build() {
         name: "build-external-worker".to_string(),
         repository_url: "https://example.com/ext.git".to_string(),
         pipeline_path: "pipelines/ext.yml".to_string(),
+        pipeline_yaml: None,
     };
 
     let create_response = app
@@ -357,6 +451,7 @@ async fn worker_cannot_complete_build_claimed_by_other_worker() {
         name: "build-ownership-check".to_string(),
         repository_url: "https://example.com/owner.git".to_string(),
         pipeline_path: "pipelines/owner.yml".to_string(),
+        pipeline_yaml: None,
     };
 
     let create_response = app
@@ -446,6 +541,7 @@ async fn stale_claim_is_reclaimed_for_another_worker() {
         name: "build-reclaim-check".to_string(),
         repository_url: "https://example.com/reclaim.git".to_string(),
         pipeline_path: "pipelines/reclaim.yml".to_string(),
+        pipeline_yaml: None,
     };
 
     let create_response = app
@@ -514,10 +610,12 @@ async fn stale_claim_is_reclaimed_for_another_worker() {
         .iter()
         .find(|b| b.id == run_payload.build.id)
         .expect("build should exist");
-    assert!(build
-        .logs
-        .iter()
-        .any(|line| line.contains("stale worker lease timeout")));
+    assert!(
+        build
+            .logs
+            .iter()
+            .any(|line| line.contains("stale worker lease timeout"))
+    );
 }
 
 #[tokio::test]
@@ -539,6 +637,7 @@ async fn failed_build_is_requeued_with_retry_and_exposed_in_metrics() {
         name: "build-retry-check".to_string(),
         repository_url: "https://example.com/retry.git".to_string(),
         pipeline_path: "pipelines/retry.yml".to_string(),
+        pipeline_yaml: None,
     };
 
     let create_response = app
@@ -652,6 +751,7 @@ async fn exhausted_retries_moves_build_to_dead_letter_and_exposes_it() {
         name: "build-dead-letter-check".to_string(),
         repository_url: "https://example.com/dlq.git".to_string(),
         pipeline_path: "pipelines/dlq.yml".to_string(),
+        pipeline_yaml: None,
     };
 
     let create_response = app
@@ -715,10 +815,12 @@ async fn exhausted_retries_moves_build_to_dead_letter_and_exposes_it() {
         .expect("dead-letter response");
     assert_eq!(dead_letter_response.status(), StatusCode::OK);
     let dead_letters: DeadLetterBuildsResponse = read_json_body(dead_letter_response).await;
-    assert!(dead_letters
-        .builds
-        .iter()
-        .any(|b| b.id == run_payload.build.id && b.status == JobStatus::Failed));
+    assert!(
+        dead_letters
+            .builds
+            .iter()
+            .any(|b| b.id == run_payload.build.id && b.status == JobStatus::Failed)
+    );
 
     let metrics_response = app
         .oneshot(

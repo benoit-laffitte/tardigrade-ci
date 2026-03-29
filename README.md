@@ -195,6 +195,12 @@ curl -X POST http://127.0.0.1:8080/jobs \
 	-H 'content-type: application/json' \
 	-d '{"name":"build-api","repository_url":"https://example.com/api.git","pipeline_path":"pipelines/api.yml"}'
 
+Create a job with inline pipeline YAML validation (optional `pipeline_yaml`):
+
+curl -X POST http://127.0.0.1:8080/jobs \
+	-H 'content-type: application/json' \
+	-d '{"name":"build-api-inline","repository_url":"https://example.com/api.git","pipeline_path":"pipelines/api.yml","pipeline_yaml":"version: 1\nstages:\n  - name: build\n    steps:\n      - name: cargo-build\n        image: \"rust:1.94\"\n        command:\n          - cargo\n          - build"}'
+
 List jobs:
 
 curl http://127.0.0.1:8080/jobs

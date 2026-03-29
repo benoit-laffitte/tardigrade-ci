@@ -2,8 +2,8 @@ use anyhow::Result;
 use async_trait::async_trait;
 use reqwest::Client;
 use std::time::Duration;
-use tardigrade_core::BuildRecord;
 use tardigrade_api::{ClaimBuildResponse, CompleteBuildRequest, WorkerBuildStatus};
+use tardigrade_core::BuildRecord;
 use tracing::{error, info};
 
 #[derive(Debug, Clone)]
@@ -108,7 +108,11 @@ async fn claim_step(api: &impl WorkerApi, claim_url: &str) -> ClaimStep {
     }
 }
 
-async fn complete_step(api: &impl WorkerApi, complete_url: &str, body: &CompleteBuildRequest) -> bool {
+async fn complete_step(
+    api: &impl WorkerApi,
+    complete_url: &str,
+    body: &CompleteBuildRequest,
+) -> bool {
     match api.complete(complete_url, body).await {
         Ok(()) => true,
         Err(err) => {

@@ -1,11 +1,8 @@
 use super::{
     RuntimeMode, app_js, index, load_runtime_mode_from_config, parse_runtime_mode_from_toml,
-    styles_css, tardigrade_logo_png,
+    styles_css,
 };
-use axum::{
-    body::{Body, to_bytes},
-    response::IntoResponse,
-};
+use axum::{body::to_bytes, response::IntoResponse};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 #[tokio::test]
@@ -38,23 +35,6 @@ async fn styles_handler_sets_css_content_type() {
         .and_then(|v| v.to_str().ok())
         .unwrap_or_default();
     assert_eq!(content_type, "text/css; charset=utf-8");
-}
-
-#[tokio::test]
-async fn logo_handler_returns_png_content_type_and_body() {
-    let response = tardigrade_logo_png().await.into_response();
-    let content_type = response
-        .headers()
-        .get("content-type")
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or_default();
-    assert_eq!(content_type, "image/png");
-
-    let body = to_bytes(response.into_body(), usize::MAX)
-        .await
-        .expect("read body");
-    assert!(!body.is_empty());
-    let _ = Body::from(body);
 }
 
 #[test]

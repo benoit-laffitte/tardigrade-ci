@@ -3,11 +3,11 @@ use axum::{
     http::{Request, StatusCode, header},
 };
 use serde::{Serialize, de::DeserializeOwned};
+use std::sync::Arc;
 use tardigrade_api::{CreateJobResponse, ListBuildsResponse, ListJobsResponse, RunJobResponse};
 use tardigrade_scheduler::InMemoryScheduler;
 use tardigrade_storage::PostgresStorage;
 use tower::ServiceExt;
-use std::sync::Arc;
 
 #[derive(Serialize)]
 struct CreateJobRequestBody {
@@ -104,7 +104,12 @@ async fn postgres_storage_persists_jobs_and_builds_across_state_recreation() {
         .expect("builds response");
     assert_eq!(builds_response.status(), StatusCode::OK);
     let builds_payload: ListBuildsResponse = read_json_body(builds_response).await;
-    assert!(builds_payload.builds.iter().any(|b| b.id == run_payload.build.id));
+    assert!(
+        builds_payload
+            .builds
+            .iter()
+            .any(|b| b.id == run_payload.build.id)
+    );
 }
 
 fn json_request(path: &str, payload: &impl Serialize) -> Request<Body> {

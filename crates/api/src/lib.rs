@@ -8,19 +8,28 @@ use axum::{
     Extension, Json, Router,
     extract::{Path, State},
     http::StatusCode,
-    response::{Html, sse::{Event, KeepAlive, Sse}},
+    response::{
+        Html, IntoResponse, Response,
+        sse::{Event, KeepAlive, Sse},
+    },
     routing::{get, post},
 };
-use tardigrade_executor::WorkerExecutor;
-use tardigrade_core::{BuildRecord, JobDefinition, JobStatus, PipelineDefinition, PipelineDslError};
-use serde::{Deserialize, Serialize};
 use chrono::{DateTime, Utc};
-use std::{collections::{HashMap, HashSet}, sync::{Arc, Mutex}};
+use serde::{Deserialize, Serialize};
 use std::time::Duration;
-use tokio::sync::broadcast;
-use tokio_stream::{StreamExt, wrappers::BroadcastStream};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::{Arc, Mutex},
+};
+use tardigrade_core::{
+    BuildRecord, JobDefinition, JobStatus, PipelineDefinition, PipelineDslError,
+    PipelineValidationIssue,
+};
+use tardigrade_executor::WorkerExecutor;
 use tardigrade_scheduler::{InMemoryScheduler, Scheduler};
 use tardigrade_storage::{InMemoryStorage, Storage};
+use tokio::sync::broadcast;
+use tokio_stream::{StreamExt, wrappers::BroadcastStream};
 use uuid::Uuid;
 
 #[derive(Clone)]
@@ -96,6 +105,14 @@ pub struct CreateJobRequest {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CreateJobResponse {
     pub job: JobDefinition,
+}
+
+/// Structured API error response with optional detailed issues.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ApiErrorResponse {
+    pub code: String,
+    pub message: String,
+    pub details: Option<Vec<PipelineValidationIssue>>,
 }
 
 /// Response payload listing known jobs.
@@ -370,17 +387,21 @@ fn parse_id_as_uuid(id: &ID) -> Result<Uuid, GraphQLError> {
 
 fn gql_err_from_api(err: ApiError) -> GraphQLError {
     match err {
-        ApiError::InvalidPipeline(message) => GraphQLError::new(message),
-        _ => GraphQLError::new(format!("request failed with status {}", err.status_code().as_u16())),
+        ApiError::InvalidPipeline { message, .. } => GraphQLError::new(message),
+        _ => GraphQLError::new(format!(
+            "request failed with status {}",
+            err.status_code().as_u16()
+        )),
     }
 }
 
 /// Converts DSL parser/validator failures into API-level invalid pipeline errors.
 fn map_pipeline_error(error: PipelineDslError) -> ApiError {
     match error {
-        PipelineDslError::Yaml(message) => {
-            ApiError::InvalidPipeline(format!("invalid pipeline YAML: {message}"))
-        }
+        PipelineDslError::Yaml(message) => ApiError::InvalidPipeline {
+            message: format!("invalid pipeline YAML: {message}"),
+            details: None,
+        },
         PipelineDslError::Validation(issues) => {
             let summary = issues
                 .iter()
@@ -388,10 +409,15 @@ fn map_pipeline_error(error: PipelineDslError) -> ApiError {
                 .map(|issue| format!("{}: {}", issue.field, issue.message))
                 .collect::<Vec<_>>()
                 .join("; ");
-            let suffix = if issues.len() > 3 { " (additional issues omitted)" } else { "" };
-            ApiError::InvalidPipeline(format!(
-                "pipeline validation failed: {summary}{suffix}"
-            ))
+            let suffix = if issues.len() > 3 {
+                " (additional issues omitted)"
+            } else {
+                ""
+            };
+            ApiError::InvalidPipeline {
+                message: format!("pipeline validation failed: {summary}{suffix}"),
+                details: Some(issues),
+            }
         }
     }
 }
@@ -417,11 +443,7 @@ impl QueryRoot {
     /// Returns readiness status after dependency checks.
     async fn ready(&self, ctx: &Context<'_>) -> Result<GqlReadyResponse, GraphQLError> {
         let state = ctx.data_unchecked::<ApiState>();
-        state
-            .service
-            .is_ready()
-            .await
-            .map_err(gql_err_from_api)?;
+        state.service.is_ready().await.map_err(gql_err_from_api)?;
         Ok(GqlReadyResponse {
             status: "ready".to_string(),
         })
@@ -437,7 +459,11 @@ impl QueryRoot {
     /// Returns builds list sorted by queue time.
     async fn builds(&self, ctx: &Context<'_>) -> Result<Vec<GqlBuildRecord>, GraphQLError> {
         let state = ctx.data_unchecked::<ApiState>();
-        let builds = state.service.list_builds().await.map_err(gql_err_from_api)?;
+        let builds = state
+            .service
+            .list_builds()
+            .await
+            .map_err(gql_err_from_api)?;
         Ok(builds.into_iter().map(Into::into).collect())
     }
 
@@ -455,7 +481,10 @@ impl QueryRoot {
     }
 
     /// Returns builds currently moved to dead-letter set.
-    async fn dead_letter_builds(&self, ctx: &Context<'_>) -> Result<Vec<GqlBuildRecord>, GraphQLError> {
+    async fn dead_letter_builds(
+        &self,
+        ctx: &Context<'_>,
+    ) -> Result<Vec<GqlBuildRecord>, GraphQLError> {
         let state = ctx.data_unchecked::<ApiState>();
         let builds = state
             .service
@@ -466,10 +495,17 @@ impl QueryRoot {
     }
 
     /// Returns full dashboard snapshot in a single request.
-    async fn dashboard_snapshot(&self, ctx: &Context<'_>) -> Result<GqlDashboardSnapshot, GraphQLError> {
+    async fn dashboard_snapshot(
+        &self,
+        ctx: &Context<'_>,
+    ) -> Result<GqlDashboardSnapshot, GraphQLError> {
         let state = ctx.data_unchecked::<ApiState>();
         let jobs = state.service.list_jobs().await.map_err(gql_err_from_api)?;
-        let builds = state.service.list_builds().await.map_err(gql_err_from_api)?;
+        let builds = state
+            .service
+            .list_builds()
+            .await
+            .map_err(gql_err_from_api)?;
         let workers = state.service.list_workers().map_err(gql_err_from_api)?;
         let dead_letter_builds = state
             .service
@@ -530,7 +566,11 @@ impl MutationRoot {
     }
 
     /// Cancels one build by id.
-    async fn cancel_build(&self, ctx: &Context<'_>, build_id: ID) -> Result<GqlBuildRecord, GraphQLError> {
+    async fn cancel_build(
+        &self,
+        ctx: &Context<'_>,
+        build_id: ID,
+    ) -> Result<GqlBuildRecord, GraphQLError> {
         let state = ctx.data_unchecked::<ApiState>();
         let build_uuid = parse_id_as_uuid(&build_id)?;
         let build = state
@@ -596,7 +636,11 @@ impl ApiState {
         service_name: impl Into<String>,
         storage: Arc<dyn Storage + Send + Sync>,
     ) -> Self {
-        Self::with_components(service_name, storage, Arc::new(InMemoryScheduler::default()))
+        Self::with_components(
+            service_name,
+            storage,
+            Arc::new(InMemoryScheduler::default()),
+        )
     }
 
     /// Builds API state from explicit storage and scheduler components.
@@ -725,7 +769,9 @@ impl CiService {
             .reclaim_stale(self.worker_lease_timeout)
             .map_err(|_| ApiError::Internal)?;
 
-        if !reclaimed.is_empty() && let Ok(mut metrics) = self.metrics.lock() {
+        if !reclaimed.is_empty()
+            && let Ok(mut metrics) = self.metrics.lock()
+        {
             metrics.reclaimed_total += reclaimed.len() as u64;
         }
 
@@ -877,12 +923,17 @@ impl CiService {
             .save_build(executed)
             .await
             .map_err(|_| ApiError::Internal)?;
-        self.scheduler.ack(build_id).map_err(|_| ApiError::Internal)?;
+        self.scheduler
+            .ack(build_id)
+            .map_err(|_| ApiError::Internal)?;
         Ok(())
     }
 
     /// Claims one build for worker and transitions state to running when possible.
-    async fn claim_build_for_worker(&self, worker_id: &str) -> Result<Option<BuildRecord>, ApiError> {
+    async fn claim_build_for_worker(
+        &self,
+        worker_id: &str,
+    ) -> Result<Option<BuildRecord>, ApiError> {
         self.touch_worker(worker_id);
         // Claim path always tries to reclaim stale leases before taking new work.
         self.reclaim_stale_builds().await?;
@@ -897,13 +948,17 @@ impl CiService {
             .await
             .map_err(|_| ApiError::Internal)?
         else {
-            self.scheduler.ack(build_id).map_err(|_| ApiError::Internal)?;
+            self.scheduler
+                .ack(build_id)
+                .map_err(|_| ApiError::Internal)?;
             return Ok(None);
         };
 
         if !build.mark_running() {
             // Another actor may have completed or canceled it.
-            self.scheduler.ack(build_id).map_err(|_| ApiError::Internal)?;
+            self.scheduler
+                .ack(build_id)
+                .map_err(|_| ApiError::Internal)?;
             return Ok(None);
         }
 
@@ -1010,7 +1065,9 @@ impl CiService {
                         .save_build(build.clone())
                         .await
                         .map_err(|_| ApiError::Internal)?;
-                    self.scheduler.ack(build_id).map_err(|_| ApiError::Internal)?;
+                    self.scheduler
+                        .ack(build_id)
+                        .map_err(|_| ApiError::Internal)?;
 
                     if let Ok(mut metrics) = self.metrics.lock() {
                         metrics.retry_requeued_total += 1;
@@ -1044,7 +1101,9 @@ impl CiService {
 
                 if build.mark_failed() {
                     // Build is moved to dead-letter after final retry is exhausted.
-                    build.append_log(format!("Failed by worker {worker_id} after retries (moved to dead-letter)"));
+                    build.append_log(format!(
+                        "Failed by worker {worker_id} after retries (moved to dead-letter)"
+                    ));
                     if let Ok(mut dead_letter) = self.dead_letter_builds.lock() {
                         dead_letter.insert(build_id);
                     }
@@ -1067,7 +1126,9 @@ impl CiService {
             .save_build(build.clone())
             .await
             .map_err(|_| ApiError::Internal)?;
-        self.scheduler.ack(build_id).map_err(|_| ApiError::Internal)?;
+        self.scheduler
+            .ack(build_id)
+            .map_err(|_| ApiError::Internal)?;
         Ok(build)
     }
 
@@ -1100,7 +1161,10 @@ impl CiService {
     /// Lists known workers enriched with active build counts.
     fn list_workers(&self) -> Result<Vec<WorkerInfo>, ApiError> {
         let loads = self.scheduler.worker_loads();
-        let registry = self.worker_registry.lock().map_err(|_| ApiError::Internal)?;
+        let registry = self
+            .worker_registry
+            .lock()
+            .map_err(|_| ApiError::Internal)?;
 
         let mut workers = registry
             .iter()
@@ -1181,7 +1245,10 @@ impl CiService {
 /// Internal service-layer error taxonomy converted to HTTP codes at the edge.
 enum ApiError {
     BadRequest,
-    InvalidPipeline(String),
+    InvalidPipeline {
+        message: String,
+        details: Option<Vec<PipelineValidationIssue>>,
+    },
     NotFound,
     Conflict,
     Internal,
@@ -1192,7 +1259,7 @@ impl ApiError {
     fn status_code(&self) -> StatusCode {
         match self {
             Self::BadRequest => StatusCode::BAD_REQUEST,
-            Self::InvalidPipeline(_) => StatusCode::UNPROCESSABLE_ENTITY,
+            Self::InvalidPipeline { .. } => StatusCode::UNPROCESSABLE_ENTITY,
             Self::NotFound => StatusCode::NOT_FOUND,
             Self::Conflict => StatusCode::CONFLICT,
             Self::Internal => StatusCode::INTERNAL_SERVER_ERROR,
@@ -1257,25 +1324,36 @@ async fn live() -> Json<LiveResponse> {
 }
 
 /// Returns readiness probe response after dependency checks.
-async fn ready(State(state): State<ApiState>) -> Result<(StatusCode, Json<ReadyResponse>), StatusCode> {
-    state.service.is_ready().await.map_err(|e| e.status_code())?;
+async fn ready(
+    State(state): State<ApiState>,
+) -> Result<(StatusCode, Json<ReadyResponse>), StatusCode> {
+    state
+        .service
+        .is_ready()
+        .await
+        .map_err(|e| e.status_code())?;
     Ok((StatusCode::OK, Json(ReadyResponse { status: "ready" })))
 }
 
 /// Streams live operational events to dashboard clients using SSE.
-async fn events(State(state): State<ApiState>) -> Sse<impl tokio_stream::Stream<Item = Result<Event, std::convert::Infallible>>> {
+async fn events(
+    State(state): State<ApiState>,
+) -> Sse<impl tokio_stream::Stream<Item = Result<Event, std::convert::Infallible>>> {
     // BroadcastStream may drop lagging messages; dashboard treats this as best-effort live feed.
-    let stream = BroadcastStream::new(state.service.subscribe_events()).filter_map(|msg| {
-        match msg {
+    let stream =
+        BroadcastStream::new(state.service.subscribe_events()).filter_map(|msg| match msg {
             Ok(event) => {
                 let data = serde_json::to_string(&event).ok()?;
                 Some(Ok(Event::default().data(data)))
             }
             Err(_) => None,
-        }
-    });
+        });
 
-    Sse::new(stream).keep_alive(KeepAlive::new().interval(Duration::from_secs(15)).text("keep-alive"))
+    Sse::new(stream).keep_alive(
+        KeepAlive::new()
+            .interval(Duration::from_secs(15))
+            .text("keep-alive"),
+    )
 }
 
 /// Returns current reliability metrics snapshot.
@@ -1299,21 +1377,31 @@ async fn dead_letter_builds(
 async fn create_job(
     State(state): State<ApiState>,
     Json(payload): Json<CreateJobRequest>,
-) -> Result<(StatusCode, Json<CreateJobResponse>), StatusCode> {
-    let job = state
-        .service
-        .create_job(payload)
-        .await
-        .map_err(|e| e.status_code())?;
-
-    Ok((StatusCode::CREATED, Json(CreateJobResponse { job })))
+) -> Response {
+    match state.service.create_job(payload).await {
+        Ok(job) => (StatusCode::CREATED, Json(CreateJobResponse { job })).into_response(),
+        Err(ApiError::InvalidPipeline { message, details }) => (
+            StatusCode::UNPROCESSABLE_ENTITY,
+            Json(ApiErrorResponse {
+                code: "invalid_pipeline".to_string(),
+                message,
+                details,
+            }),
+        )
+            .into_response(),
+        Err(err) => err.status_code().into_response(),
+    }
 }
 
 /// Lists all jobs.
 async fn list_jobs(
     State(state): State<ApiState>,
 ) -> Result<(StatusCode, Json<ListJobsResponse>), StatusCode> {
-    let jobs = state.service.list_jobs().await.map_err(|e| e.status_code())?;
+    let jobs = state
+        .service
+        .list_jobs()
+        .await
+        .map_err(|e| e.status_code())?;
     Ok((StatusCode::OK, Json(ListJobsResponse { jobs })))
 }
 
@@ -1322,7 +1410,11 @@ async fn run_job(
     Path(id): Path<Uuid>,
     State(state): State<ApiState>,
 ) -> Result<(StatusCode, Json<RunJobResponse>), StatusCode> {
-    let build = state.service.run_job(id).await.map_err(|e| e.status_code())?;
+    let build = state
+        .service
+        .run_job(id)
+        .await
+        .map_err(|e| e.status_code())?;
 
     if state.run_embedded_worker {
         // Embedded mode keeps bootstrap behavior while worker APIs allow external workers.
@@ -1339,7 +1431,11 @@ async fn run_job(
 async fn list_builds(
     State(state): State<ApiState>,
 ) -> Result<(StatusCode, Json<ListBuildsResponse>), StatusCode> {
-    let builds = state.service.list_builds().await.map_err(|e| e.status_code())?;
+    let builds = state
+        .service
+        .list_builds()
+        .await
+        .map_err(|e| e.status_code())?;
     Ok((StatusCode::OK, Json(ListBuildsResponse { builds })))
 }
 
@@ -1356,7 +1452,11 @@ async fn cancel_build(
     Path(id): Path<Uuid>,
     State(state): State<ApiState>,
 ) -> Result<(StatusCode, Json<CancelBuildResponse>), StatusCode> {
-    let build = state.service.cancel_build(id).await.map_err(|e| e.status_code())?;
+    let build = state
+        .service
+        .cancel_build(id)
+        .await
+        .map_err(|e| e.status_code())?;
 
     Ok((StatusCode::OK, Json(CancelBuildResponse { build })))
 }

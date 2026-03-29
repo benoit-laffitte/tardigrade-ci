@@ -62,8 +62,8 @@ Goal: make pipeline definitions explicit, validated, and versioned.
 
 - [x] `DSL-01` Define pipeline schema (`version`, `stages`, `steps`, retry policy hooks).
 - [x] `DSL-02` Add YAML parser/validator crate integration (`serde_yaml` + structural validation).
-- [-] `DSL-03` Add API validation path for pipeline files before build enqueue.
-- [ ] `DSL-04` Add clear error model for invalid pipeline definitions (HTTP + GraphQL surfaces).
+- [x] `DSL-03` Add API validation path for pipeline files before build enqueue.
+- [-] `DSL-04` Add clear error model for invalid pipeline definitions (HTTP + GraphQL surfaces).
 - [ ] `DSL-05` Add tests for valid/invalid DSL samples and edge cases.
 - [ ] `DSL-06` Document DSL format with examples in docs/README.
 

@@ -89,7 +89,10 @@ async fn graphql_create_and_run_job_flow_works() {
 
     assert_eq!(create_response.status(), StatusCode::OK);
     let create_payload = read_json(create_response).await;
-    assert!(create_payload.get("errors").is_none(), "graphql errors: {create_payload}");
+    assert!(
+        create_payload.get("errors").is_none(),
+        "graphql errors: {create_payload}"
+    );
 
     let job_id = create_payload["data"]["create_job"]["id"]
         .as_str()
@@ -113,10 +116,47 @@ async fn graphql_create_and_run_job_flow_works() {
 
     assert_eq!(run_response.status(), StatusCode::OK);
     let run_payload = read_json(run_response).await;
-    assert!(run_payload.get("errors").is_none(), "graphql errors: {run_payload}");
+    assert!(
+        run_payload.get("errors").is_none(),
+        "graphql errors: {run_payload}"
+    );
 
     let status = run_payload["data"]["run_job"]["status"]
         .as_str()
         .expect("status string");
     assert!(status == "PENDING" || status == "SUCCESS" || status == "RUNNING");
+}
+
+#[tokio::test]
+async fn graphql_create_job_with_invalid_pipeline_yaml_returns_error() {
+    let app = tardigrade_api::build_router(tardigrade_api::ApiState::new("tardigrade-ci-test"));
+
+    let response = app
+        .oneshot(graphql_request(
+            r#"
+            mutation Create($input: GqlCreateJobInput!) {
+              create_job(input: $input) {
+                id
+              }
+            }
+            "#,
+            json!({
+                "input": {
+                    "name": "build-graphql-invalid",
+                    "repository_url": "https://example.com/repo.git",
+                    "pipeline_path": "pipeline.yml",
+                    "pipeline_yaml": "version: [1\nstages: []"
+                }
+            }),
+        ))
+        .await
+        .expect("create job response");
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let payload = read_json(response).await;
+
+    let errors = payload["errors"].as_array().expect("graphql errors array");
+    assert!(!errors.is_empty());
+    let message = errors[0]["message"].as_str().expect("error message");
+    assert!(message.contains("invalid pipeline YAML"));
 }
