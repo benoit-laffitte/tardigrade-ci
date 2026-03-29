@@ -36,6 +36,7 @@ services:
     container_name: tardigrade-controller
     restart: unless-stopped
     environment:
+      TARDIGRADE_CONFIG_FILE: /app/config/runtime-prod.toml
       TARDIGRADE_BIND_ADDR: 0.0.0.0:8080
       TARDIGRADE_SERVICE_NAME: tardigrade-ci
       TARDIGRADE_EMBEDDED_WORKER: "false"

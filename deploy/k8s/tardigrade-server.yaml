@@ -21,10 +21,18 @@ spec:
         ports:
         - containerPort: 8080
         env:
+        - name: TARDIGRADE_CONFIG_FILE
+          value: /app/config/runtime-prod.toml
         - name: TARDIGRADE_BIND_ADDR
           value: 0.0.0.0:8080
         - name: TARDIGRADE_EMBEDDED_WORKER
           value: "false"
+        - name: TARDIGRADE_DATABASE_URL
+          value: postgres://tardigrade:tardigrade@postgres:5432/tardigrade
+        - name: TARDIGRADE_REDIS_URL
+          value: redis://redis:6379
+        - name: TARDIGRADE_REDIS_PREFIX
+          value: tardigrade
         readinessProbe:
           httpGet:
             path: /ready

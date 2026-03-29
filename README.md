@@ -67,9 +67,9 @@ Build dashboard assets served by Rust server:
 
 The Vite build outputs to `crates/server/static` (`index.html`, `app.js`, `styles.css`) and the Axum server embeds these files at compile time.
 
-Run server with durable queue state on disk:
+Run server in dev mode from config file (Redis optional, in-memory fallback):
 
-TARDIGRADE_QUEUE_FILE=.tardigrade/queue-state.json \
+TARDIGRADE_CONFIG_FILE=config/runtime-dev.toml \
 env -u https_proxy -u http_proxy -u PXY_FAB_FONC cargo run -p tardigrade-server
 
 Run server with Redis-backed queue:
@@ -80,6 +80,7 @@ env -u https_proxy -u http_proxy -u PXY_FAB_FONC cargo run -p tardigrade-server
 
 Run server with PostgreSQL storage + Redis queue:
 
+TARDIGRADE_CONFIG_FILE=config/runtime-prod.toml \
 TARDIGRADE_DATABASE_URL=postgres://tardigrade:tardigrade@127.0.0.1:5432/tardigrade \
 TARDIGRADE_REDIS_URL=redis://127.0.0.1:6379 \
 TARDIGRADE_REDIS_PREFIX=tardigrade \
@@ -93,16 +94,23 @@ env -u https_proxy -u http_proxy -u PXY_FAB_FONC cargo run -p tardigrade-worker
 
 Cloud-friendly runtime env vars:
 
+- TARDIGRADE_CONFIG_FILE (optional config file path, default: config/example.toml)
 - TARDIGRADE_BIND_ADDR (default: 0.0.0.0:8080)
 - TARDIGRADE_SERVICE_NAME (default: tardigrade-ci)
 - TARDIGRADE_EMBEDDED_WORKER (default: true)
-- TARDIGRADE_QUEUE_FILE (optional durable queue state file)
 - TARDIGRADE_DATABASE_URL (optional PostgreSQL URL for jobs/builds persistence)
 - TARDIGRADE_REDIS_URL (optional Redis URL for distributed queue backend)
 - TARDIGRADE_REDIS_PREFIX (optional Redis key prefix, default: tardigrade)
 - TARDIGRADE_SERVER_URL (worker -> controller URL)
 - TARDIGRADE_WORKER_ID (worker identity)
 - TARDIGRADE_WORKER_POLL_MS (worker polling interval)
+
+Runtime mode is read from config file under `[runtime]`:
+
+- `mode = "dev"`: scheduler uses Redis when configured, otherwise in-memory fallback.
+- `mode = "prod"`: server fails fast unless both PostgreSQL and Redis are configured.
+
+`TARDIGRADE_QUEUE_FILE` is deprecated and ignored.
 
 ## Test
 

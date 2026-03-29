@@ -2,6 +2,21 @@
 
 This file is the delivery backlog derived from the current roadmap.
 
+## Team working agreement
+
+- From now on, priorities are reminded at the start of backlog-related discussions.
+- Every new feature request must be tracked in this file before implementation.
+- New entries should use an ID with this format: `FEAT-XXX`.
+- Each new entry must include: goal, scope, status, and acceptance criteria.
+
+### Priority reminder (current)
+
+1. Epic 4 (`SCHED-*`) to lock production behavior.
+2. Epic 1 (`DSL-*`) to formalize pipeline contract.
+3. Epic 2 (`SCM-*`) for external trigger automation.
+4. Epic 3 (`PLUG-*`) for extension safety model.
+5. Reliability follow-ups (`REL-*`) as hardening milestones.
+
 ## Status legend
 
 - `[ ]` not started
@@ -67,12 +82,12 @@ Definition of done:
 
 Goal: make Redis the default production scheduler path and reduce file-backed usage to local/dev only.
 
-- [ ] `SCHED-01` Add explicit runtime mode selection (`dev`, `prod`).
-- [ ] `SCHED-02` Enforce Redis scheduler for production mode.
-- [ ] `SCHED-03` Keep file-backed scheduler for local bootstrap only.
-- [ ] `SCHED-04` Add startup diagnostics when production prerequisites are missing.
-- [ ] `SCHED-05` Update deployment manifests and docs to reflect Redis-first behavior.
-- [ ] `SCHED-06` Add migration notes for users still relying on file-backed queue in clustered runs.
+- [x] `SCHED-01` Add explicit runtime mode selection (`dev`, `prod`).
+- [x] `SCHED-02` Enforce Redis scheduler for production mode.
+- [x] `SCHED-03` Remove file-backed scheduler from runtime fallback path.
+- [x] `SCHED-04` Add startup diagnostics when production prerequisites are missing.
+- [x] `SCHED-05` Update deployment manifests and docs to reflect Redis-first behavior.
+- [-] `SCHED-06` Add migration notes for users still relying on file-backed queue in clustered runs.
 
 Definition of done:
 
