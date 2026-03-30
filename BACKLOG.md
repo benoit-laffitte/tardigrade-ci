@@ -11,12 +11,15 @@ This file is the delivery backlog derived from the current roadmap.
 
 ### Priority reminder (current)
 
-1. Epic 1b (`TECH-*`) to make multi-technology support explicit and productized.
-2. Epic 1 (`DSL-*`) to formalize pipeline contract.
-3. Epic 2 (`SCM-*`) for external trigger automation.
-4. Epic 3 (`PLUG-*`) for extension safety model.
-5. Reliability follow-ups (`REL-*`) as hardening milestones.
-6. Epic 0 (`INDUS-*`) hardening follow-ups.
+1. Epic 2 (`SCM-*`) for external trigger automation.
+2. Epic 3 (`PLUG-*`) for extension safety model.
+3. Reliability follow-ups (`REL-*`) as hardening milestones.
+4. Epic 0 (`INDUS-*`) hardening follow-ups.
+
+Context update:
+
+- Epic 1 (`DSL-*`) is complete.
+- Epic 1b (`TECH-*`) is complete.
 
 ## Status legend
 
@@ -94,8 +97,18 @@ Definition of done:
 
 Goal: trigger builds from SCM events and periodic repository checks.
 
-- [-] `SCM-01` Define trigger model (manual, webhook, polling).
-- [ ] `SCM-02` Add webhook endpoint(s) with signature verification.
+Refinement decisions (MVP):
+
+- Delivery mode: webhook + polling in parallel.
+- First providers: GitHub and GitLab.
+- Trigger events: `push`, `pull_request` / `merge_request`, `tag`, and manual dispatch.
+- Webhook security baseline: signature verification + IP allowlist.
+- Dedup strategy: provider `event_id` first, fallback to (`repo`, `commit_sha`, `event_type`).
+- Polling scope: branch polling by default (`main` / `master` + configured branches).
+- Ingestion failure behavior: return error, emit logs, emit metrics.
+
+- [x] `SCM-01` Define trigger model (manual, webhook, polling).
+- [-] `SCM-02` Add webhook endpoint(s) with signature verification.
 - [ ] `SCM-03` Implement provider adapters (GitHub/GitLab first).
 - [ ] `SCM-04` Add SCM polling worker loop and configurable intervals.
 - [ ] `SCM-05` Add deduplication/idempotency for repeated webhook events.
@@ -165,9 +178,7 @@ Definition of done:
 
 ## Suggested delivery order
 
-1. Epic 1b (`TECH-*`) to productize multi-technology support.
-2. Epic 1 (`DSL-*`) to formalize pipeline contract.
-3. Epic 2 (`SCM-*`) for external trigger automation.
-4. Epic 3 (`PLUG-*`) for extension safety model.
-5. Reliability follow-ups (`REL-*`) as hardening milestones.
-6. Epic 0 (`INDUS-*`) hardening follow-ups.
+1. Epic 2 (`SCM-*`) for external trigger automation.
+2. Epic 3 (`PLUG-*`) for extension safety model.
+3. Reliability follow-ups (`REL-*`) as hardening milestones.
+4. Epic 0 (`INDUS-*`) hardening follow-ups.
