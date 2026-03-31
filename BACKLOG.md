@@ -164,7 +164,14 @@ Definition of done:
 
 Goal: move from in-memory plugin registry to a controllable runtime plugin system.
 
-- [ ] `PLUG-01` Define plugin lifecycle (`load`, `init`, `execute`, `unload`).
+Refinement outcome for `PLUG-01` (2026-03-31):
+
+- Lifecycle states: `Loaded` -> `Initialized` -> `Unloaded`.
+- Lifecycle operations: explicit `load`, `init`, `execute`, `unload` methods in registry.
+- Compatibility: keep `register` as a backward-compatible alias to `load`.
+- Error semantics: typed errors for duplicate name, not found, invalid state, and execution failure.
+
+- [x] `PLUG-01` Define plugin lifecycle (`load`, `init`, `execute`, `unload`).
 - [ ] `PLUG-02` Add plugin discovery/loading strategy (filesystem manifest first).
 - [ ] `PLUG-03` Add plugin capability model (network, fs, secrets, runtime hooks).
 - [ ] `PLUG-04` Add authorization checks for plugin capabilities.
