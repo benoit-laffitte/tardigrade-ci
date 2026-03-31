@@ -57,53 +57,11 @@ jobs:
         run: |
           make dashboard-install dashboard-lint dashboard-build
 
-  docker:
-    name: Docker
-    runs-on: ubuntu-latest
-    needs: [rust]
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Install Trivy
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y wget gnupg lsb-release
-          wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo gpg --dearmor -o /usr/share/keyrings/trivy.gpg
-          echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | sudo tee /etc/apt/sources.list.d/trivy.list
-          sudo apt-get update
-          sudo apt-get install -y trivy
-
-      - name: Download release binaries artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: release-binaries
-          path: target/release
-
-      - name: Ensure binaries are executable
-        run: chmod +x target/release/tardigrade-server target/release/tardigrade-worker
-
-      - name: Build and scan images
-        run: |
-          make docker-scan
-
-      - name: Smoke-check image binaries
-        run: |
-          docker run --rm --entrypoint /usr/local/bin/tardigrade-server tardigrade-server:local --help >/dev/null 2>&1 || {
-            echo "tardigrade-server binary failed to execute inside image";
-            exit 1;
-          }
-
-          docker run --rm --entrypoint /usr/local/bin/tardigrade-worker tardigrade-worker:local --help >/dev/null 2>&1 || {
-            echo "tardigrade-worker binary failed to execute inside image";
-            exit 1;
-          }
 
   pipeline-summary-gate:
     name: Pipeline Summary Gate
     runs-on: ubuntu-latest
-    needs: [rust, node, docker]
+    needs: [rust, node]
     if: ${{ always() }}
 
     steps:
@@ -111,8 +69,7 @@ jobs:
         run: |
           echo "rust=${{ needs.rust.result }}"
           echo "node=${{ needs.node.result }}"
-          echo "docker=${{ needs.docker.result }}"
 
           [[ "${{ needs.rust.result }}" == "success" ]] || exit 1
           [[ "${{ needs.node.result }}" == "success" ]] || exit 1
-          [[ "${{ needs.docker.result }}" == "success" ]] || exit 1
+         

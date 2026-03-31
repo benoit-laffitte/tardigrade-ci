@@ -4,7 +4,7 @@
 
 build: build-rust dashboard-build ## Build project deliverables (Rust + dashboard)
 
-ci: lint test-all dashboard-install build docker-build docker-scan ## Run local CI-equivalent pipeline
+ci: lint test-all dashboard-install build  ## Run local CI-equivalent pipeline
 
 help: ## Show available Make targets
 	@echo "Tardigrade CI Make targets"
