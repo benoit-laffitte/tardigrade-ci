@@ -120,7 +120,7 @@ Refinement outcome for `SCM-02` (2026-03-31):
 
 - [x] `SCM-01` Define trigger model (manual, webhook, polling).
 - [x] `SCM-02` Add webhook endpoint(s) with signature verification.
-- [ ] `SCM-03` Implement provider adapters (GitHub/GitLab first).
+- [x] `SCM-03` Implement provider adapters (GitHub/GitLab first).
 - [ ] `SCM-04` Add SCM polling worker loop and configurable intervals.
 - [ ] `SCM-05` Add deduplication/idempotency for repeated webhook events.
 - [ ] `SCM-06` Add observability events/metrics for trigger ingestion.

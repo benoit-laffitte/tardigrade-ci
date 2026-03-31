@@ -18,6 +18,7 @@ use axum::{
 use chrono::{DateTime, Utc};
 use hmac::{Hmac, Mac};
 use serde::{Deserialize, Serialize};
+use serde_json::Value as JsonValue;
 use sha2::Sha256;
 use std::time::Duration;
 use std::{
@@ -213,6 +214,16 @@ pub struct UpsertWebhookSecurityConfigRequest {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ScmWebhookAcceptedResponse {
     pub status: String,
+}
+
+/// SCM webhook event families that can trigger build enqueue logic.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ScmTriggerEvent {
+    Push,
+    PullRequest,
+    MergeRequest,
+    Tag,
+    ManualDispatch,
 }
 
 /// Live event model emitted by the API and streamed to dashboard clients.
@@ -932,11 +943,53 @@ impl CiService {
         validate_replay_window(headers, Duration::from_secs(5 * 60))?;
         validate_ip_allowlist(headers, &config.allowed_ips)?;
         verify_signature(provider, headers, body, &config.secret)?;
+        let event = parse_scm_trigger_event(provider, headers, body)?;
+
+        if let Some(event) = event {
+            self.enqueue_repository_jobs_for_event(&repository_url, event)
+                .await?;
+        }
 
         self.emit_event(
             "scm_webhook_ingested",
             "info",
             format!("Webhook accepted for repository {}", repository_url),
+            None,
+            None,
+            None,
+        );
+
+        Ok(())
+    }
+
+    /// Enqueues builds for all jobs bound to one repository when a trigger event is accepted.
+    async fn enqueue_repository_jobs_for_event(
+        &self,
+        repository_url: &str,
+        event: ScmTriggerEvent,
+    ) -> Result<(), ApiError> {
+        let jobs = self
+            .storage
+            .list_jobs()
+            .await
+            .map_err(|_| ApiError::Internal)?;
+
+        let mut triggered = 0usize;
+        for job in jobs
+            .into_iter()
+            .filter(|job| job.repository_url == repository_url)
+        {
+            let _ = self.run_job(job.id).await?;
+            triggered += 1;
+        }
+
+        self.emit_event(
+            "scm_trigger_processed",
+            "info",
+            format!(
+                "SCM event {:?} processed for repository {} ({} job(s) enqueued)",
+                event, repository_url, triggered
+            ),
             None,
             None,
             None,
@@ -1706,6 +1759,85 @@ fn verify_gitlab_signature(headers: &HeaderMap, secret: &str) -> Result<(), ApiE
     } else {
         Err(ApiError::Unauthorized)
     }
+}
+
+/// Parses provider event metadata into one internal SCM trigger event.
+fn parse_scm_trigger_event(
+    provider: ScmProvider,
+    headers: &HeaderMap,
+    body: &[u8],
+) -> Result<Option<ScmTriggerEvent>, ApiError> {
+    match provider {
+        ScmProvider::Github => parse_github_trigger_event(headers, body),
+        ScmProvider::Gitlab => parse_gitlab_trigger_event(headers, body),
+    }
+}
+
+/// Maps GitHub webhook event headers/payload into internal trigger family.
+fn parse_github_trigger_event(
+    headers: &HeaderMap,
+    body: &[u8],
+) -> Result<Option<ScmTriggerEvent>, ApiError> {
+    let event_name = header_value(headers, "x-github-event")?.to_ascii_lowercase();
+    if event_name == "push" {
+        let payload: JsonValue =
+            serde_json::from_slice(body).map_err(|_| ApiError::BadRequest)?;
+        let is_tag = payload
+            .get("ref")
+            .and_then(JsonValue::as_str)
+            .map(|r| r.starts_with("refs/tags/"))
+            .unwrap_or(false);
+        return Ok(Some(if is_tag {
+            ScmTriggerEvent::Tag
+        } else {
+            ScmTriggerEvent::Push
+        }));
+    }
+
+    if event_name == "pull_request" {
+        return Ok(Some(ScmTriggerEvent::PullRequest));
+    }
+
+    if event_name == "workflow_dispatch" {
+        return Ok(Some(ScmTriggerEvent::ManualDispatch));
+    }
+
+    Ok(None)
+}
+
+/// Maps GitLab webhook event headers/payload into internal trigger family.
+fn parse_gitlab_trigger_event(
+    headers: &HeaderMap,
+    body: &[u8],
+) -> Result<Option<ScmTriggerEvent>, ApiError> {
+    let event_name = header_value(headers, "x-gitlab-event")?.to_ascii_lowercase();
+    if event_name == "push hook" {
+        return Ok(Some(ScmTriggerEvent::Push));
+    }
+
+    if event_name == "merge request hook" {
+        return Ok(Some(ScmTriggerEvent::MergeRequest));
+    }
+
+    if event_name == "tag push hook" {
+        return Ok(Some(ScmTriggerEvent::Tag));
+    }
+
+    if event_name == "pipeline hook" {
+        let payload: JsonValue =
+            serde_json::from_slice(body).map_err(|_| ApiError::BadRequest)?;
+        let source = payload
+            .get("object_attributes")
+            .and_then(|v| v.get("source"))
+            .and_then(JsonValue::as_str)
+            .map(|v| v.to_ascii_lowercase());
+        if source.as_deref() == Some("web") {
+            return Ok(Some(ScmTriggerEvent::ManualDispatch));
+        }
+        return Ok(None);
+    }
+
+    Ok(None)
 }
 
 /// Claims next available build for one worker.

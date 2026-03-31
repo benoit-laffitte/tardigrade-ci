@@ -1,0 +1,58 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Test SCM-03 API",
+			"type": "shell",
+			"command": "env",
+			"args": [
+				"-u",
+				"https_proxy",
+				"-u",
+				"http_proxy",
+				"-u",
+				"PXY_FAB_FONC",
+				"cargo",
+				"test",
+				"-p",
+				"tardigrade-api"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "Retest SCM-03 API",
+			"type": "shell",
+			"command": "env",
+			"args": [
+				"-u",
+				"https_proxy",
+				"-u",
+				"http_proxy",
+				"-u",
+				"PXY_FAB_FONC",
+				"cargo",
+				"test",
+				"-p",
+				"tardigrade-api"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "Workspace Tests After SCM-03",
+			"type": "shell",
+			"command": "env",
+			"args": [
+				"-u",
+				"https_proxy",
+				"-u",
+				"http_proxy",
+				"-u",
+				"PXY_FAB_FONC",
+				"cargo",
+				"test",
+				"--workspace"
+			],
+			"isBackground": false
+		}
+	]
+}
