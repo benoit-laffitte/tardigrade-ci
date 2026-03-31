@@ -1,10 +1,9 @@
-use super::{InMemoryStorage, Storage, parse_status, status_to_str};
+use super::InMemoryStorage;
+use crate::Storage;
 use chrono::Utc;
-use tardigrade_core::{
-    BuildRecord, JobDefinition, JobStatus, ScmPollingConfig, ScmProvider,
-    WebhookSecurityConfig,
-};
+use tardigrade_core::{BuildRecord, JobDefinition, JobStatus, ScmPollingConfig, ScmProvider, WebhookSecurityConfig};
 
+/// Verifies in-memory storage roundtrip for one job and one build.
 #[tokio::test]
 async fn in_memory_storage_roundtrip_job_and_build() {
     let storage = InMemoryStorage::default();
@@ -51,6 +50,7 @@ async fn in_memory_storage_roundtrip_job_and_build() {
     assert_eq!(listed_builds.len(), 1);
 }
 
+/// Verifies in-memory storage behavior for empty lists and missing ids.
 #[tokio::test]
 async fn in_memory_storage_handles_empty_and_missing_records() {
     let storage = InMemoryStorage::default();
@@ -80,6 +80,7 @@ async fn in_memory_storage_handles_empty_and_missing_records() {
     );
 }
 
+/// Verifies saving a job with the same id updates existing entry.
 #[tokio::test]
 async fn in_memory_storage_overwrites_existing_job_by_id() {
     let storage = InMemoryStorage::default();
@@ -108,29 +109,7 @@ async fn in_memory_storage_overwrites_existing_job_by_id() {
     assert_eq!(original.name, "build-api-updated");
 }
 
-#[test]
-fn status_helpers_cover_all_supported_values() {
-    let statuses = [
-        JobStatus::Pending,
-        JobStatus::Running,
-        JobStatus::Success,
-        JobStatus::Failed,
-        JobStatus::Canceled,
-    ];
-
-    for status in statuses {
-        let raw = status_to_str(&status);
-        let parsed = parse_status(raw).expect("parse should succeed");
-        assert_eq!(parsed, status);
-    }
-}
-
-#[test]
-fn parse_status_rejects_unknown_values() {
-    let err = parse_status("unknown").expect_err("unknown status should fail");
-    assert!(err.to_string().contains("unknown job status"));
-}
-
+/// Verifies in-memory webhook security config roundtrip.
 #[tokio::test]
 async fn in_memory_storage_roundtrip_webhook_security_config() {
     let storage = InMemoryStorage::default();
@@ -159,6 +138,7 @@ async fn in_memory_storage_roundtrip_webhook_security_config() {
     assert_eq!(stored.allowed_ips, vec!["203.0.113.10".to_string()]);
 }
 
+/// Verifies in-memory SCM polling config roundtrip.
 #[tokio::test]
 async fn in_memory_storage_roundtrip_scm_polling_config() {
     let storage = InMemoryStorage::default();

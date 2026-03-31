@@ -1,4 +1,5 @@
-use super::{FileBackedScheduler, InMemoryScheduler, Scheduler};
+use super::{FileBackedScheduler, InMemoryScheduler};
+use crate::Scheduler;
 use std::time::Duration;
 use uuid::Uuid;
 
