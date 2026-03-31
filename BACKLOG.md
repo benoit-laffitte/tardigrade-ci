@@ -171,9 +171,23 @@ Refinement outcome for `PLUG-01` (2026-03-31):
 - Compatibility: keep `register` as a backward-compatible alias to `load`.
 - Error semantics: typed errors for duplicate name, not found, invalid state, and execution failure.
 
+Refinement outcome for `PLUG-02` (2026-03-31):
+
+- Discovery source: filesystem TOML manifest (`plugins.toml`) with `[[plugins]]` entries.
+- Entry schema: `name` + optional `enabled` (default `true`).
+- Loading strategy: registry reads manifest and asks caller factory to resolve plugin implementations by name.
+- Failure policy: fail on unreadable/invalid manifest or unknown plugin references.
+
+Refinement outcome for `PLUG-03` (2026-03-31):
+
+- Capability taxonomy: `network`, `filesystem`, `secrets`, `runtime_hooks`.
+- Declaration sources: plugin implementation defaults + optional manifest override.
+- Registry metadata: normalized (sorted/deduplicated) capability list per loaded plugin.
+- Scope limit: model only in this step; policy enforcement is handled by `PLUG-04`.
+
 - [x] `PLUG-01` Define plugin lifecycle (`load`, `init`, `execute`, `unload`).
-- [ ] `PLUG-02` Add plugin discovery/loading strategy (filesystem manifest first).
-- [ ] `PLUG-03` Add plugin capability model (network, fs, secrets, runtime hooks).
+- [x] `PLUG-02` Add plugin discovery/loading strategy (filesystem manifest first).
+- [x] `PLUG-03` Add plugin capability model (network, fs, secrets, runtime hooks).
 - [ ] `PLUG-04` Add authorization checks for plugin capabilities.
 - [ ] `PLUG-05` Add plugin isolation/guardrails and failure containment.
 - [ ] `PLUG-06` Add tests for duplicate names, denied capabilities, and load failures.

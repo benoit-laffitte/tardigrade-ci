@@ -1,8 +1,12 @@
-use super::{Plugin, PluginLifecycleError, PluginLifecycleState, PluginRegistry};
+use super::{
+    Plugin, PluginCapability, PluginLifecycleError, PluginLifecycleState, PluginRegistry,
+};
+use std::path::PathBuf;
 use std::sync::{
     Arc,
     atomic::{AtomicUsize, Ordering},
 };
+use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Test plugin tracking lifecycle hook invocation counts.
 struct TestPlugin {
@@ -12,6 +16,7 @@ struct TestPlugin {
     execute_count: Arc<AtomicUsize>,
     unload_count: Arc<AtomicUsize>,
     fail_execute: bool,
+    required_capabilities: Vec<PluginCapability>,
 }
 
 /// Lifecycle hook implementation used by registry tests.
@@ -19,6 +24,11 @@ impl Plugin for TestPlugin {
     /// Returns unique test plugin name.
     fn name(&self) -> &'static str {
         self.name
+    }
+
+    /// Returns required capabilities declared by test instance.
+    fn required_capabilities(&self) -> Vec<PluginCapability> {
+        self.required_capabilities.clone()
     }
 
     /// Increments load counter when plugin is loaded.
@@ -62,6 +72,7 @@ fn register_accepts_unique_name_and_invokes_on_load_once() {
         execute_count: execute_count.clone(),
         unload_count: unload_count.clone(),
         fail_execute: false,
+        required_capabilities: vec![],
     }));
 
     assert!(inserted);
@@ -87,6 +98,7 @@ fn register_rejects_duplicate_name_without_second_on_load() {
         execute_count: execute_count.clone(),
         unload_count: unload_count.clone(),
         fail_execute: false,
+        required_capabilities: vec![],
     }));
     let second_insert = registry.register(Box::new(TestPlugin {
         name: "artifact-store",
@@ -95,6 +107,7 @@ fn register_rejects_duplicate_name_without_second_on_load() {
         execute_count: execute_count.clone(),
         unload_count: unload_count.clone(),
         fail_execute: false,
+        required_capabilities: vec![],
     }));
 
     assert!(first_insert);
@@ -121,6 +134,7 @@ fn lifecycle_transitions_succeed_in_order() {
             execute_count: execute_count.clone(),
             unload_count: unload_count.clone(),
             fail_execute: false,
+            required_capabilities: vec![],
         }))
         .expect("load should succeed");
     assert_eq!(registry.state("executor"), Some(PluginLifecycleState::Loaded));
@@ -157,6 +171,7 @@ fn execute_before_init_is_rejected() {
             execute_count: count.clone(),
             unload_count: count.clone(),
             fail_execute: false,
+            required_capabilities: vec![],
         }))
         .expect("load should succeed");
 
@@ -180,6 +195,7 @@ fn execute_failure_is_reported() {
             execute_count: count.clone(),
             unload_count: count.clone(),
             fail_execute: true,
+            required_capabilities: vec![],
         }))
         .expect("load should succeed");
     registry
@@ -190,4 +206,139 @@ fn execute_failure_is_reported() {
         .execute("failing-plugin")
         .expect_err("execution should fail");
     assert_eq!(err, PluginLifecycleError::ExecutionFailed);
+}
+
+/// Creates a temporary manifest file with provided content for filesystem loading tests.
+fn write_temp_manifest(contents: &str) -> PathBuf {
+    let unique = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("clock should be after unix epoch")
+        .as_nanos();
+    let dir = std::env::temp_dir().join(format!("tardigrade-plugins-test-{unique}"));
+    std::fs::create_dir_all(&dir).expect("temp dir should be created");
+    let manifest_path = dir.join("plugins.toml");
+    std::fs::write(&manifest_path, contents).expect("manifest should be written");
+    manifest_path
+}
+
+/// Verifies parser accepts valid manifest and respects default enabled value.
+#[test]
+fn parse_manifest_parses_enabled_and_default_values() {
+    let parsed = PluginRegistry::parse_manifest(
+        r#"
+            [[plugins]]
+            name = "metrics"
+            capabilities = ["network", "runtime_hooks"]
+
+            [[plugins]]
+            name = "artifact-store"
+            enabled = false
+        "#,
+    )
+    .expect("manifest should parse");
+
+    assert_eq!(parsed.plugins.len(), 2);
+    assert_eq!(parsed.plugins[0].name, "metrics");
+    assert!(parsed.plugins[0].enabled);
+    assert_eq!(
+        parsed.plugins[0].capabilities,
+        vec![PluginCapability::Network, PluginCapability::RuntimeHooks]
+    );
+    assert_eq!(parsed.plugins[1].name, "artifact-store");
+    assert!(!parsed.plugins[1].enabled);
+}
+
+/// Verifies loader reads filesystem manifest and loads only enabled known plugins.
+#[test]
+fn load_from_manifest_path_loads_enabled_entries() {
+    let manifest_path = write_temp_manifest(
+        r#"
+            [[plugins]]
+            name = "metrics"
+            capabilities = ["network", "secrets"]
+
+            [[plugins]]
+            name = "artifact-store"
+            enabled = false
+        "#,
+    );
+
+    let mut registry = PluginRegistry::default();
+    let load_count = Arc::new(AtomicUsize::new(0));
+    let init_count = Arc::new(AtomicUsize::new(0));
+    let execute_count = Arc::new(AtomicUsize::new(0));
+    let unload_count = Arc::new(AtomicUsize::new(0));
+
+    let loaded = registry
+        .load_from_manifest_path(manifest_path, |name| match name {
+            "metrics" => Some(Box::new(TestPlugin {
+                name: "metrics",
+                load_count: load_count.clone(),
+                init_count: init_count.clone(),
+                execute_count: execute_count.clone(),
+                unload_count: unload_count.clone(),
+                fail_execute: false,
+                required_capabilities: vec![PluginCapability::Filesystem],
+            })),
+            _ => None,
+        })
+        .expect("manifest load should succeed");
+
+    assert_eq!(loaded, vec!["metrics".to_string()]);
+    assert_eq!(registry.count(), 1);
+    assert_eq!(registry.state("metrics"), Some(PluginLifecycleState::Loaded));
+    assert_eq!(
+        registry.capabilities("metrics"),
+        Some(vec![PluginCapability::Network, PluginCapability::Secrets])
+    );
+    assert_eq!(load_count.load(Ordering::SeqCst), 1);
+}
+
+/// Verifies loader fails when manifest references an unknown plugin name.
+#[test]
+fn load_from_manifest_path_fails_for_unknown_plugin() {
+    let manifest_path = write_temp_manifest(
+        r#"
+            [[plugins]]
+            name = "unknown-plugin"
+        "#,
+    );
+
+    let mut registry = PluginRegistry::default();
+    let err = registry
+        .load_from_manifest_path(manifest_path, |_name| None)
+        .expect_err("unknown plugin should fail loading");
+
+    assert_eq!(err, PluginLifecycleError::UnknownPlugin);
+}
+
+/// Verifies direct load uses plugin-declared required capability model.
+#[test]
+fn load_uses_plugin_required_capabilities() {
+    let mut registry = PluginRegistry::default();
+    let count = Arc::new(AtomicUsize::new(0));
+
+    registry
+        .load(Box::new(TestPlugin {
+            name: "policy-aware",
+            load_count: count.clone(),
+            init_count: count.clone(),
+            execute_count: count.clone(),
+            unload_count: count.clone(),
+            fail_execute: false,
+            required_capabilities: vec![
+                PluginCapability::RuntimeHooks,
+                PluginCapability::Network,
+                PluginCapability::Network,
+            ],
+        }))
+        .expect("load should succeed");
+
+    assert_eq!(
+        registry.capabilities("policy-aware"),
+        Some(vec![
+            PluginCapability::Network,
+            PluginCapability::RuntimeHooks,
+        ])
+    );
 }
