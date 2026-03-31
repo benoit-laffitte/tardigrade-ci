@@ -676,6 +676,7 @@ async fn stale_claim_is_reclaimed_for_another_worker() {
             worker_lease_timeout_secs: 0,
             max_retries: 2,
             retry_backoff_ms: 1000,
+            webhook_dedup_ttl_secs: 3600,
         },
     );
     let app = tardigrade_api::build_router(state);
@@ -772,6 +773,7 @@ async fn failed_build_is_requeued_with_retry_and_exposed_in_metrics() {
             worker_lease_timeout_secs: 30,
             max_retries: 1,
             retry_backoff_ms: 0,
+            webhook_dedup_ttl_secs: 3600,
         },
     );
     let app = tardigrade_api::build_router(state);
@@ -886,6 +888,7 @@ async fn exhausted_retries_moves_build_to_dead_letter_and_exposes_it() {
             worker_lease_timeout_secs: 30,
             max_retries: 0,
             retry_backoff_ms: 0,
+            webhook_dedup_ttl_secs: 3600,
         },
     );
     let app = tardigrade_api::build_router(state);

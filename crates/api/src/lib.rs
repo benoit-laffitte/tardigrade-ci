@@ -15,7 +15,7 @@ use axum::{
     },
     routing::{get, post},
 };
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Duration as ChronoDuration, Utc};
 use hmac::{Hmac, Mac};
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
@@ -50,6 +50,7 @@ pub struct ServiceSettings {
     pub worker_lease_timeout_secs: u64,
     pub max_retries: u32,
     pub retry_backoff_ms: u64,
+    pub webhook_dedup_ttl_secs: u64,
 }
 
 impl ServiceSettings {
@@ -68,11 +69,16 @@ impl ServiceSettings {
             .ok()
             .and_then(|v| v.parse::<u64>().ok())
             .unwrap_or(1000);
+        let webhook_dedup_ttl_secs = std::env::var("TARDIGRADE_SCM_WEBHOOK_DEDUP_TTL_SECS")
+            .ok()
+            .and_then(|v| v.parse::<u64>().ok())
+            .unwrap_or(3600);
 
         Self {
             worker_lease_timeout_secs,
             max_retries,
             retry_backoff_ms,
+            webhook_dedup_ttl_secs,
         }
     }
 }
@@ -820,6 +826,9 @@ struct CiService {
     metrics: Arc<Mutex<RuntimeMetrics>>,
     /// dead_letter_builds provides a focused operational view over failed terminal retries.
     dead_letter_builds: Arc<Mutex<HashSet<Uuid>>>,
+    /// seen_webhook_events stores recent dedup keys to enforce idempotent ingestion.
+    seen_webhook_events: Arc<Mutex<HashMap<String, DateTime<Utc>>>>,
+    webhook_dedup_ttl: Duration,
     /// Internal broadcast bus feeding the SSE /events endpoint.
     event_tx: broadcast::Sender<LiveEvent>,
 }
@@ -852,6 +861,8 @@ impl CiService {
             retry_state: Arc::new(Mutex::new(HashMap::new())),
             metrics: Arc::new(Mutex::new(RuntimeMetrics::default())),
             dead_letter_builds: Arc::new(Mutex::new(HashSet::new())),
+            seen_webhook_events: Arc::new(Mutex::new(HashMap::new())),
+            webhook_dedup_ttl: Duration::from_secs(settings.webhook_dedup_ttl_secs),
             event_tx,
         }
     }
@@ -1001,6 +1012,29 @@ impl CiService {
         let event = parse_scm_trigger_event(provider, headers, body)?;
 
         if let Some(event) = event {
+            if let Some(dedup_key) = build_webhook_dedup_key(
+                provider,
+                &repository_url,
+                headers,
+                body,
+                event,
+            ) {
+                if self.is_duplicate_webhook_event(&dedup_key) {
+                    self.emit_event(
+                        "scm_webhook_duplicate_ignored",
+                        "info",
+                        format!(
+                            "Duplicate webhook ignored for repository {}",
+                            repository_url
+                        ),
+                        None,
+                        None,
+                        None,
+                    );
+                    return Ok(());
+                }
+            }
+
             self.enqueue_repository_jobs_for_event(&repository_url, event)
                 .await?;
         }
@@ -1015,6 +1049,26 @@ impl CiService {
         );
 
         Ok(())
+    }
+
+    /// Returns true when a webhook dedup key is still within TTL and should be ignored.
+    fn is_duplicate_webhook_event(&self, dedup_key: &str) -> bool {
+        let now = Utc::now();
+        let ttl = ChronoDuration::from_std(self.webhook_dedup_ttl)
+            .unwrap_or_else(|_| ChronoDuration::seconds(0));
+
+        let mut seen = self
+            .seen_webhook_events
+            .lock()
+            .expect("webhook dedup state poisoned");
+        seen.retain(|_, seen_at| now.signed_duration_since(*seen_at) <= ttl);
+
+        if seen.contains_key(dedup_key) {
+            return true;
+        }
+
+        seen.insert(dedup_key.to_string(), now);
+        false
     }
 
     /// Enqueues builds for all jobs bound to one repository when a trigger event is accepted.
@@ -1902,6 +1956,109 @@ fn parse_scm_trigger_event(
     match provider {
         ScmProvider::Github => parse_github_trigger_event(headers, body),
         ScmProvider::Gitlab => parse_gitlab_trigger_event(headers, body),
+    }
+}
+
+/// Builds deterministic dedup key from provider event id or fallback tuple.
+fn build_webhook_dedup_key(
+    provider: ScmProvider,
+    repository_url: &str,
+    headers: &HeaderMap,
+    body: &[u8],
+    event: ScmTriggerEvent,
+) -> Option<String> {
+    if let Some(event_id) = parse_provider_event_id(provider, headers) {
+        return Some(format!(
+            "event_id:{}:{}:{}",
+            provider_slug(provider),
+            repository_url,
+            event_id
+        ));
+    }
+
+    let commit_sha = parse_event_commit_sha(provider, body)
+        .unwrap_or_else(|| "unknown_commit".to_string());
+
+    Some(format!(
+        "fallback:{}:{}:{}:{}",
+        provider_slug(provider),
+        repository_url,
+        event_slug(event),
+        commit_sha
+    ))
+}
+
+/// Extracts provider event identifier from headers when available.
+fn parse_provider_event_id(provider: ScmProvider, headers: &HeaderMap) -> Option<String> {
+    let keys: &[&str] = match provider {
+        ScmProvider::Github => &["x-scm-event-id", "x-github-delivery", "x-request-id"],
+        ScmProvider::Gitlab => &["x-scm-event-id", "x-gitlab-event-uuid", "x-request-id"],
+    };
+
+    keys.iter().find_map(|key| optional_header_value(headers, key))
+}
+
+/// Parses commit SHA candidates from provider payload for fallback dedup tuple.
+fn parse_event_commit_sha(provider: ScmProvider, body: &[u8]) -> Option<String> {
+    let payload: JsonValue = serde_json::from_slice(body).ok()?;
+    match provider {
+        ScmProvider::Github => payload
+            .get("after")
+            .and_then(JsonValue::as_str)
+            .or_else(|| {
+                payload
+                    .get("head_commit")
+                    .and_then(|v| v.get("id"))
+                    .and_then(JsonValue::as_str)
+            })
+            .or_else(|| {
+                payload
+                    .get("pull_request")
+                    .and_then(|v| v.get("head"))
+                    .and_then(|v| v.get("sha"))
+                    .and_then(JsonValue::as_str)
+            })
+            .map(ToString::to_string),
+        ScmProvider::Gitlab => payload
+            .get("checkout_sha")
+            .and_then(JsonValue::as_str)
+            .or_else(|| {
+                payload
+                    .get("object_attributes")
+                    .and_then(|v| v.get("last_commit"))
+                    .and_then(|v| v.get("id"))
+                    .and_then(JsonValue::as_str)
+            })
+            .map(ToString::to_string),
+    }
+}
+
+/// Returns lowercased header value when present and non-empty.
+fn optional_header_value(headers: &HeaderMap, key: &'static str) -> Option<String> {
+    headers
+        .get(key)
+        .and_then(|v| v.to_str().ok())
+        .map(str::trim)
+        .filter(|v| !v.is_empty())
+        .map(|v| v.to_ascii_lowercase())
+}
+
+/// Returns stable provider slug used in dedup key encoding.
+fn provider_slug(provider: ScmProvider) -> &'static str {
+    match provider {
+        ScmProvider::Github => "github",
+        ScmProvider::Gitlab => "gitlab",
+    }
+}
+
+/// Returns stable trigger family slug used in fallback dedup key encoding.
+fn event_slug(event: ScmTriggerEvent) -> &'static str {
+    match event {
+        ScmTriggerEvent::Push => "push",
+        ScmTriggerEvent::PullRequest => "pull_request",
+        ScmTriggerEvent::MergeRequest => "merge_request",
+        ScmTriggerEvent::Tag => "tag",
+        ScmTriggerEvent::ManualDispatch => "manual_dispatch",
     }
 }
 

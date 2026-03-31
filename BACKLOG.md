@@ -125,11 +125,18 @@ Refinement outcome for `SCM-04` (2026-03-31):
 - Branch scope: all branches (provider adapters can later filter by branch policy).
 - Source of truth: polling configuration stored per repository in persistence layer.
 
+Refinement outcome for `SCM-05` (2026-03-31):
+
+- Primary dedup key: provider `event_id` when available in webhook headers.
+- Fallback dedup key: (`provider`, `repository`, `commit_sha`, `event_type`).
+- Idempotency window: in-memory TTL cache (default 3600s, configurable by env).
+- Duplicate behavior: accept webhook (`202`) but skip enqueue side effects.
+
 - [x] `SCM-01` Define trigger model (manual, webhook, polling).
 - [x] `SCM-02` Add webhook endpoint(s) with signature verification.
 - [x] `SCM-03` Implement provider adapters (GitHub/GitLab first).
 - [x] `SCM-04` Add SCM polling worker loop and configurable intervals.
-- [ ] `SCM-05` Add deduplication/idempotency for repeated webhook events.
+- [x] `SCM-05` Add deduplication/idempotency for repeated webhook events.
 - [ ] `SCM-06` Add observability events/metrics for trigger ingestion.
 - [ ] `SCM-07` Add integration tests for webhook and polling flows.
 

@@ -371,6 +371,163 @@ async fn scm_webhook_gitlab_merge_request_enqueues_build() {
 }
 
 #[tokio::test]
+/// Ensures duplicate GitHub deliveries with same event id do not enqueue duplicate builds.
+async fn scm_webhook_duplicate_event_id_is_idempotent() {
+    let state = ApiState::new("tardigrade-ci-test");
+    state
+        .upsert_webhook_security_config(UpsertWebhookSecurityConfigRequest {
+            repository_url: "https://example.com/repo.git".to_string(),
+            provider: ScmProvider::Github,
+            secret: "super-secret".to_string(),
+            allowed_ips: vec!["203.0.113.10".to_string()],
+        })
+        .await
+        .expect("upsert webhook config");
+    let app = tardigrade_api::build_router(state);
+
+    let create_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/jobs")
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(
+                    br#"{"name":"repo-build","repository_url":"https://example.com/repo.git","pipeline_path":"pipeline.yml"}"#.to_vec(),
+                ))
+                .expect("valid request"),
+        )
+        .await
+        .expect("create response");
+    let created: CreateJobResponse =
+        serde_json::from_value(read_json(create_response).await).expect("create body");
+
+    let payload = br#"{"ref":"refs/heads/main","after":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}"#;
+    let signature = github_signature("super-secret", payload);
+
+    for _ in 0..2 {
+        let webhook_response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/webhooks/scm")
+                    .header("x-scm-provider", "github")
+                    .header("x-scm-repository", "https://example.com/repo.git")
+                    .header("x-scm-timestamp", Utc::now().timestamp().to_string())
+                    .header("x-forwarded-for", "203.0.113.10")
+                    .header("x-github-event", "push")
+                    .header("x-github-delivery", "delivery-123")
+                    .header("x-hub-signature-256", &signature)
+                    .body(Body::from(payload.to_vec()))
+                    .expect("valid request"),
+            )
+            .await
+            .expect("webhook response");
+
+        assert_eq!(webhook_response.status(), StatusCode::ACCEPTED);
+    }
+
+    let builds_response = app
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/builds")
+                .body(Body::empty())
+                .expect("valid request"),
+        )
+        .await
+        .expect("builds response");
+    let builds: ListBuildsResponse =
+        serde_json::from_value(read_json(builds_response).await).expect("builds body");
+
+    let count = builds
+        .builds
+        .iter()
+        .filter(|build| build.job_id == created.job.id)
+        .count();
+    assert_eq!(count, 1, "expected exactly one build for duplicate event id");
+}
+
+#[tokio::test]
+/// Ensures duplicate webhook payloads without event id use fallback tuple deduplication.
+async fn scm_webhook_duplicate_fallback_tuple_is_idempotent() {
+    let state = ApiState::new("tardigrade-ci-test");
+    state
+        .upsert_webhook_security_config(UpsertWebhookSecurityConfigRequest {
+            repository_url: "https://example.com/repo.git".to_string(),
+            provider: ScmProvider::Github,
+            secret: "super-secret".to_string(),
+            allowed_ips: vec!["203.0.113.10".to_string()],
+        })
+        .await
+        .expect("upsert webhook config");
+    let app = tardigrade_api::build_router(state);
+
+    let create_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/jobs")
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(
+                    br#"{"name":"repo-build","repository_url":"https://example.com/repo.git","pipeline_path":"pipeline.yml"}"#.to_vec(),
+                ))
+                .expect("valid request"),
+        )
+        .await
+        .expect("create response");
+    let created: CreateJobResponse =
+        serde_json::from_value(read_json(create_response).await).expect("create body");
+
+    let payload = br#"{"ref":"refs/heads/main","after":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}"#;
+    let signature = github_signature("super-secret", payload);
+
+    for _ in 0..2 {
+        let webhook_response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/webhooks/scm")
+                    .header("x-scm-provider", "github")
+                    .header("x-scm-repository", "https://example.com/repo.git")
+                    .header("x-scm-timestamp", Utc::now().timestamp().to_string())
+                    .header("x-forwarded-for", "203.0.113.10")
+                    .header("x-github-event", "push")
+                    .header("x-hub-signature-256", &signature)
+                    .body(Body::from(payload.to_vec()))
+                    .expect("valid request"),
+            )
+            .await
+            .expect("webhook response");
+
+        assert_eq!(webhook_response.status(), StatusCode::ACCEPTED);
+    }
+
+    let builds_response = app
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/builds")
+                .body(Body::empty())
+                .expect("valid request"),
+        )
+        .await
+        .expect("builds response");
+    let builds: ListBuildsResponse =
+        serde_json::from_value(read_json(builds_response).await).expect("builds body");
+
+    let count = builds
+        .builds
+        .iter()
+        .filter(|build| build.job_id == created.job.id)
+        .count();
+    assert_eq!(count, 1, "expected exactly one build for fallback dedup key");
+}
+
+#[tokio::test]
 /// Ensures SCM polling tick enqueues builds for repositories with due polling config.
 async fn scm_polling_tick_enqueues_builds_for_matching_repository_jobs() {
     let state = ApiState::new("tardigrade-ci-test");
