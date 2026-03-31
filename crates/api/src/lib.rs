@@ -17,7 +17,6 @@ use axum::{
 };
 use chrono::{DateTime, Duration as ChronoDuration, Utc};
 use hmac::{Hmac, Mac};
-use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 use sha2::Sha256;
 use std::time::Duration;
@@ -36,216 +35,27 @@ use tokio::sync::broadcast;
 use tokio_stream::{StreamExt, wrappers::BroadcastStream};
 use uuid::Uuid;
 
+mod events;
+mod http_models;
+mod settings;
+
+pub use events::LiveEvent;
+pub use http_models::{
+    ApiErrorResponse, CancelBuildResponse, ClaimBuildResponse, CompleteBuildRequest,
+    CompleteBuildResponse, CreateJobRequest, CreateJobResponse, DeadLetterBuildsResponse,
+    HealthResponse, ListBuildsResponse, ListJobsResponse, ListWorkersResponse, LiveResponse,
+    ReadyResponse, RunJobResponse, RuntimeMetricsResponse, ScmPollingTickResponse,
+    ScmWebhookAcceptedResponse, UpsertScmPollingConfigRequest,
+    UpsertWebhookSecurityConfigRequest, WorkerBuildStatus, WorkerInfo,
+};
+pub use settings::ServiceSettings;
+
 #[derive(Clone)]
 pub struct ApiState {
     pub service_name: String,
     /// Service owns all domain orchestration (storage, scheduler, metrics, events).
     service: Arc<CiService>,
     run_embedded_worker: bool,
-}
-
-/// Runtime tuning knobs for reliability behavior (leases/retries/backoff).
-#[derive(Clone, Copy)]
-pub struct ServiceSettings {
-    pub worker_lease_timeout_secs: u64,
-    pub max_retries: u32,
-    pub retry_backoff_ms: u64,
-    pub webhook_dedup_ttl_secs: u64,
-}
-
-impl ServiceSettings {
-    /// Loads reliability settings from environment variables with safe defaults.
-    pub fn from_env() -> Self {
-        // Env-based defaults keep local dev easy while allowing production tuning.
-        let worker_lease_timeout_secs = std::env::var("TARDIGRADE_WORKER_LEASE_TIMEOUT_SECS")
-            .ok()
-            .and_then(|v| v.parse::<u64>().ok())
-            .unwrap_or(30);
-        let max_retries = std::env::var("TARDIGRADE_BUILD_MAX_RETRIES")
-            .ok()
-            .and_then(|v| v.parse::<u32>().ok())
-            .unwrap_or(2);
-        let retry_backoff_ms = std::env::var("TARDIGRADE_BUILD_RETRY_BACKOFF_MS")
-            .ok()
-            .and_then(|v| v.parse::<u64>().ok())
-            .unwrap_or(1000);
-        let webhook_dedup_ttl_secs = std::env::var("TARDIGRADE_SCM_WEBHOOK_DEDUP_TTL_SECS")
-            .ok()
-            .and_then(|v| v.parse::<u64>().ok())
-            .unwrap_or(3600);
-
-        Self {
-            worker_lease_timeout_secs,
-            max_retries,
-            retry_backoff_ms,
-            webhook_dedup_ttl_secs,
-        }
-    }
-}
-
-/// Response body for service health endpoint.
-#[derive(Debug, Serialize, Deserialize)]
-pub struct HealthResponse {
-    pub status: &'static str,
-    pub service: String,
-}
-
-/// Response body for process liveness endpoint.
-#[derive(Debug, Serialize, Deserialize)]
-pub struct LiveResponse {
-    pub status: &'static str,
-}
-
-/// Response body for readiness endpoint.
-#[derive(Debug, Serialize, Deserialize)]
-pub struct ReadyResponse {
-    pub status: &'static str,
-}
-
-/// Request payload used to create a new job.
-#[derive(Debug, Deserialize)]
-pub struct CreateJobRequest {
-    pub name: String,
-    pub repository_url: String,
-    pub pipeline_path: String,
-    pub pipeline_yaml: Option<String>,
-}
-
-/// Response payload containing the created job.
-#[derive(Debug, Serialize, Deserialize)]
-pub struct CreateJobResponse {
-    pub job: JobDefinition,
-}
-
-/// Structured API error response with optional detailed issues.
-#[derive(Debug, Serialize, Deserialize)]
-pub struct ApiErrorResponse {
-    pub code: String,
-    pub message: String,
-    pub details: Option<Vec<PipelineValidationIssue>>,
-}
-
-/// Response payload listing known jobs.
-#[derive(Debug, Serialize, Deserialize)]
-pub struct ListJobsResponse {
-    pub jobs: Vec<JobDefinition>,
-}
-
-/// Response payload containing enqueued build record.
-#[derive(Debug, Serialize, Deserialize)]
-pub struct RunJobResponse {
-    pub build: BuildRecord,
-}
-
-/// Response payload containing canceled build state.
-#[derive(Debug, Serialize, Deserialize)]
-pub struct CancelBuildResponse {
-    pub build: BuildRecord,
-}
-
-/// Response payload listing builds.
-#[derive(Debug, Serialize, Deserialize)]
-pub struct ListBuildsResponse {
-    pub builds: Vec<BuildRecord>,
-}
-
-/// Worker telemetry model shown by dashboard.
-#[derive(Debug, Serialize, Deserialize)]
-pub struct WorkerInfo {
-    pub id: String,
-    pub active_builds: usize,
-    pub status: String,
-    pub last_seen_at: DateTime<Utc>,
-}
-
-/// Response payload listing workers and their current loads.
-#[derive(Debug, Serialize, Deserialize)]
-pub struct ListWorkersResponse {
-    pub workers: Vec<WorkerInfo>,
-}
-
-/// Response payload for worker claim call.
-#[derive(Debug, Serialize, Deserialize)]
-pub struct ClaimBuildResponse {
-    pub build: Option<BuildRecord>,
-}
-
-/// Worker-reported terminal result for one build execution.
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum WorkerBuildStatus {
-    Success,
-    Failed,
-}
-
-/// Request payload for worker completion call.
-#[derive(Debug, Serialize, Deserialize)]
-pub struct CompleteBuildRequest {
-    pub status: WorkerBuildStatus,
-    pub log_line: Option<String>,
-}
-
-/// Response payload containing updated build after completion.
-#[derive(Debug, Serialize, Deserialize)]
-pub struct CompleteBuildResponse {
-    pub build: BuildRecord,
-}
-
-/// Runtime reliability counters exposed for operators.
-#[derive(Debug, Serialize, Deserialize)]
-pub struct RuntimeMetricsResponse {
-    pub reclaimed_total: u64,
-    pub retry_requeued_total: u64,
-    pub ownership_conflicts_total: u64,
-    pub dead_letter_total: u64,
-    pub scm_webhook_received_total: u64,
-    pub scm_webhook_accepted_total: u64,
-    pub scm_webhook_rejected_total: u64,
-    pub scm_webhook_duplicate_total: u64,
-    pub scm_trigger_enqueued_builds_total: u64,
-    pub scm_polling_ticks_total: u64,
-    pub scm_polling_repositories_total: u64,
-    pub scm_polling_enqueued_builds_total: u64,
-}
-
-/// Response payload listing builds moved to dead-letter set.
-#[derive(Debug, Serialize, Deserialize)]
-pub struct DeadLetterBuildsResponse {
-    pub builds: Vec<BuildRecord>,
-}
-
-/// Request payload used to register webhook verification settings for one repository.
-#[derive(Debug, Deserialize)]
-pub struct UpsertWebhookSecurityConfigRequest {
-    pub repository_url: String,
-    pub provider: ScmProvider,
-    pub secret: String,
-    #[serde(default)]
-    pub allowed_ips: Vec<String>,
-}
-
-/// Response payload confirming webhook ingestion acceptance.
-#[derive(Debug, Serialize, Deserialize)]
-pub struct ScmWebhookAcceptedResponse {
-    pub status: String,
-}
-
-/// Request payload used to upsert SCM polling settings for one repository/provider.
-#[derive(Debug, Deserialize)]
-pub struct UpsertScmPollingConfigRequest {
-    pub repository_url: String,
-    pub provider: ScmProvider,
-    pub enabled: bool,
-    pub interval_secs: u64,
-    #[serde(default)]
-    pub branches: Vec<String>,
-}
-
-/// Response payload for one SCM polling tick execution.
-#[derive(Debug, Serialize, Deserialize)]
-pub struct ScmPollingTickResponse {
-    pub polled_repositories: usize,
-    pub enqueued_builds: usize,
 }
 
 /// SCM webhook event families that can trigger build enqueue logic.
@@ -256,18 +66,6 @@ enum ScmTriggerEvent {
     MergeRequest,
     Tag,
     ManualDispatch,
-}
-
-/// Live event model emitted by the API and streamed to dashboard clients.
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct LiveEvent {
-    pub kind: String,
-    pub severity: String,
-    pub message: String,
-    pub job_id: Option<Uuid>,
-    pub build_id: Option<Uuid>,
-    pub worker_id: Option<String>,
-    pub at: DateTime<Utc>,
 }
 
 /// GraphQL schema serving CI query and mutation operations.
