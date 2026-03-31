@@ -1,10 +1,5 @@
-use anyhow::{Context, Result, anyhow};
-use axum::{
-    response::{Html, IntoResponse},
-    routing::get,
-};
-use serde::Deserialize;
-use std::fs;
+use anyhow::{Result, anyhow};
+use axum::routing::get;
 use std::sync::Arc;
 use std::time::Duration;
 use tardigrade_api::{ApiState, build_router};
@@ -14,62 +9,13 @@ use tokio::net::TcpListener;
 use tracing::{info, warn};
 use tracing_subscriber::EnvFilter;
 
-/// Embedded dashboard main html payload.
-const INDEX_HTML: &str = include_str!("../static/index.html");
-/// Embedded dashboard javascript payload.
-const APP_JS: &str = include_str!("../static/app.js");
-/// Embedded dashboard stylesheet payload.
-const STYLES_CSS: &str = include_str!("../static/styles.css");
-/// Sunset target for removing any legacy queue-file flows outside dev mode.
-const FILE_BACKED_PROD_DEPRECATION_TARGET: &str = "2026-09-30";
+mod config;
+mod dashboard;
+mod runtime;
 
-/// Runtime mode derived from configuration file.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "lowercase")]
-enum RuntimeMode {
-    Dev,
-    Prod,
-}
-
-impl Default for RuntimeMode {
-    /// Defaults runtime mode to dev when configuration omits explicit value.
-    fn default() -> Self {
-        Self::Dev
-    }
-}
-
-/// Top-level config file shape used by server bootstrap.
-#[derive(Debug, Deserialize, Default)]
-struct ServerConfigFile {
-    runtime: Option<RuntimeSection>,
-}
-
-/// Runtime-specific configuration section.
-#[derive(Debug, Deserialize)]
-struct RuntimeSection {
-    mode: RuntimeMode,
-}
-
-/// Parses runtime mode from TOML payload.
-fn parse_runtime_mode_from_toml(raw: &str) -> Result<RuntimeMode> {
-    let config: ServerConfigFile = toml::from_str(raw).context("parse TOML configuration")?;
-    Ok(config
-        .runtime
-        .map(|runtime| runtime.mode)
-        .unwrap_or_default())
-}
-
-/// Loads runtime mode from config file path, defaulting to dev when file is missing.
-fn load_runtime_mode_from_config(path: &str) -> Result<RuntimeMode> {
-    match fs::read_to_string(path) {
-        Ok(raw) => parse_runtime_mode_from_toml(&raw),
-        Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
-            info!(config_path = %path, "config file not found, defaulting runtime mode to dev");
-            Ok(RuntimeMode::Dev)
-        }
-        Err(err) => Err(err).with_context(|| format!("read config file at {path}")),
-    }
-}
+use config::{RuntimeMode, load_runtime_mode_from_config};
+use dashboard::{app_js, index, styles_css};
+use runtime::{FILE_BACKED_PROD_DEPRECATION_TARGET, shutdown_signal};
 
 /// Boots API server, selects configured backends, and serves HTTP routes.
 #[tokio::main]
@@ -183,48 +129,3 @@ async fn main() -> Result<()> {
 
     Ok(())
 }
-
-/// Serves dashboard index HTML.
-async fn index() -> Html<&'static str> {
-    Html(INDEX_HTML)
-}
-
-/// Serves dashboard javascript with explicit content type.
-async fn app_js() -> impl IntoResponse {
-    (
-        [("content-type", "application/javascript; charset=utf-8")],
-        APP_JS,
-    )
-}
-
-/// Serves dashboard stylesheet with explicit content type.
-async fn styles_css() -> impl IntoResponse {
-    ([("content-type", "text/css; charset=utf-8")], STYLES_CSS)
-}
-
-/// Waits for termination signals and lets server shut down gracefully.
-async fn shutdown_signal() {
-    // Graceful shutdown lets in-flight requests complete before process exit.
-    let ctrl_c = async {
-        let _ = tokio::signal::ctrl_c().await;
-    };
-
-    #[cfg(unix)]
-    let terminate = async {
-        use tokio::signal::unix::{SignalKind, signal};
-        if let Ok(mut stream) = signal(SignalKind::terminate()) {
-            stream.recv().await;
-        }
-    };
-
-    #[cfg(not(unix))]
-    let terminate = std::future::pending::<()>();
-
-    tokio::select! {
-        _ = ctrl_c => {},
-        _ = terminate => {},
-    }
-}
-
-#[cfg(test)]
-mod tests;
