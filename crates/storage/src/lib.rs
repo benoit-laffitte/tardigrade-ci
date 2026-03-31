@@ -4,7 +4,9 @@ use chrono::{DateTime, Utc};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use tardigrade_core::{BuildRecord, JobDefinition, JobStatus};
+use tardigrade_core::{
+    BuildRecord, JobDefinition, JobStatus, ScmProvider, WebhookSecurityConfig,
+};
 use tokio_postgres::{NoTls, Row};
 use uuid::Uuid;
 
@@ -30,7 +32,20 @@ const MIGRATIONS: &[(&str, &str)] = &[(
             logs JSONB NOT NULL DEFAULT '[]'::jsonb
         );
         "#,
-)];
+),
+    (
+        "002_init_webhook_security_configs",
+        r#"
+        CREATE TABLE IF NOT EXISTS webhook_security_configs (
+            repository_url TEXT NOT NULL,
+            provider TEXT NOT NULL,
+            secret TEXT NOT NULL,
+            allowed_ips JSONB NOT NULL DEFAULT '[]'::jsonb,
+            updated_at TIMESTAMPTZ NOT NULL,
+            PRIMARY KEY (repository_url, provider)
+        );
+        "#,
+    )];
 
 #[async_trait]
 pub trait Storage {
@@ -47,6 +62,14 @@ pub trait Storage {
     async fn get_build(&self, id: Uuid) -> Result<Option<BuildRecord>>;
     /// Lists all known builds.
     async fn list_builds(&self) -> Result<Vec<BuildRecord>>;
+    /// Upserts one repository-level webhook verification configuration.
+    async fn upsert_webhook_security_config(&self, config: WebhookSecurityConfig) -> Result<()>;
+    /// Fetches repository-level webhook verification configuration for one provider.
+    async fn get_webhook_security_config(
+        &self,
+        repository_url: &str,
+        provider: ScmProvider,
+    ) -> Result<Option<WebhookSecurityConfig>>;
 }
 
 /// Postgres-backed implementation of the storage contract.
@@ -60,6 +83,7 @@ pub struct PostgresStorage {
 pub struct InMemoryStorage {
     jobs: Arc<Mutex<HashMap<Uuid, JobDefinition>>>,
     builds: Arc<Mutex<HashMap<Uuid, BuildRecord>>>,
+    webhook_security_configs: Arc<Mutex<HashMap<(String, ScmProvider), WebhookSecurityConfig>>>,
 }
 
 #[async_trait]
@@ -100,6 +124,34 @@ impl Storage for InMemoryStorage {
     async fn list_builds(&self) -> Result<Vec<BuildRecord>> {
         let builds = self.builds.lock().expect("builds storage poisoned");
         Ok(builds.values().cloned().collect())
+    }
+
+    /// Upserts repository-level webhook verification settings in process memory.
+    async fn upsert_webhook_security_config(&self, config: WebhookSecurityConfig) -> Result<()> {
+        let mut configs = self
+            .webhook_security_configs
+            .lock()
+            .expect("webhook security storage poisoned");
+        configs.insert(
+            (config.repository_url.clone(), config.provider),
+            config,
+        );
+        Ok(())
+    }
+
+    /// Fetches one repository-level webhook verification setting from process memory.
+    async fn get_webhook_security_config(
+        &self,
+        repository_url: &str,
+        provider: ScmProvider,
+    ) -> Result<Option<WebhookSecurityConfig>> {
+        let configs = self
+            .webhook_security_configs
+            .lock()
+            .expect("webhook security storage poisoned");
+        Ok(configs
+            .get(&(repository_url.to_string(), provider))
+            .cloned())
     }
 }
 
@@ -267,6 +319,53 @@ impl Storage for PostgresStorage {
 
         rows.into_iter().map(row_to_build).collect()
     }
+
+    /// Upserts repository-level webhook verification settings in postgres.
+    async fn upsert_webhook_security_config(&self, config: WebhookSecurityConfig) -> Result<()> {
+        let allowed_ips = serde_json::to_value(&config.allowed_ips)?;
+        self.client
+            .execute(
+                r#"
+            INSERT INTO webhook_security_configs (repository_url, provider, secret, allowed_ips, updated_at)
+            VALUES ($1, $2, $3, $4, $5)
+            ON CONFLICT (repository_url, provider) DO UPDATE
+            SET secret = EXCLUDED.secret,
+                allowed_ips = EXCLUDED.allowed_ips,
+                updated_at = EXCLUDED.updated_at
+            "#,
+                &[
+                    &config.repository_url,
+                    &scm_provider_to_str(config.provider),
+                    &config.secret,
+                    &allowed_ips,
+                    &config.updated_at,
+                ],
+            )
+            .await?;
+
+        Ok(())
+    }
+
+    /// Fetches one repository-level webhook verification setting from postgres.
+    async fn get_webhook_security_config(
+        &self,
+        repository_url: &str,
+        provider: ScmProvider,
+    ) -> Result<Option<WebhookSecurityConfig>> {
+        let row = self
+            .client
+            .query_opt(
+                r#"
+            SELECT repository_url, provider, secret, allowed_ips, updated_at
+            FROM webhook_security_configs
+            WHERE repository_url = $1 AND provider = $2
+            "#,
+                &[&repository_url, &scm_provider_to_str(provider)],
+            )
+            .await?;
+
+        row.map(row_to_webhook_security_config).transpose()
+    }
 }
 
 /// Converts a postgres row into domain job structure.
@@ -320,6 +419,38 @@ fn parse_status(raw: &str) -> Result<JobStatus> {
         "canceled" => Ok(JobStatus::Canceled),
         other => Err(anyhow!("unknown job status in storage: {other}")),
     }
+}
+
+/// Maps SCM provider enum to compact persisted text representation.
+fn scm_provider_to_str(provider: ScmProvider) -> &'static str {
+    match provider {
+        ScmProvider::Github => "github",
+        ScmProvider::Gitlab => "gitlab",
+    }
+}
+
+/// Parses persisted SCM provider text into enum value.
+fn parse_scm_provider(raw: &str) -> Result<ScmProvider> {
+    match raw {
+        "github" => Ok(ScmProvider::Github),
+        "gitlab" => Ok(ScmProvider::Gitlab),
+        other => Err(anyhow!("unknown SCM provider in storage: {other}")),
+    }
+}
+
+/// Converts a postgres row into repository-level webhook verification settings.
+fn row_to_webhook_security_config(row: Row) -> Result<WebhookSecurityConfig> {
+    let provider_raw: String = row.try_get("provider")?;
+    let allowed_ips_value: Value = row.try_get("allowed_ips")?;
+    let allowed_ips: Vec<String> = serde_json::from_value(allowed_ips_value)?;
+
+    Ok(WebhookSecurityConfig {
+        repository_url: row.try_get("repository_url")?,
+        provider: parse_scm_provider(&provider_raw)?,
+        secret: row.try_get("secret")?,
+        allowed_ips,
+        updated_at: row.try_get("updated_at")?,
+    })
 }
 
 #[cfg(test)]

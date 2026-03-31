@@ -27,6 +27,24 @@ pub struct JobDefinition {
     pub created_at: DateTime<Utc>,
 }
 
+/// SCM provider identity used for webhook signature verification behavior.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[serde(rename_all = "snake_case")]
+pub enum ScmProvider {
+    Github,
+    Gitlab,
+}
+
+/// Per-repository webhook security settings persisted for SCM trigger validation.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct WebhookSecurityConfig {
+    pub repository_url: String,
+    pub provider: ScmProvider,
+    pub secret: String,
+    pub allowed_ips: Vec<String>,
+    pub updated_at: DateTime<Utc>,
+}
+
 /// Versioned pipeline schema executed by workers for one job definition.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct PipelineDefinition {

@@ -1,5 +1,8 @@
 use super::{InMemoryStorage, Storage, parse_status, status_to_str};
-use tardigrade_core::{BuildRecord, JobDefinition, JobStatus};
+use chrono::Utc;
+use tardigrade_core::{
+    BuildRecord, JobDefinition, JobStatus, ScmProvider, WebhookSecurityConfig,
+};
 
 #[tokio::test]
 async fn in_memory_storage_roundtrip_job_and_build() {
@@ -125,4 +128,32 @@ fn status_helpers_cover_all_supported_values() {
 fn parse_status_rejects_unknown_values() {
     let err = parse_status("unknown").expect_err("unknown status should fail");
     assert!(err.to_string().contains("unknown job status"));
+}
+
+#[tokio::test]
+async fn in_memory_storage_roundtrip_webhook_security_config() {
+    let storage = InMemoryStorage::default();
+    let config = WebhookSecurityConfig {
+        repository_url: "https://example.com/repo.git".to_string(),
+        provider: ScmProvider::Github,
+        secret: "secret-1".to_string(),
+        allowed_ips: vec!["203.0.113.10".to_string()],
+        updated_at: Utc::now(),
+    };
+
+    storage
+        .upsert_webhook_security_config(config.clone())
+        .await
+        .expect("save webhook config should succeed");
+
+    let stored = storage
+        .get_webhook_security_config(&config.repository_url, config.provider)
+        .await
+        .expect("get webhook config should succeed")
+        .expect("webhook config should exist");
+
+    assert_eq!(stored.repository_url, config.repository_url);
+    assert_eq!(stored.provider, config.provider);
+    assert_eq!(stored.secret, "secret-1");
+    assert_eq!(stored.allowed_ips, vec!["203.0.113.10".to_string()]);
 }

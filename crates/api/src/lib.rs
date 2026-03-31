@@ -6,8 +6,9 @@ use async_graphql::{
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
 use axum::{
     Extension, Json, Router,
+    body::Bytes,
     extract::{Path, State},
-    http::StatusCode,
+    http::{HeaderMap, StatusCode},
     response::{
         Html, IntoResponse, Response,
         sse::{Event, KeepAlive, Sse},
@@ -15,7 +16,9 @@ use axum::{
     routing::{get, post},
 };
 use chrono::{DateTime, Utc};
+use hmac::{Hmac, Mac};
 use serde::{Deserialize, Serialize};
+use sha2::Sha256;
 use std::time::Duration;
 use std::{
     collections::{HashMap, HashSet},
@@ -23,7 +26,7 @@ use std::{
 };
 use tardigrade_core::{
     BuildRecord, JobDefinition, JobStatus, PipelineDefinition, PipelineDslError,
-    PipelineValidationIssue,
+    PipelineValidationIssue, ScmProvider, WebhookSecurityConfig,
 };
 use tardigrade_executor::WorkerExecutor;
 use tardigrade_scheduler::{InMemoryScheduler, Scheduler};
@@ -194,6 +197,22 @@ pub struct RuntimeMetricsResponse {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct DeadLetterBuildsResponse {
     pub builds: Vec<BuildRecord>,
+}
+
+/// Request payload used to register webhook verification settings for one repository.
+#[derive(Debug, Deserialize)]
+pub struct UpsertWebhookSecurityConfigRequest {
+    pub repository_url: String,
+    pub provider: ScmProvider,
+    pub secret: String,
+    #[serde(default)]
+    pub allowed_ips: Vec<String>,
+}
+
+/// Response payload confirming webhook ingestion acceptance.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ScmWebhookAcceptedResponse {
+    pub status: String,
 }
 
 /// Live event model emitted by the API and streamed to dashboard clients.
@@ -695,6 +714,30 @@ impl ApiState {
             run_embedded_worker,
         }
     }
+
+    /// Upserts one repository-level webhook verification configuration.
+    pub async fn upsert_webhook_security_config(
+        &self,
+        request: UpsertWebhookSecurityConfigRequest,
+    ) -> Result<(), StatusCode> {
+        if request.repository_url.trim().is_empty() || request.secret.trim().is_empty() {
+            return Err(StatusCode::BAD_REQUEST);
+        }
+
+        let config = WebhookSecurityConfig {
+            repository_url: request.repository_url,
+            provider: request.provider,
+            secret: request.secret,
+            allowed_ips: request.allowed_ips,
+            updated_at: Utc::now(),
+        };
+
+        self.service
+            .storage
+            .upsert_webhook_security_config(config)
+            .await
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
+    }
 }
 
 #[derive(Clone)]
@@ -869,6 +912,37 @@ impl CiService {
         );
 
         Ok(job)
+    }
+
+    /// Validates and accepts one SCM webhook after signature, replay, and allowlist checks.
+    async fn ingest_scm_webhook(
+        &self,
+        headers: &HeaderMap,
+        body: &[u8],
+    ) -> Result<(), ApiError> {
+        let provider = parse_scm_provider_header(headers)?;
+        let repository_url = header_value(headers, "x-scm-repository")?;
+        let config = self
+            .storage
+            .get_webhook_security_config(&repository_url, provider)
+            .await
+            .map_err(|_| ApiError::Internal)?
+            .ok_or(ApiError::Forbidden)?;
+
+        validate_replay_window(headers, Duration::from_secs(5 * 60))?;
+        validate_ip_allowlist(headers, &config.allowed_ips)?;
+        verify_signature(provider, headers, body, &config.secret)?;
+
+        self.emit_event(
+            "scm_webhook_ingested",
+            "info",
+            format!("Webhook accepted for repository {}", repository_url),
+            None,
+            None,
+            None,
+        );
+
+        Ok(())
     }
 
     /// Lists jobs sorted chronologically by creation time.
@@ -1258,6 +1332,8 @@ impl CiService {
 /// Internal service-layer error taxonomy converted to HTTP codes at the edge.
 enum ApiError {
     BadRequest,
+    Unauthorized,
+    Forbidden,
     InvalidPipeline {
         message: String,
         details: Option<Vec<PipelineValidationIssue>>,
@@ -1272,6 +1348,8 @@ impl ApiError {
     fn status_code(&self) -> StatusCode {
         match self {
             Self::BadRequest => StatusCode::BAD_REQUEST,
+            Self::Unauthorized => StatusCode::UNAUTHORIZED,
+            Self::Forbidden => StatusCode::FORBIDDEN,
             Self::InvalidPipeline { .. } => StatusCode::UNPROCESSABLE_ENTITY,
             Self::NotFound => StatusCode::NOT_FOUND,
             Self::Conflict => StatusCode::CONFLICT,
@@ -1299,6 +1377,7 @@ pub fn build_router(state: ApiState) -> Router {
         .route("/jobs", post(create_job).get(list_jobs))
         .route("/builds", get(list_builds))
         .route("/workers", get(list_workers))
+        .route("/webhooks/scm", post(ingest_scm_webhook))
         .route("/jobs/{id}/run", post(run_job))
         .route("/builds/{id}/cancel", post(cancel_build))
         .route("/workers/{worker_id}/claim", post(worker_claim_build))
@@ -1460,6 +1539,51 @@ async fn list_workers(
     Ok((StatusCode::OK, Json(ListWorkersResponse { workers })))
 }
 
+/// Ingests one SCM webhook with strict signature, replay-window, and IP allowlist checks.
+async fn ingest_scm_webhook(
+    State(state): State<ApiState>,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Response {
+    match state.service.ingest_scm_webhook(&headers, &body).await {
+        Ok(()) => (
+            StatusCode::ACCEPTED,
+            Json(ScmWebhookAcceptedResponse {
+                status: "accepted".to_string(),
+            }),
+        )
+            .into_response(),
+        Err(ApiError::BadRequest) => (
+            StatusCode::BAD_REQUEST,
+            Json(ApiErrorResponse {
+                code: "invalid_webhook_request".to_string(),
+                message: "webhook request is missing required headers".to_string(),
+                details: None,
+            }),
+        )
+            .into_response(),
+        Err(ApiError::Unauthorized) => (
+            StatusCode::UNAUTHORIZED,
+            Json(ApiErrorResponse {
+                code: "invalid_webhook_signature".to_string(),
+                message: "webhook signature is missing, invalid, or expired".to_string(),
+                details: None,
+            }),
+        )
+            .into_response(),
+        Err(ApiError::Forbidden) => (
+            StatusCode::FORBIDDEN,
+            Json(ApiErrorResponse {
+                code: "webhook_forbidden".to_string(),
+                message: "webhook provider/repository/ip is not authorized".to_string(),
+                details: None,
+            }),
+        )
+            .into_response(),
+        Err(err) => err.status_code().into_response(),
+    }
+}
+
 /// Cancels one build by id.
 async fn cancel_build(
     Path(id): Path<Uuid>,
@@ -1472,6 +1596,116 @@ async fn cancel_build(
         .map_err(|e| e.status_code())?;
 
     Ok((StatusCode::OK, Json(CancelBuildResponse { build })))
+}
+
+/// Reads one required header value and trims surrounding spaces.
+fn header_value(headers: &HeaderMap, key: &'static str) -> Result<String, ApiError> {
+    headers
+        .get(key)
+        .and_then(|v| v.to_str().ok())
+        .map(str::trim)
+        .filter(|v| !v.is_empty())
+        .map(ToString::to_string)
+        .ok_or(ApiError::BadRequest)
+}
+
+/// Parses provider from unified SCM header.
+fn parse_scm_provider_header(headers: &HeaderMap) -> Result<ScmProvider, ApiError> {
+    let raw = header_value(headers, "x-scm-provider")?;
+    match raw.to_ascii_lowercase().as_str() {
+        "github" => Ok(ScmProvider::Github),
+        "gitlab" => Ok(ScmProvider::Gitlab),
+        _ => Err(ApiError::BadRequest),
+    }
+}
+
+/// Enforces webhook replay protection using `x-scm-timestamp` unix seconds header.
+fn validate_replay_window(headers: &HeaderMap, window: Duration) -> Result<(), ApiError> {
+    let raw = header_value(headers, "x-scm-timestamp")?;
+    let timestamp = raw.parse::<i64>().map_err(|_| ApiError::Unauthorized)?;
+    let now = Utc::now().timestamp();
+    let drift = (now - timestamp).unsigned_abs();
+    if drift > window.as_secs() {
+        return Err(ApiError::Unauthorized);
+    }
+    Ok(())
+}
+
+/// Validates source IP against configured allowlist when list is non-empty.
+fn validate_ip_allowlist(headers: &HeaderMap, allowed_ips: &[String]) -> Result<(), ApiError> {
+    if allowed_ips.is_empty() {
+        return Ok(());
+    }
+
+    let source_ip = headers
+        .get("x-forwarded-for")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.split(',').next())
+        .map(str::trim)
+        .filter(|v| !v.is_empty())
+        .map(ToString::to_string)
+        .or_else(|| {
+            headers
+                .get("x-real-ip")
+                .and_then(|v| v.to_str().ok())
+                .map(str::trim)
+                .filter(|v| !v.is_empty())
+                .map(ToString::to_string)
+        })
+        .ok_or(ApiError::Forbidden)?;
+
+    if allowed_ips.iter().any(|ip| ip == &source_ip) {
+        return Ok(());
+    }
+
+    Err(ApiError::Forbidden)
+}
+
+/// Verifies SCM provider signature semantics for one webhook payload.
+fn verify_signature(
+    provider: ScmProvider,
+    headers: &HeaderMap,
+    body: &[u8],
+    secret: &str,
+) -> Result<(), ApiError> {
+    match provider {
+        ScmProvider::Github => verify_github_signature(headers, body, secret),
+        ScmProvider::Gitlab => verify_gitlab_signature(headers, secret),
+    }
+}
+
+/// Verifies GitHub `x-hub-signature-256` value against HMAC-SHA256 over request body.
+fn verify_github_signature(headers: &HeaderMap, body: &[u8], secret: &str) -> Result<(), ApiError> {
+    let header = header_value(headers, "x-hub-signature-256").map_err(|_| ApiError::Unauthorized)?;
+    let Some(hex_sig) = header.strip_prefix("sha256=") else {
+        return Err(ApiError::Unauthorized);
+    };
+
+    let provided = hex::decode(hex_sig).map_err(|_| ApiError::Unauthorized)?;
+    let mut mac = Hmac::<Sha256>::new_from_slice(secret.as_bytes()).map_err(|_| ApiError::Internal)?;
+    mac.update(body);
+    mac.verify_slice(&provided)
+        .map_err(|_| ApiError::Unauthorized)
+}
+
+/// Verifies GitLab token-style signature header using constant-time equality.
+fn verify_gitlab_signature(headers: &HeaderMap, secret: &str) -> Result<(), ApiError> {
+    let provided = header_value(headers, "x-gitlab-token").map_err(|_| ApiError::Unauthorized)?;
+    if provided.len() != secret.len() {
+        return Err(ApiError::Unauthorized);
+    }
+
+    let diff = provided
+        .as_bytes()
+        .iter()
+        .zip(secret.as_bytes().iter())
+        .fold(0u8, |acc, (a, b)| acc | (a ^ b));
+
+    if diff == 0 {
+        Ok(())
+    } else {
+        Err(ApiError::Unauthorized)
+    }
 }
 
 /// Claims next available build for one worker.
