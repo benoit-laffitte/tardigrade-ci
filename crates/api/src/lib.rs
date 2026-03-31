@@ -1,19 +1,5 @@
-use async_graphql::{
-    EmptySubscription, Schema,
-    http::{GraphQLPlaygroundConfig, playground_source},
-};
-use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
-use axum::{
-    Extension, Json, Router,
-    body::Bytes,
-    extract::{Path, State},
-    http::{HeaderMap, StatusCode},
-    response::{
-        Html, IntoResponse, Response,
-        sse::{Event, KeepAlive, Sse},
-    },
-    routing::{get, post},
-};
+use async_graphql::{EmptySubscription, Schema};
+use axum::{Extension, Router, http::{HeaderMap, StatusCode}, routing::{get, post}};
 use chrono::{Duration as ChronoDuration, Utc};
 use hmac::{Hmac, Mac};
 use serde_json::Value as JsonValue;
@@ -30,11 +16,11 @@ use tardigrade_executor::WorkerExecutor;
 use tardigrade_scheduler::Scheduler;
 use tardigrade_storage::Storage;
 use tokio::sync::broadcast;
-use tokio_stream::{StreamExt, wrappers::BroadcastStream};
 use uuid::Uuid;
 
 mod events;
 mod graphql;
+mod handlers;
 mod http_models;
 mod service;
 mod state;
@@ -51,7 +37,14 @@ pub use http_models::{
 };
 pub use state::ApiState;
 pub use settings::ServiceSettings;
-use graphql::{CiGraphQLSchema, MutationRoot, QueryRoot};
+pub(crate) use graphql::CiGraphQLSchema;
+use graphql::{MutationRoot, QueryRoot};
+use handlers::{
+    cancel_build, create_job, dead_letter_builds, events, graphql_handler, graphql_playground,
+    health, ingest_scm_webhook, list_builds, list_jobs, list_workers, live, metrics, ready,
+    run_job, run_scm_polling_tick, upsert_scm_polling_config, worker_claim_build,
+    worker_complete_build,
+};
 use service::{CiService, RuntimeMetrics, ScmTriggerEvent, map_pipeline_error};
 
 impl CiService {
@@ -865,253 +858,6 @@ pub fn build_router(state: ApiState) -> Router {
         .with_state(state)
 }
 
-/// Serves GraphQL playground for interactive schema exploration.
-async fn graphql_playground() -> Html<String> {
-    Html(playground_source(GraphQLPlaygroundConfig::new("/graphql")))
-}
-
-/// Executes one GraphQL request against CI schema.
-async fn graphql_handler(
-    Extension(schema): Extension<CiGraphQLSchema>,
-    req: GraphQLRequest,
-) -> GraphQLResponse {
-    schema.execute(req.into_inner()).await.into()
-}
-
-/// Returns service identity and basic health signal.
-async fn health(State(state): State<ApiState>) -> Json<HealthResponse> {
-    Json(HealthResponse {
-        status: "ok",
-        service: state.service_name,
-    })
-}
-
-/// Returns process liveness probe response.
-async fn live() -> Json<LiveResponse> {
-    Json(LiveResponse { status: "alive" })
-}
-
-/// Returns readiness probe response after dependency checks.
-async fn ready(
-    State(state): State<ApiState>,
-) -> Result<(StatusCode, Json<ReadyResponse>), StatusCode> {
-    state
-        .service
-        .is_ready()
-        .await
-        .map_err(|e| e.status_code())?;
-    Ok((StatusCode::OK, Json(ReadyResponse { status: "ready" })))
-}
-
-/// Streams live operational events to dashboard clients using SSE.
-async fn events(
-    State(state): State<ApiState>,
-) -> Sse<impl tokio_stream::Stream<Item = Result<Event, std::convert::Infallible>>> {
-    // BroadcastStream may drop lagging messages; dashboard treats this as best-effort live feed.
-    let stream =
-        BroadcastStream::new(state.service.subscribe_events()).filter_map(|msg| match msg {
-            Ok(event) => {
-                let data = serde_json::to_string(&event).ok()?;
-                Some(Ok(Event::default().data(data)))
-            }
-            Err(_) => None,
-        });
-
-    Sse::new(stream).keep_alive(
-        KeepAlive::new()
-            .interval(Duration::from_secs(15))
-            .text("keep-alive"),
-    )
-}
-
-/// Returns current reliability metrics snapshot.
-async fn metrics(State(state): State<ApiState>) -> (StatusCode, Json<RuntimeMetricsResponse>) {
-    (StatusCode::OK, Json(state.service.metrics_snapshot()))
-}
-
-/// Returns build records currently tagged as dead-letter.
-async fn dead_letter_builds(
-    State(state): State<ApiState>,
-) -> Result<(StatusCode, Json<DeadLetterBuildsResponse>), StatusCode> {
-    let builds = state
-        .service
-        .list_dead_letter_builds()
-        .await
-        .map_err(|e| e.status_code())?;
-    Ok((StatusCode::OK, Json(DeadLetterBuildsResponse { builds })))
-}
-
-/// Creates one job from request payload.
-async fn create_job(
-    State(state): State<ApiState>,
-    Json(payload): Json<CreateJobRequest>,
-) -> Response {
-    match state.service.create_job(payload).await {
-        Ok(job) => (StatusCode::CREATED, Json(CreateJobResponse { job })).into_response(),
-        Err(ApiError::InvalidPipeline { message, details }) => (
-            StatusCode::UNPROCESSABLE_ENTITY,
-            Json(ApiErrorResponse {
-                code: "invalid_pipeline".to_string(),
-                message,
-                details,
-            }),
-        )
-            .into_response(),
-        Err(err) => err.status_code().into_response(),
-    }
-}
-
-/// Lists all jobs.
-async fn list_jobs(
-    State(state): State<ApiState>,
-) -> Result<(StatusCode, Json<ListJobsResponse>), StatusCode> {
-    let jobs = state
-        .service
-        .list_jobs()
-        .await
-        .map_err(|e| e.status_code())?;
-    Ok((StatusCode::OK, Json(ListJobsResponse { jobs })))
-}
-
-/// Enqueues one build for the given job id.
-async fn run_job(
-    Path(id): Path<Uuid>,
-    State(state): State<ApiState>,
-) -> Result<(StatusCode, Json<RunJobResponse>), StatusCode> {
-    let build = state
-        .service
-        .run_job(id)
-        .await
-        .map_err(|e| e.status_code())?;
-
-    if state.run_embedded_worker {
-        // Embedded mode keeps bootstrap behavior while worker APIs allow external workers.
-        let service = state.service.clone();
-        tokio::spawn(async move {
-            let _ = service.process_next_build().await;
-        });
-    }
-
-    Ok((StatusCode::CREATED, Json(RunJobResponse { build })))
-}
-
-/// Lists all builds.
-async fn list_builds(
-    State(state): State<ApiState>,
-) -> Result<(StatusCode, Json<ListBuildsResponse>), StatusCode> {
-    let builds = state
-        .service
-        .list_builds()
-        .await
-        .map_err(|e| e.status_code())?;
-    Ok((StatusCode::OK, Json(ListBuildsResponse { builds })))
-}
-
-/// Lists all known workers.
-async fn list_workers(
-    State(state): State<ApiState>,
-) -> Result<(StatusCode, Json<ListWorkersResponse>), StatusCode> {
-    let workers = state.service.list_workers().map_err(|e| e.status_code())?;
-    Ok((StatusCode::OK, Json(ListWorkersResponse { workers })))
-}
-
-/// Ingests one SCM webhook with strict signature, replay-window, and IP allowlist checks.
-async fn ingest_scm_webhook(
-    State(state): State<ApiState>,
-    headers: HeaderMap,
-    body: Bytes,
-) -> Response {
-    state.service.record_scm_webhook_received();
-
-    match state.service.ingest_scm_webhook(&headers, &body).await {
-        Ok(()) => {
-            state.service.record_scm_webhook_accepted();
-            (
-                StatusCode::ACCEPTED,
-                Json(ScmWebhookAcceptedResponse {
-                    status: "accepted".to_string(),
-                }),
-            )
-                .into_response()
-        }
-        Err(ApiError::BadRequest) => {
-            state.service.record_scm_webhook_rejected();
-            (
-                StatusCode::BAD_REQUEST,
-                Json(ApiErrorResponse {
-                    code: "invalid_webhook_request".to_string(),
-                    message: "webhook request is missing required headers".to_string(),
-                    details: None,
-                }),
-            )
-                .into_response()
-        }
-        Err(ApiError::Unauthorized) => {
-            state.service.record_scm_webhook_rejected();
-            (
-                StatusCode::UNAUTHORIZED,
-                Json(ApiErrorResponse {
-                    code: "invalid_webhook_signature".to_string(),
-                    message: "webhook signature is missing, invalid, or expired".to_string(),
-                    details: None,
-                }),
-            )
-                .into_response()
-        }
-        Err(ApiError::Forbidden) => {
-            state.service.record_scm_webhook_rejected();
-            (
-                StatusCode::FORBIDDEN,
-                Json(ApiErrorResponse {
-                    code: "webhook_forbidden".to_string(),
-                    message: "webhook provider/repository/ip is not authorized".to_string(),
-                    details: None,
-                }),
-            )
-                .into_response()
-        }
-        Err(err) => {
-            state.service.record_scm_webhook_rejected();
-            err.status_code().into_response()
-        }
-    }
-}
-
-/// Upserts SCM polling configuration for one repository/provider.
-async fn upsert_scm_polling_config(
-    State(state): State<ApiState>,
-    Json(payload): Json<UpsertScmPollingConfigRequest>,
-) -> Result<StatusCode, StatusCode> {
-    state.upsert_scm_polling_config(payload).await?;
-    Ok(StatusCode::NO_CONTENT)
-}
-
-/// Runs one SCM polling tick immediately.
-async fn run_scm_polling_tick(
-    State(state): State<ApiState>,
-) -> Result<(StatusCode, Json<ScmPollingTickResponse>), StatusCode> {
-    let result = state
-        .service
-        .run_scm_polling_tick()
-        .await
-        .map_err(|e| e.status_code())?;
-    Ok((StatusCode::OK, Json(result)))
-}
-
-/// Cancels one build by id.
-async fn cancel_build(
-    Path(id): Path<Uuid>,
-    State(state): State<ApiState>,
-) -> Result<(StatusCode, Json<CancelBuildResponse>), StatusCode> {
-    let build = state
-        .service
-        .cancel_build(id)
-        .await
-        .map_err(|e| e.status_code())?;
-
-    Ok((StatusCode::OK, Json(CancelBuildResponse { build })))
-}
-
 /// Reads one required header value and trims surrounding spaces.
 fn header_value(headers: &HeaderMap, key: &'static str) -> Result<String, ApiError> {
     headers
@@ -1404,30 +1150,3 @@ fn parse_gitlab_trigger_event(
     Ok(None)
 }
 
-/// Claims next available build for one worker.
-async fn worker_claim_build(
-    Path(worker_id): Path<String>,
-    State(state): State<ApiState>,
-) -> Result<(StatusCode, Json<ClaimBuildResponse>), StatusCode> {
-    let build = state
-        .service
-        .claim_build_for_worker(&worker_id)
-        .await
-        .map_err(|e| e.status_code())?;
-    Ok((StatusCode::OK, Json(ClaimBuildResponse { build })))
-}
-
-/// Completes one claimed build for one worker.
-async fn worker_complete_build(
-    Path((worker_id, id)): Path<(String, Uuid)>,
-    State(state): State<ApiState>,
-    Json(payload): Json<CompleteBuildRequest>,
-) -> Result<(StatusCode, Json<CompleteBuildResponse>), StatusCode> {
-    let build = state
-        .service
-        .complete_build_for_worker(&worker_id, id, payload.status, payload.log_line)
-        .await
-        .map_err(|e| e.status_code())?;
-
-    Ok((StatusCode::OK, Json(CompleteBuildResponse { build })))
-}
