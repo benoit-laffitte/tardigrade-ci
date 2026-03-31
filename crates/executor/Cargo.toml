@@ -5,6 +5,6 @@ edition = "2024"
 
 [dependencies]
 anyhow.workspace = true
-tokio.workspace = true
+tokio = { workspace = true, features = ["time", "macros", "rt"] }
 tracing.workspace = true
 tardigrade-core = { path = "../core" }

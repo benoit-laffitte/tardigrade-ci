@@ -1,4 +1,4 @@
-use super::{
+use crate::{
     Plugin, PluginCapability, PluginLifecycleError, PluginLifecycleState, PluginRegistry,
 };
 use std::path::PathBuf;
@@ -142,13 +142,9 @@ fn lifecycle_transitions_succeed_in_order() {
     registry.init("executor").expect("init should succeed");
     assert_eq!(registry.state("executor"), Some(PluginLifecycleState::Initialized));
 
-    registry
-        .execute("executor")
-        .expect("execute should succeed");
+    registry.execute("executor").expect("execute should succeed");
 
-    registry
-        .unload("executor")
-        .expect("unload should succeed");
+    registry.unload("executor").expect("unload should succeed");
     assert_eq!(registry.state("executor"), Some(PluginLifecycleState::Unloaded));
 
     assert_eq!(load_count.load(Ordering::SeqCst), 1);
