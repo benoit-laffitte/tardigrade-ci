@@ -24,8 +24,8 @@ use std::{
     sync::{Arc, Mutex},
 };
 use tardigrade_core::{
-    BuildRecord, JobDefinition, PipelineDefinition, PipelineDslError, PipelineValidationIssue,
-    ScmPollingConfig, ScmProvider, WebhookSecurityConfig,
+    BuildRecord, JobDefinition, PipelineDefinition, PipelineValidationIssue, ScmPollingConfig,
+    ScmProvider, WebhookSecurityConfig,
 };
 use tardigrade_executor::WorkerExecutor;
 use tardigrade_scheduler::{InMemoryScheduler, Scheduler};
@@ -37,6 +37,7 @@ use uuid::Uuid;
 mod events;
 mod graphql;
 mod http_models;
+mod service;
 mod settings;
 
 pub use events::LiveEvent;
@@ -50,6 +51,7 @@ pub use http_models::{
 };
 pub use settings::ServiceSettings;
 use graphql::{CiGraphQLSchema, MutationRoot, QueryRoot};
+use service::{ScmTriggerEvent, map_pipeline_error};
 
 #[derive(Clone)]
 pub struct ApiState {
@@ -57,43 +59,6 @@ pub struct ApiState {
     /// Service owns all domain orchestration (storage, scheduler, metrics, events).
     service: Arc<CiService>,
     run_embedded_worker: bool,
-}
-
-/// SCM webhook event families that can trigger build enqueue logic.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum ScmTriggerEvent {
-    Push,
-    PullRequest,
-    MergeRequest,
-    Tag,
-    ManualDispatch,
-}
-
-/// Converts DSL parser/validator failures into API-level invalid pipeline errors.
-fn map_pipeline_error(error: PipelineDslError) -> ApiError {
-    match error {
-        PipelineDslError::Yaml(message) => ApiError::InvalidPipeline {
-            message: format!("invalid pipeline YAML: {message}"),
-            details: None,
-        },
-        PipelineDslError::Validation(issues) => {
-            let summary = issues
-                .iter()
-                .take(3)
-                .map(|issue| format!("{}: {}", issue.field, issue.message))
-                .collect::<Vec<_>>()
-                .join("; ");
-            let suffix = if issues.len() > 3 {
-                " (additional issues omitted)"
-            } else {
-                ""
-            };
-            ApiError::InvalidPipeline {
-                message: format!("pipeline validation failed: {summary}{suffix}"),
-                details: Some(issues),
-            }
-        }
-    }
 }
 
 impl ApiState {
