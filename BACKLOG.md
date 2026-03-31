@@ -8,6 +8,7 @@ This file is the delivery backlog derived from the current roadmap.
 - Every new feature request must be tracked in this file before implementation.
 - New entries should use an epic prefix-based ID (examples: `INDUS-201`, `DSL-01`, `SCM-03`).
 - Each new entry must include: goal, scope, status, and acceptance criteria.
+- Before starting any epic, we run an explicit refinement step (affinage) together and record the outcome in the backlog discussion.
 
 ### Priority reminder (current)
 
@@ -15,11 +16,13 @@ This file is the delivery backlog derived from the current roadmap.
 2. Epic 3 (`PLUG-*`) for extension safety model.
 3. Reliability follow-ups (`REL-*`) as hardening milestones.
 4. Epic 0 (`INDUS-*`) hardening follow-ups.
+5. Epic 5 (`CLOUD-*`) cloud/container delivery track (deferred).
 
 Context update:
 
 - Epic 1 (`DSL-*`) is complete.
 - Epic 1b (`TECH-*`) is complete.
+- Docker/cloud scope has been deferred and tracked under Epic 5 (`CLOUD-*`).
 
 ## Status legend
 
@@ -155,6 +158,25 @@ Definition of done:
 - Production mode cannot start without Redis configuration.
 - Local developer workflow remains simple with non-Redis fallback.
 
+### Epic 5: Cloud/container delivery track (deferred)
+
+Goal: reintroduce and harden container/cloud delivery later, after current SCM and platform priorities.
+
+Status: deferred for a later planning cycle.
+
+- [ ] `CLOUD-01` Reintroduce reproducible Linux container builds for server and worker.
+- [ ] `CLOUD-02` Define image tagging/versioning policy for local, CI, and release channels.
+- [ ] `CLOUD-03` Add registry publish flow and pull authentication model.
+- [ ] `CLOUD-04` Rebuild Kubernetes baseline manifests (server=1, worker=2, dependencies).
+- [ ] `CLOUD-05` Add cloud smoke checks (health endpoints, worker registration, basic pipeline run).
+- [ ] `CLOUD-06` Document deployment and troubleshooting runbook (TLS, pull failures, architecture mismatch).
+
+Definition of done:
+
+- Tardigrade can be deployed from published images to a Kubernetes cluster with documented steps.
+- CI validates image/runtime architecture compatibility before deployment.
+- Operational runbook covers local cluster and cloud deployment paths.
+
 ## Queue reliability follow-ups
 
 ### Completed
@@ -182,3 +204,4 @@ Definition of done:
 2. Epic 3 (`PLUG-*`) for extension safety model.
 3. Reliability follow-ups (`REL-*`) as hardening milestones.
 4. Epic 0 (`INDUS-*`) hardening follow-ups.
+5. Epic 5 (`CLOUD-*`) cloud/container delivery track (deferred).
