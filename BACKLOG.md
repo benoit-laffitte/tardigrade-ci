@@ -110,6 +110,14 @@ Refinement decisions (MVP):
 - Polling scope: branch polling by default (`main` / `master` + configured branches).
 - Ingestion failure behavior: return error, emit logs, emit metrics.
 
+Refinement outcome for `SCM-02` (2026-03-31):
+
+- Unified endpoint path: `/webhooks/scm`.
+- Secret source: per-repository secrets stored in persistence layer (database-backed model).
+- Validation mode: strict reject on missing/invalid signature (`401/403`).
+- Replay defense: timestamp window set to 5 minutes.
+- Security scope for current step: implement signature verification and IP allowlist together.
+
 - [x] `SCM-01` Define trigger model (manual, webhook, polling).
 - [-] `SCM-02` Add webhook endpoint(s) with signature verification.
 - [ ] `SCM-03` Implement provider adapters (GitHub/GitLab first).
