@@ -14,7 +14,7 @@ use axum::{
     },
     routing::{get, post},
 };
-use chrono::{DateTime, Duration as ChronoDuration, Utc};
+use chrono::{Duration as ChronoDuration, Utc};
 use hmac::{Hmac, Mac};
 use serde_json::Value as JsonValue;
 use sha2::Sha256;
@@ -24,12 +24,11 @@ use std::{
     sync::{Arc, Mutex},
 };
 use tardigrade_core::{
-    BuildRecord, JobDefinition, PipelineDefinition, PipelineValidationIssue, ScmPollingConfig,
-    ScmProvider, WebhookSecurityConfig,
+    BuildRecord, JobDefinition, PipelineDefinition, PipelineValidationIssue, ScmProvider,
 };
 use tardigrade_executor::WorkerExecutor;
-use tardigrade_scheduler::{InMemoryScheduler, Scheduler};
-use tardigrade_storage::{InMemoryStorage, Storage};
+use tardigrade_scheduler::Scheduler;
+use tardigrade_storage::Storage;
 use tokio::sync::broadcast;
 use tokio_stream::{StreamExt, wrappers::BroadcastStream};
 use uuid::Uuid;
@@ -38,6 +37,7 @@ mod events;
 mod graphql;
 mod http_models;
 mod service;
+mod state;
 mod settings;
 
 pub use events::LiveEvent;
@@ -49,179 +49,10 @@ pub use http_models::{
     ScmWebhookAcceptedResponse, UpsertScmPollingConfigRequest,
     UpsertWebhookSecurityConfigRequest, WorkerBuildStatus, WorkerInfo,
 };
+pub use state::ApiState;
 pub use settings::ServiceSettings;
 use graphql::{CiGraphQLSchema, MutationRoot, QueryRoot};
-use service::{ScmTriggerEvent, map_pipeline_error};
-
-#[derive(Clone)]
-pub struct ApiState {
-    pub service_name: String,
-    /// Service owns all domain orchestration (storage, scheduler, metrics, events).
-    service: Arc<CiService>,
-    run_embedded_worker: bool,
-}
-
-impl ApiState {
-    /// Builds default API state with in-memory storage and scheduler.
-    pub fn new(service_name: impl Into<String>) -> Self {
-        Self::with_components(
-            service_name,
-            Arc::new(InMemoryStorage::default()),
-            Arc::new(InMemoryScheduler::default()),
-        )
-    }
-
-    /// Builds API state overriding storage backend while keeping in-memory scheduler.
-    pub fn with_storage(
-        service_name: impl Into<String>,
-        storage: Arc<dyn Storage + Send + Sync>,
-    ) -> Self {
-        Self::with_components(
-            service_name,
-            storage,
-            Arc::new(InMemoryScheduler::default()),
-        )
-    }
-
-    /// Builds API state from explicit storage and scheduler components.
-    pub fn with_components(
-        service_name: impl Into<String>,
-        storage: Arc<dyn Storage + Send + Sync>,
-        scheduler: Arc<dyn Scheduler + Send + Sync>,
-    ) -> Self {
-        Self::with_components_and_mode(service_name, storage, scheduler, true)
-    }
-
-    /// Builds API state and configures whether embedded worker loop is enabled.
-    pub fn with_components_and_mode(
-        service_name: impl Into<String>,
-        storage: Arc<dyn Storage + Send + Sync>,
-        scheduler: Arc<dyn Scheduler + Send + Sync>,
-        run_embedded_worker: bool,
-    ) -> Self {
-        Self::with_components_and_mode_and_settings(
-            service_name,
-            storage,
-            scheduler,
-            run_embedded_worker,
-            ServiceSettings::from_env(),
-        )
-    }
-
-    /// Builds API state with explicit reliability settings (useful for deterministic tests).
-    pub fn with_components_and_mode_and_settings(
-        service_name: impl Into<String>,
-        storage: Arc<dyn Storage + Send + Sync>,
-        scheduler: Arc<dyn Scheduler + Send + Sync>,
-        run_embedded_worker: bool,
-        settings: ServiceSettings,
-    ) -> Self {
-        Self {
-            service_name: service_name.into(),
-            service: Arc::new(CiService::new(storage, scheduler, settings)),
-            run_embedded_worker,
-        }
-    }
-
-    /// Upserts one repository-level webhook verification configuration.
-    pub async fn upsert_webhook_security_config(
-        &self,
-        request: UpsertWebhookSecurityConfigRequest,
-    ) -> Result<(), StatusCode> {
-        if request.repository_url.trim().is_empty() || request.secret.trim().is_empty() {
-            return Err(StatusCode::BAD_REQUEST);
-        }
-
-        let config = WebhookSecurityConfig {
-            repository_url: request.repository_url,
-            provider: request.provider,
-            secret: request.secret,
-            allowed_ips: request.allowed_ips,
-            updated_at: Utc::now(),
-        };
-
-        self.service
-            .storage
-            .upsert_webhook_security_config(config)
-            .await
-            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
-    }
-
-    /// Upserts one SCM polling configuration for one repository/provider.
-    pub async fn upsert_scm_polling_config(
-        &self,
-        request: UpsertScmPollingConfigRequest,
-    ) -> Result<(), StatusCode> {
-        if request.repository_url.trim().is_empty() || request.interval_secs == 0 {
-            return Err(StatusCode::BAD_REQUEST);
-        }
-
-        let config = ScmPollingConfig {
-            repository_url: request.repository_url,
-            provider: request.provider,
-            enabled: request.enabled,
-            interval_secs: request.interval_secs,
-            branches: request.branches,
-            last_polled_at: None,
-            updated_at: Utc::now(),
-        };
-
-        self.service
-            .storage
-            .upsert_scm_polling_config(config)
-            .await
-            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
-    }
-
-    /// Starts SCM polling background loop with fixed check interval.
-    pub fn start_scm_polling_loop(&self, check_interval: Duration) {
-        let service = self.service.clone();
-        tokio::spawn(async move {
-            loop {
-                let _ = service.run_scm_polling_tick().await;
-                tokio::time::sleep(check_interval).await;
-            }
-        });
-    }
-}
-
-#[derive(Clone)]
-struct CiService {
-    storage: Arc<dyn Storage + Send + Sync>,
-    scheduler: Arc<dyn Scheduler + Send + Sync>,
-    /// last_seen map allows the dashboard to expose active/idle workers.
-    worker_registry: Arc<Mutex<HashMap<String, DateTime<Utc>>>>,
-    worker_lease_timeout: Duration,
-    max_retries: u32,
-    retry_backoff_ms: u64,
-    /// retry_state tracks attempt count per build until terminal state.
-    retry_state: Arc<Mutex<HashMap<Uuid, u32>>>,
-    metrics: Arc<Mutex<RuntimeMetrics>>,
-    /// dead_letter_builds provides a focused operational view over failed terminal retries.
-    dead_letter_builds: Arc<Mutex<HashSet<Uuid>>>,
-    /// seen_webhook_events stores recent dedup keys to enforce idempotent ingestion.
-    seen_webhook_events: Arc<Mutex<HashMap<String, DateTime<Utc>>>>,
-    webhook_dedup_ttl: Duration,
-    /// Internal broadcast bus feeding the SSE /events endpoint.
-    event_tx: broadcast::Sender<LiveEvent>,
-}
-
-/// Mutable runtime counters for reliability and SCM trigger observability.
-#[derive(Default)]
-struct RuntimeMetrics {
-    reclaimed_total: u64,
-    retry_requeued_total: u64,
-    ownership_conflicts_total: u64,
-    dead_letter_total: u64,
-    scm_webhook_received_total: u64,
-    scm_webhook_accepted_total: u64,
-    scm_webhook_rejected_total: u64,
-    scm_webhook_duplicate_total: u64,
-    scm_trigger_enqueued_builds_total: u64,
-    scm_polling_ticks_total: u64,
-    scm_polling_repositories_total: u64,
-    scm_polling_enqueued_builds_total: u64,
-}
+use service::{CiService, RuntimeMetrics, ScmTriggerEvent, map_pipeline_error};
 
 impl CiService {
     /// Creates orchestrator service from persistence, queue backend, and runtime settings.
