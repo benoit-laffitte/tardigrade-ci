@@ -14,9 +14,10 @@ This file is the delivery backlog derived from the current roadmap.
 
 1. Epic 2 (`SCM-*`) for external trigger automation.
 2. Epic 3 (`PLUG-*`) for extension safety model.
-3. Reliability follow-ups (`REL-*`) as hardening milestones.
-4. Epic 0 (`INDUS-*`) hardening follow-ups.
-5. Epic 5 (`CLOUD-*`) cloud/container delivery track (deferred).
+3. Epic 6 (`REFAC-*`) for Rust source maintainability refactor.
+4. Reliability follow-ups (`REL-*`) as hardening milestones.
+5. Epic 0 (`INDUS-*`) hardening follow-ups.
+6. Epic 5 (`CLOUD-*`) cloud/container delivery track (deferred).
 
 Context update:
 
@@ -234,6 +235,37 @@ Definition of done:
 - CI validates image/runtime architecture compatibility before deployment.
 - Operational runbook covers local cluster and cloud deployment paths.
 
+### Epic 6: Rust source maintainability (one object per file)
+
+Goal: improve maintainability by enforcing one primary Rust object per `.rs` source file.
+
+Refinement outcome for `REFAC-01` (2026-03-31):
+
+- Scope target: all workspace Rust crates (`api`, `auth`, `core`, `executor`, `plugins`, `scheduler`, `server`, `storage`, `worker`, `xtask`).
+- Object granularity: one primary object per file (`struct`, `enum`, `trait`, or type-focused module API surface).
+- `impl` policy: keep `impl` blocks in the same file as their primary object.
+- Module layout: split large `lib.rs`/`main.rs` internals into dedicated module files while keeping crate public APIs stable.
+- API compatibility policy: strict backward compatibility for public APIs during the refactor.
+- Migration strategy: incremental by crate, with compile + tests passing at each step.
+- Execution order: `core` -> `storage` -> `scheduler` -> `plugins` -> `executor` -> `api` -> `server` -> `worker` -> `auth` -> `xtask`.
+- Safety constraint: no behavior changes in this epic, only structure and readability improvements.
+- Validation gate: run `cargo test --workspace` on every `REFAC-*` ticket.
+
+- [-] `REFAC-01` Define and document one-object-per-file conventions (naming, `mod.rs` usage, re-export policy).
+- [ ] `REFAC-02` Refactor `crates/core` into one-object-per-file module structure.
+- [ ] `REFAC-03` Refactor `crates/storage` and `crates/scheduler` into one-object-per-file module structure.
+- [ ] `REFAC-04` Refactor `crates/plugins` and `crates/executor` into one-object-per-file module structure.
+- [ ] `REFAC-05` Refactor `crates/api` and `crates/server` into one-object-per-file module structure.
+- [ ] `REFAC-06` Refactor `crates/worker`, `crates/auth`, and `crates/xtask` into one-object-per-file module structure.
+- [ ] `REFAC-07` Validate workspace stability (`cargo test --workspace`) and update docs/contribution guidelines.
+
+Definition of done:
+
+- Rust source modules follow one-primary-object-per-file convention across targeted crates.
+- Public crate APIs remain backward compatible unless explicitly approved.
+- Formatting, linting, and tests pass after refactor.
+- Contribution docs describe the convention for future changes.
+
 ## Queue reliability follow-ups
 
 ### Completed
@@ -259,6 +291,7 @@ Definition of done:
 
 1. Epic 2 (`SCM-*`) for external trigger automation.
 2. Epic 3 (`PLUG-*`) for extension safety model.
-3. Reliability follow-ups (`REL-*`) as hardening milestones.
-4. Epic 0 (`INDUS-*`) hardening follow-ups.
-5. Epic 5 (`CLOUD-*`) cloud/container delivery track (deferred).
+3. Epic 6 (`REFAC-*`) for Rust source maintainability refactor.
+4. Reliability follow-ups (`REL-*`) as hardening milestones.
+5. Epic 0 (`INDUS-*`) hardening follow-ups.
+6. Epic 5 (`CLOUD-*`) cloud/container delivery track (deferred).
