@@ -1,7 +1,8 @@
 use super::{InMemoryStorage, Storage, parse_status, status_to_str};
 use chrono::Utc;
 use tardigrade_core::{
-    BuildRecord, JobDefinition, JobStatus, ScmProvider, WebhookSecurityConfig,
+    BuildRecord, JobDefinition, JobStatus, ScmPollingConfig, ScmProvider,
+    WebhookSecurityConfig,
 };
 
 #[tokio::test]
@@ -156,4 +157,33 @@ async fn in_memory_storage_roundtrip_webhook_security_config() {
     assert_eq!(stored.provider, config.provider);
     assert_eq!(stored.secret, "secret-1");
     assert_eq!(stored.allowed_ips, vec!["203.0.113.10".to_string()]);
+}
+
+#[tokio::test]
+async fn in_memory_storage_roundtrip_scm_polling_config() {
+    let storage = InMemoryStorage::default();
+    let config = ScmPollingConfig {
+        repository_url: "https://example.com/repo.git".to_string(),
+        provider: ScmProvider::Github,
+        enabled: true,
+        interval_secs: 30,
+        branches: vec!["main".to_string(), "develop".to_string()],
+        last_polled_at: None,
+        updated_at: Utc::now(),
+    };
+
+    storage
+        .upsert_scm_polling_config(config.clone())
+        .await
+        .expect("save scm polling config should succeed");
+
+    let listed = storage
+        .list_scm_polling_configs()
+        .await
+        .expect("list scm polling configs should succeed");
+    assert_eq!(listed.len(), 1);
+    assert_eq!(listed[0].repository_url, config.repository_url);
+    assert_eq!(listed[0].provider, config.provider);
+    assert_eq!(listed[0].interval_secs, 30);
+    assert_eq!(listed[0].branches.len(), 2);
 }

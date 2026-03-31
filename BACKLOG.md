@@ -118,10 +118,17 @@ Refinement outcome for `SCM-02` (2026-03-31):
 - Replay defense: timestamp window set to 5 minutes.
 - Security scope for current step: implement signature verification and IP allowlist together.
 
+Refinement outcome for `SCM-04` (2026-03-31):
+
+- Target architecture: dedicated SCM polling service path (introduced with runtime loop support).
+- Default polling interval: 30 seconds per repository when configured accordingly.
+- Branch scope: all branches (provider adapters can later filter by branch policy).
+- Source of truth: polling configuration stored per repository in persistence layer.
+
 - [x] `SCM-01` Define trigger model (manual, webhook, polling).
 - [x] `SCM-02` Add webhook endpoint(s) with signature verification.
 - [x] `SCM-03` Implement provider adapters (GitHub/GitLab first).
-- [ ] `SCM-04` Add SCM polling worker loop and configurable intervals.
+- [x] `SCM-04` Add SCM polling worker loop and configurable intervals.
 - [ ] `SCM-05` Add deduplication/idempotency for repeated webhook events.
 - [ ] `SCM-06` Add observability events/metrics for trigger ingestion.
 - [ ] `SCM-07` Add integration tests for webhook and polling flows.

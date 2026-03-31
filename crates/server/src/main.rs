@@ -6,6 +6,7 @@ use axum::{
 use serde::Deserialize;
 use std::fs;
 use std::sync::Arc;
+use std::time::Duration;
 use tardigrade_api::{ApiState, build_router};
 use tardigrade_scheduler::RedisScheduler;
 use tardigrade_storage::{InMemoryStorage, PostgresStorage, Storage};
@@ -92,6 +93,14 @@ async fn main() -> Result<()> {
         .unwrap_or(true);
     let redis_prefix =
         std::env::var("TARDIGRADE_REDIS_PREFIX").unwrap_or_else(|_| "tardigrade".to_string());
+    let scm_polling_enabled = std::env::var("TARDIGRADE_SCM_POLLING_ENABLED")
+        .ok()
+        .map(|v| matches!(v.as_str(), "1" | "true" | "TRUE" | "True"))
+        .unwrap_or(false);
+    let scm_polling_check_secs = std::env::var("TARDIGRADE_SCM_POLLING_CHECK_SECS")
+        .ok()
+        .and_then(|v| v.parse::<u64>().ok())
+        .unwrap_or(5);
     let database_url = std::env::var("TARDIGRADE_DATABASE_URL").ok();
     let redis_url = std::env::var("TARDIGRADE_REDIS_URL").ok();
     let queue_file = std::env::var("TARDIGRADE_QUEUE_FILE").ok();
@@ -151,6 +160,15 @@ async fn main() -> Result<()> {
         scheduler,
         run_embedded_worker,
     );
+
+    if scm_polling_enabled {
+        state.start_scm_polling_loop(Duration::from_secs(scm_polling_check_secs));
+        info!(
+            scm_polling_check_secs,
+            "SCM polling loop enabled"
+        );
+    }
+
     let router = build_router(state)
         .route("/", get(index))
         .route("/app.js", get(app_js))

@@ -7,8 +7,8 @@ use hmac::{Hmac, Mac};
 use serde_json::Value;
 use sha2::Sha256;
 use tardigrade_api::{
-    ApiState, CreateJobResponse, ListBuildsResponse, ScmWebhookAcceptedResponse,
-    UpsertWebhookSecurityConfigRequest,
+    ApiState, CreateJobResponse, ListBuildsResponse, ScmPollingTickResponse,
+    ScmWebhookAcceptedResponse, UpsertScmPollingConfigRequest, UpsertWebhookSecurityConfigRequest,
 };
 use tardigrade_core::ScmProvider;
 use tower::ServiceExt;
@@ -367,5 +367,77 @@ async fn scm_webhook_gitlab_merge_request_enqueues_build() {
             .iter()
             .any(|build| build.job_id == created.job.id),
         "expected one build enqueued for matching repository"
+    );
+}
+
+#[tokio::test]
+/// Ensures SCM polling tick enqueues builds for repositories with due polling config.
+async fn scm_polling_tick_enqueues_builds_for_matching_repository_jobs() {
+    let state = ApiState::new("tardigrade-ci-test");
+    state
+        .upsert_scm_polling_config(UpsertScmPollingConfigRequest {
+            repository_url: "https://example.com/repo.git".to_string(),
+            provider: ScmProvider::Github,
+            enabled: true,
+            interval_secs: 30,
+            branches: vec!["main".to_string()],
+        })
+        .await
+        .expect("upsert polling config");
+    let app = tardigrade_api::build_router(state);
+
+    let create_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/jobs")
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(
+                    br#"{"name":"repo-build","repository_url":"https://example.com/repo.git","pipeline_path":"pipeline.yml"}"#.to_vec(),
+                ))
+                .expect("valid request"),
+        )
+        .await
+        .expect("create response");
+    let created: CreateJobResponse =
+        serde_json::from_value(read_json(create_response).await).expect("create body");
+
+    let tick_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/scm/polling/tick")
+                .body(Body::empty())
+                .expect("valid request"),
+        )
+        .await
+        .expect("tick response");
+
+    assert_eq!(tick_response.status(), StatusCode::OK);
+    let tick: ScmPollingTickResponse =
+        serde_json::from_value(read_json(tick_response).await).expect("tick body");
+    assert_eq!(tick.polled_repositories, 1);
+    assert!(tick.enqueued_builds >= 1);
+
+    let builds_response = app
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/builds")
+                .body(Body::empty())
+                .expect("valid request"),
+        )
+        .await
+        .expect("builds response");
+    let builds: ListBuildsResponse =
+        serde_json::from_value(read_json(builds_response).await).expect("builds body");
+    assert!(
+        builds
+            .builds
+            .iter()
+            .any(|build| build.job_id == created.job.id),
+        "expected one build enqueued by polling tick"
     );
 }

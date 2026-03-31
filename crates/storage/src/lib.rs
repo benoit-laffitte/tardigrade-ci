@@ -5,7 +5,8 @@ use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use tardigrade_core::{
-    BuildRecord, JobDefinition, JobStatus, ScmProvider, WebhookSecurityConfig,
+    BuildRecord, JobDefinition, JobStatus, ScmPollingConfig, ScmProvider,
+    WebhookSecurityConfig,
 };
 use tokio_postgres::{NoTls, Row};
 use uuid::Uuid;
@@ -45,6 +46,21 @@ const MIGRATIONS: &[(&str, &str)] = &[(
             PRIMARY KEY (repository_url, provider)
         );
         "#,
+    ),
+    (
+        "003_init_scm_polling_configs",
+        r#"
+        CREATE TABLE IF NOT EXISTS scm_polling_configs (
+            repository_url TEXT NOT NULL,
+            provider TEXT NOT NULL,
+            enabled BOOLEAN NOT NULL,
+            interval_secs BIGINT NOT NULL,
+            branches JSONB NOT NULL DEFAULT '[]'::jsonb,
+            last_polled_at TIMESTAMPTZ NULL,
+            updated_at TIMESTAMPTZ NOT NULL,
+            PRIMARY KEY (repository_url, provider)
+        );
+        "#,
     )];
 
 #[async_trait]
@@ -70,6 +86,10 @@ pub trait Storage {
         repository_url: &str,
         provider: ScmProvider,
     ) -> Result<Option<WebhookSecurityConfig>>;
+    /// Upserts one SCM polling configuration for repository/provider.
+    async fn upsert_scm_polling_config(&self, config: ScmPollingConfig) -> Result<()>;
+    /// Lists SCM polling configuration entries.
+    async fn list_scm_polling_configs(&self) -> Result<Vec<ScmPollingConfig>>;
 }
 
 /// Postgres-backed implementation of the storage contract.
@@ -84,6 +104,7 @@ pub struct InMemoryStorage {
     jobs: Arc<Mutex<HashMap<Uuid, JobDefinition>>>,
     builds: Arc<Mutex<HashMap<Uuid, BuildRecord>>>,
     webhook_security_configs: Arc<Mutex<HashMap<(String, ScmProvider), WebhookSecurityConfig>>>,
+    scm_polling_configs: Arc<Mutex<HashMap<(String, ScmProvider), ScmPollingConfig>>>,
 }
 
 #[async_trait]
@@ -152,6 +173,25 @@ impl Storage for InMemoryStorage {
         Ok(configs
             .get(&(repository_url.to_string(), provider))
             .cloned())
+    }
+
+    /// Upserts SCM polling configuration in process memory.
+    async fn upsert_scm_polling_config(&self, config: ScmPollingConfig) -> Result<()> {
+        let mut configs = self
+            .scm_polling_configs
+            .lock()
+            .expect("scm polling storage poisoned");
+        configs.insert((config.repository_url.clone(), config.provider), config);
+        Ok(())
+    }
+
+    /// Lists SCM polling configuration entries from process memory.
+    async fn list_scm_polling_configs(&self) -> Result<Vec<ScmPollingConfig>> {
+        let configs = self
+            .scm_polling_configs
+            .lock()
+            .expect("scm polling storage poisoned");
+        Ok(configs.values().cloned().collect())
     }
 }
 
@@ -366,6 +406,62 @@ impl Storage for PostgresStorage {
 
         row.map(row_to_webhook_security_config).transpose()
     }
+
+    /// Upserts SCM polling configuration in postgres.
+    async fn upsert_scm_polling_config(&self, config: ScmPollingConfig) -> Result<()> {
+        let branches = serde_json::to_value(&config.branches)?;
+        let interval_secs = i64::try_from(config.interval_secs)
+            .map_err(|_| anyhow!("interval_secs exceeds i64 range"))?;
+        self.client
+            .execute(
+                r#"
+            INSERT INTO scm_polling_configs (
+                repository_url,
+                provider,
+                enabled,
+                interval_secs,
+                branches,
+                last_polled_at,
+                updated_at
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            ON CONFLICT (repository_url, provider) DO UPDATE
+            SET enabled = EXCLUDED.enabled,
+                interval_secs = EXCLUDED.interval_secs,
+                branches = EXCLUDED.branches,
+                last_polled_at = EXCLUDED.last_polled_at,
+                updated_at = EXCLUDED.updated_at
+            "#,
+                &[
+                    &config.repository_url,
+                    &scm_provider_to_str(config.provider),
+                    &config.enabled,
+                    &interval_secs,
+                    &branches,
+                    &config.last_polled_at,
+                    &config.updated_at,
+                ],
+            )
+            .await?;
+
+        Ok(())
+    }
+
+    /// Lists SCM polling configuration entries from postgres.
+    async fn list_scm_polling_configs(&self) -> Result<Vec<ScmPollingConfig>> {
+        let rows = self
+            .client
+            .query(
+                r#"
+            SELECT repository_url, provider, enabled, interval_secs, branches, last_polled_at, updated_at
+            FROM scm_polling_configs
+            "#,
+                &[],
+            )
+            .await?;
+
+        rows.into_iter().map(row_to_scm_polling_config).collect()
+    }
 }
 
 /// Converts a postgres row into domain job structure.
@@ -449,6 +545,26 @@ fn row_to_webhook_security_config(row: Row) -> Result<WebhookSecurityConfig> {
         provider: parse_scm_provider(&provider_raw)?,
         secret: row.try_get("secret")?,
         allowed_ips,
+        updated_at: row.try_get("updated_at")?,
+    })
+}
+
+/// Converts a postgres row into SCM polling configuration model.
+fn row_to_scm_polling_config(row: Row) -> Result<ScmPollingConfig> {
+    let provider_raw: String = row.try_get("provider")?;
+    let branches_value: Value = row.try_get("branches")?;
+    let branches: Vec<String> = serde_json::from_value(branches_value)?;
+    let interval_secs_i64: i64 = row.try_get("interval_secs")?;
+    let interval_secs = u64::try_from(interval_secs_i64)
+        .map_err(|_| anyhow!("negative interval_secs in storage: {interval_secs_i64}"))?;
+
+    Ok(ScmPollingConfig {
+        repository_url: row.try_get("repository_url")?,
+        provider: parse_scm_provider(&provider_raw)?,
+        enabled: row.try_get("enabled")?,
+        interval_secs,
+        branches,
+        last_polled_at: row.try_get("last_polled_at")?,
         updated_at: row.try_get("updated_at")?,
     })
 }

@@ -45,6 +45,18 @@ pub struct WebhookSecurityConfig {
     pub updated_at: DateTime<Utc>,
 }
 
+/// Per-repository SCM polling configuration used by background polling workers.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ScmPollingConfig {
+    pub repository_url: String,
+    pub provider: ScmProvider,
+    pub enabled: bool,
+    pub interval_secs: u64,
+    pub branches: Vec<String>,
+    pub last_polled_at: Option<DateTime<Utc>>,
+    pub updated_at: DateTime<Utc>,
+}
+
 /// Versioned pipeline schema executed by workers for one job definition.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct PipelineDefinition {

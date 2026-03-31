@@ -27,7 +27,7 @@ use std::{
 };
 use tardigrade_core::{
     BuildRecord, JobDefinition, JobStatus, PipelineDefinition, PipelineDslError,
-    PipelineValidationIssue, ScmProvider, WebhookSecurityConfig,
+    PipelineValidationIssue, ScmPollingConfig, ScmProvider, WebhookSecurityConfig,
 };
 use tardigrade_executor::WorkerExecutor;
 use tardigrade_scheduler::{InMemoryScheduler, Scheduler};
@@ -214,6 +214,24 @@ pub struct UpsertWebhookSecurityConfigRequest {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ScmWebhookAcceptedResponse {
     pub status: String,
+}
+
+/// Request payload used to upsert SCM polling settings for one repository/provider.
+#[derive(Debug, Deserialize)]
+pub struct UpsertScmPollingConfigRequest {
+    pub repository_url: String,
+    pub provider: ScmProvider,
+    pub enabled: bool,
+    pub interval_secs: u64,
+    #[serde(default)]
+    pub branches: Vec<String>,
+}
+
+/// Response payload for one SCM polling tick execution.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ScmPollingTickResponse {
+    pub polled_repositories: usize,
+    pub enqueued_builds: usize,
 }
 
 /// SCM webhook event families that can trigger build enqueue logic.
@@ -749,6 +767,43 @@ impl ApiState {
             .await
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
     }
+
+    /// Upserts one SCM polling configuration for one repository/provider.
+    pub async fn upsert_scm_polling_config(
+        &self,
+        request: UpsertScmPollingConfigRequest,
+    ) -> Result<(), StatusCode> {
+        if request.repository_url.trim().is_empty() || request.interval_secs == 0 {
+            return Err(StatusCode::BAD_REQUEST);
+        }
+
+        let config = ScmPollingConfig {
+            repository_url: request.repository_url,
+            provider: request.provider,
+            enabled: request.enabled,
+            interval_secs: request.interval_secs,
+            branches: request.branches,
+            last_polled_at: None,
+            updated_at: Utc::now(),
+        };
+
+        self.service
+            .storage
+            .upsert_scm_polling_config(config)
+            .await
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
+    }
+
+    /// Starts SCM polling background loop with fixed check interval.
+    pub fn start_scm_polling_loop(&self, check_interval: Duration) {
+        let service = self.service.clone();
+        tokio::spawn(async move {
+            loop {
+                let _ = service.run_scm_polling_tick().await;
+                tokio::time::sleep(check_interval).await;
+            }
+        });
+    }
 }
 
 #[derive(Clone)]
@@ -996,6 +1051,60 @@ impl CiService {
         );
 
         Ok(())
+    }
+
+    /// Runs one SCM polling tick and enqueues builds for due repository configs.
+    async fn run_scm_polling_tick(&self) -> Result<ScmPollingTickResponse, ApiError> {
+        let now = Utc::now();
+        let configs = self
+            .storage
+            .list_scm_polling_configs()
+            .await
+            .map_err(|_| ApiError::Internal)?;
+
+        let mut polled_repositories = 0usize;
+        let mut enqueued_builds = 0usize;
+
+        for mut config in configs {
+            if !config.enabled {
+                continue;
+            }
+
+            if let Some(last) = config.last_polled_at {
+                let elapsed = now - last;
+                if elapsed.num_seconds() < i64::try_from(config.interval_secs).unwrap_or(i64::MAX)
+                {
+                    continue;
+                }
+            }
+
+            polled_repositories += 1;
+            let jobs = self
+                .storage
+                .list_jobs()
+                .await
+                .map_err(|_| ApiError::Internal)?;
+
+            for job in jobs
+                .into_iter()
+                .filter(|job| job.repository_url == config.repository_url)
+            {
+                let _ = self.run_job(job.id).await?;
+                enqueued_builds += 1;
+            }
+
+            config.last_polled_at = Some(now);
+            config.updated_at = now;
+            self.storage
+                .upsert_scm_polling_config(config)
+                .await
+                .map_err(|_| ApiError::Internal)?;
+        }
+
+        Ok(ScmPollingTickResponse {
+            polled_repositories,
+            enqueued_builds,
+        })
     }
 
     /// Lists jobs sorted chronologically by creation time.
@@ -1431,6 +1540,8 @@ pub fn build_router(state: ApiState) -> Router {
         .route("/builds", get(list_builds))
         .route("/workers", get(list_workers))
         .route("/webhooks/scm", post(ingest_scm_webhook))
+        .route("/scm/polling/configs", post(upsert_scm_polling_config))
+        .route("/scm/polling/tick", post(run_scm_polling_tick))
         .route("/jobs/{id}/run", post(run_job))
         .route("/builds/{id}/cancel", post(cancel_build))
         .route("/workers/{worker_id}/claim", post(worker_claim_build))
@@ -1635,6 +1746,27 @@ async fn ingest_scm_webhook(
             .into_response(),
         Err(err) => err.status_code().into_response(),
     }
+}
+
+/// Upserts SCM polling configuration for one repository/provider.
+async fn upsert_scm_polling_config(
+    State(state): State<ApiState>,
+    Json(payload): Json<UpsertScmPollingConfigRequest>,
+) -> Result<StatusCode, StatusCode> {
+    state.upsert_scm_polling_config(payload).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// Runs one SCM polling tick immediately.
+async fn run_scm_polling_tick(
+    State(state): State<ApiState>,
+) -> Result<(StatusCode, Json<ScmPollingTickResponse>), StatusCode> {
+    let result = state
+        .service
+        .run_scm_polling_tick()
+        .await
+        .map_err(|e| e.status_code())?;
+    Ok((StatusCode::OK, Json(result)))
 }
 
 /// Cancels one build by id.
