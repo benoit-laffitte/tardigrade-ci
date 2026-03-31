@@ -139,13 +139,20 @@ Refinement outcome for `SCM-06` (2026-03-31):
 - Polling counters: tick count, repositories polled, builds enqueued by polling.
 - Exposure path: existing `/metrics` REST and GraphQL dashboard metrics projection.
 
+Refinement outcome for `SCM-07` (2026-03-31):
+
+- Coverage scope: webhook acceptance/rejection, dedup/idempotency, polling tick, and combined webhook+polling path.
+- Test level: API integration tests using in-memory state through HTTP routes.
+- Acceptance criterion: webhook and polling flows both enqueue builds for matching repository jobs.
+- Regression guard: counters in `/metrics` must reflect trigger ingestion outcomes.
+
 - [x] `SCM-01` Define trigger model (manual, webhook, polling).
 - [x] `SCM-02` Add webhook endpoint(s) with signature verification.
 - [x] `SCM-03` Implement provider adapters (GitHub/GitLab first).
 - [x] `SCM-04` Add SCM polling worker loop and configurable intervals.
 - [x] `SCM-05` Add deduplication/idempotency for repeated webhook events.
 - [x] `SCM-06` Add observability events/metrics for trigger ingestion.
-- [ ] `SCM-07` Add integration tests for webhook and polling flows.
+- [x] `SCM-07` Add integration tests for webhook and polling flows.
 
 Definition of done:
 

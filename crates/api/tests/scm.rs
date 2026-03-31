@@ -705,6 +705,106 @@ async fn scm_polling_metrics_expose_tick_activity() {
 }
 
 #[tokio::test]
+/// Validates end-to-end coexistence of webhook and polling trigger flows for one repository.
+async fn scm_webhook_and_polling_flows_coexist_integration() {
+    let state = ApiState::new("tardigrade-ci-test");
+    state
+        .upsert_webhook_security_config(UpsertWebhookSecurityConfigRequest {
+            repository_url: "https://example.com/repo.git".to_string(),
+            provider: ScmProvider::Github,
+            secret: "super-secret".to_string(),
+            allowed_ips: vec!["203.0.113.10".to_string()],
+        })
+        .await
+        .expect("upsert webhook config");
+    state
+        .upsert_scm_polling_config(UpsertScmPollingConfigRequest {
+            repository_url: "https://example.com/repo.git".to_string(),
+            provider: ScmProvider::Github,
+            enabled: true,
+            interval_secs: 30,
+            branches: vec!["main".to_string()],
+        })
+        .await
+        .expect("upsert polling config");
+    let app = tardigrade_api::build_router(state);
+
+    let create_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/jobs")
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(
+                    br#"{"name":"repo-build","repository_url":"https://example.com/repo.git","pipeline_path":"pipeline.yml"}"#.to_vec(),
+                ))
+                .expect("valid request"),
+        )
+        .await
+        .expect("create response");
+    let created: CreateJobResponse =
+        serde_json::from_value(read_json(create_response).await).expect("create body");
+
+    let webhook_payload =
+        br#"{"ref":"refs/heads/main","after":"dddddddddddddddddddddddddddddddddddddddd"}"#;
+    let webhook_signature = github_signature("super-secret", webhook_payload);
+
+    let webhook_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/webhooks/scm")
+                .header("x-scm-provider", "github")
+                .header("x-scm-repository", "https://example.com/repo.git")
+                .header("x-scm-timestamp", Utc::now().timestamp().to_string())
+                .header("x-forwarded-for", "203.0.113.10")
+                .header("x-github-event", "push")
+                .header("x-github-delivery", "delivery-combined-1")
+                .header("x-hub-signature-256", webhook_signature)
+                .body(Body::from(webhook_payload.to_vec()))
+                .expect("valid request"),
+        )
+        .await
+        .expect("webhook response");
+    assert_eq!(webhook_response.status(), StatusCode::ACCEPTED);
+
+    let tick_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/scm/polling/tick")
+                .body(Body::empty())
+                .expect("valid request"),
+        )
+        .await
+        .expect("tick response");
+    assert_eq!(tick_response.status(), StatusCode::OK);
+
+    let builds_response = app
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/builds")
+                .body(Body::empty())
+                .expect("valid request"),
+        )
+        .await
+        .expect("builds response");
+    let builds: ListBuildsResponse =
+        serde_json::from_value(read_json(builds_response).await).expect("builds body");
+
+    let count = builds
+        .builds
+        .iter()
+        .filter(|build| build.job_id == created.job.id)
+        .count();
+    assert!(count >= 2, "expected builds from webhook and polling flows");
+}
+
+#[tokio::test]
 /// Ensures SCM polling tick enqueues builds for repositories with due polling config.
 async fn scm_polling_tick_enqueues_builds_for_matching_repository_jobs() {
     let state = ApiState::new("tardigrade-ci-test");
