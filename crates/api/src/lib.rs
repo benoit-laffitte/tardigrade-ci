@@ -198,6 +198,14 @@ pub struct RuntimeMetricsResponse {
     pub retry_requeued_total: u64,
     pub ownership_conflicts_total: u64,
     pub dead_letter_total: u64,
+    pub scm_webhook_received_total: u64,
+    pub scm_webhook_accepted_total: u64,
+    pub scm_webhook_rejected_total: u64,
+    pub scm_webhook_duplicate_total: u64,
+    pub scm_trigger_enqueued_builds_total: u64,
+    pub scm_polling_ticks_total: u64,
+    pub scm_polling_repositories_total: u64,
+    pub scm_polling_enqueued_builds_total: u64,
 }
 
 /// Response payload listing builds moved to dead-letter set.
@@ -345,6 +353,14 @@ struct GqlRuntimeMetrics {
     retry_requeued_total: u64,
     ownership_conflicts_total: u64,
     dead_letter_total: u64,
+    scm_webhook_received_total: u64,
+    scm_webhook_accepted_total: u64,
+    scm_webhook_rejected_total: u64,
+    scm_webhook_duplicate_total: u64,
+    scm_trigger_enqueued_builds_total: u64,
+    scm_polling_ticks_total: u64,
+    scm_polling_repositories_total: u64,
+    scm_polling_enqueued_builds_total: u64,
 }
 
 /// GraphQL projection grouping dashboard panels into a single payload.
@@ -431,6 +447,14 @@ impl From<RuntimeMetricsResponse> for GqlRuntimeMetrics {
             retry_requeued_total: value.retry_requeued_total,
             ownership_conflicts_total: value.ownership_conflicts_total,
             dead_letter_total: value.dead_letter_total,
+            scm_webhook_received_total: value.scm_webhook_received_total,
+            scm_webhook_accepted_total: value.scm_webhook_accepted_total,
+            scm_webhook_rejected_total: value.scm_webhook_rejected_total,
+            scm_webhook_duplicate_total: value.scm_webhook_duplicate_total,
+            scm_trigger_enqueued_builds_total: value.scm_trigger_enqueued_builds_total,
+            scm_polling_ticks_total: value.scm_polling_ticks_total,
+            scm_polling_repositories_total: value.scm_polling_repositories_total,
+            scm_polling_enqueued_builds_total: value.scm_polling_enqueued_builds_total,
         }
     }
 }
@@ -833,13 +857,21 @@ struct CiService {
     event_tx: broadcast::Sender<LiveEvent>,
 }
 
-/// Mutable runtime counters for reliability-oriented observability.
+/// Mutable runtime counters for reliability and SCM trigger observability.
 #[derive(Default)]
 struct RuntimeMetrics {
     reclaimed_total: u64,
     retry_requeued_total: u64,
     ownership_conflicts_total: u64,
     dead_letter_total: u64,
+    scm_webhook_received_total: u64,
+    scm_webhook_accepted_total: u64,
+    scm_webhook_rejected_total: u64,
+    scm_webhook_duplicate_total: u64,
+    scm_trigger_enqueued_builds_total: u64,
+    scm_polling_ticks_total: u64,
+    scm_polling_repositories_total: u64,
+    scm_polling_enqueued_builds_total: u64,
 }
 
 impl CiService {
@@ -946,6 +978,35 @@ impl CiService {
             retry_requeued_total: metrics.retry_requeued_total,
             ownership_conflicts_total: metrics.ownership_conflicts_total,
             dead_letter_total: metrics.dead_letter_total,
+            scm_webhook_received_total: metrics.scm_webhook_received_total,
+            scm_webhook_accepted_total: metrics.scm_webhook_accepted_total,
+            scm_webhook_rejected_total: metrics.scm_webhook_rejected_total,
+            scm_webhook_duplicate_total: metrics.scm_webhook_duplicate_total,
+            scm_trigger_enqueued_builds_total: metrics.scm_trigger_enqueued_builds_total,
+            scm_polling_ticks_total: metrics.scm_polling_ticks_total,
+            scm_polling_repositories_total: metrics.scm_polling_repositories_total,
+            scm_polling_enqueued_builds_total: metrics.scm_polling_enqueued_builds_total,
+        }
+    }
+
+    /// Records one received SCM webhook request before validation outcome is known.
+    fn record_scm_webhook_received(&self) {
+        if let Ok(mut metrics) = self.metrics.lock() {
+            metrics.scm_webhook_received_total += 1;
+        }
+    }
+
+    /// Records one accepted SCM webhook request (`202`) after ingestion succeeded.
+    fn record_scm_webhook_accepted(&self) {
+        if let Ok(mut metrics) = self.metrics.lock() {
+            metrics.scm_webhook_accepted_total += 1;
+        }
+    }
+
+    /// Records one rejected SCM webhook request after validation or processing error.
+    fn record_scm_webhook_rejected(&self) {
+        if let Ok(mut metrics) = self.metrics.lock() {
+            metrics.scm_webhook_rejected_total += 1;
         }
     }
 
@@ -1020,6 +1081,9 @@ impl CiService {
                 event,
             ) {
                 if self.is_duplicate_webhook_event(&dedup_key) {
+                    if let Ok(mut metrics) = self.metrics.lock() {
+                        metrics.scm_webhook_duplicate_total += 1;
+                    }
                     self.emit_event(
                         "scm_webhook_duplicate_ignored",
                         "info",
@@ -1104,12 +1168,21 @@ impl CiService {
             None,
         );
 
+        if triggered > 0
+            && let Ok(mut metrics) = self.metrics.lock()
+        {
+            metrics.scm_trigger_enqueued_builds_total += triggered as u64;
+        }
+
         Ok(())
     }
 
     /// Runs one SCM polling tick and enqueues builds for due repository configs.
     async fn run_scm_polling_tick(&self) -> Result<ScmPollingTickResponse, ApiError> {
         let now = Utc::now();
+        if let Ok(mut metrics) = self.metrics.lock() {
+            metrics.scm_polling_ticks_total += 1;
+        }
         let configs = self
             .storage
             .list_scm_polling_configs()
@@ -1153,6 +1226,11 @@ impl CiService {
                 .upsert_scm_polling_config(config)
                 .await
                 .map_err(|_| ApiError::Internal)?;
+        }
+
+        if let Ok(mut metrics) = self.metrics.lock() {
+            metrics.scm_polling_repositories_total += polled_repositories as u64;
+            metrics.scm_polling_enqueued_builds_total += enqueued_builds as u64;
         }
 
         Ok(ScmPollingTickResponse {
@@ -1763,42 +1841,59 @@ async fn ingest_scm_webhook(
     headers: HeaderMap,
     body: Bytes,
 ) -> Response {
+    state.service.record_scm_webhook_received();
+
     match state.service.ingest_scm_webhook(&headers, &body).await {
-        Ok(()) => (
-            StatusCode::ACCEPTED,
-            Json(ScmWebhookAcceptedResponse {
-                status: "accepted".to_string(),
-            }),
-        )
-            .into_response(),
-        Err(ApiError::BadRequest) => (
-            StatusCode::BAD_REQUEST,
-            Json(ApiErrorResponse {
-                code: "invalid_webhook_request".to_string(),
-                message: "webhook request is missing required headers".to_string(),
-                details: None,
-            }),
-        )
-            .into_response(),
-        Err(ApiError::Unauthorized) => (
-            StatusCode::UNAUTHORIZED,
-            Json(ApiErrorResponse {
-                code: "invalid_webhook_signature".to_string(),
-                message: "webhook signature is missing, invalid, or expired".to_string(),
-                details: None,
-            }),
-        )
-            .into_response(),
-        Err(ApiError::Forbidden) => (
-            StatusCode::FORBIDDEN,
-            Json(ApiErrorResponse {
-                code: "webhook_forbidden".to_string(),
-                message: "webhook provider/repository/ip is not authorized".to_string(),
-                details: None,
-            }),
-        )
-            .into_response(),
-        Err(err) => err.status_code().into_response(),
+        Ok(()) => {
+            state.service.record_scm_webhook_accepted();
+            (
+                StatusCode::ACCEPTED,
+                Json(ScmWebhookAcceptedResponse {
+                    status: "accepted".to_string(),
+                }),
+            )
+                .into_response()
+        }
+        Err(ApiError::BadRequest) => {
+            state.service.record_scm_webhook_rejected();
+            (
+                StatusCode::BAD_REQUEST,
+                Json(ApiErrorResponse {
+                    code: "invalid_webhook_request".to_string(),
+                    message: "webhook request is missing required headers".to_string(),
+                    details: None,
+                }),
+            )
+                .into_response()
+        }
+        Err(ApiError::Unauthorized) => {
+            state.service.record_scm_webhook_rejected();
+            (
+                StatusCode::UNAUTHORIZED,
+                Json(ApiErrorResponse {
+                    code: "invalid_webhook_signature".to_string(),
+                    message: "webhook signature is missing, invalid, or expired".to_string(),
+                    details: None,
+                }),
+            )
+                .into_response()
+        }
+        Err(ApiError::Forbidden) => {
+            state.service.record_scm_webhook_rejected();
+            (
+                StatusCode::FORBIDDEN,
+                Json(ApiErrorResponse {
+                    code: "webhook_forbidden".to_string(),
+                    message: "webhook provider/repository/ip is not authorized".to_string(),
+                    details: None,
+                }),
+            )
+                .into_response()
+        }
+        Err(err) => {
+            state.service.record_scm_webhook_rejected();
+            err.status_code().into_response()
+        }
     }
 }
 

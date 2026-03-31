@@ -7,7 +7,7 @@ use hmac::{Hmac, Mac};
 use serde_json::Value;
 use sha2::Sha256;
 use tardigrade_api::{
-    ApiState, CreateJobResponse, ListBuildsResponse, ScmPollingTickResponse,
+    ApiState, CreateJobResponse, ListBuildsResponse, RuntimeMetricsResponse, ScmPollingTickResponse,
     ScmWebhookAcceptedResponse, UpsertScmPollingConfigRequest, UpsertWebhookSecurityConfigRequest,
 };
 use tardigrade_core::ScmProvider;
@@ -525,6 +525,183 @@ async fn scm_webhook_duplicate_fallback_tuple_is_idempotent() {
         .filter(|build| build.job_id == created.job.id)
         .count();
     assert_eq!(count, 1, "expected exactly one build for fallback dedup key");
+}
+
+#[tokio::test]
+/// Verifies webhook ingestion metrics for accepted, duplicate, and rejected requests.
+async fn scm_webhook_metrics_expose_ingestion_outcomes() {
+    let state = ApiState::new("tardigrade-ci-test");
+    state
+        .upsert_webhook_security_config(UpsertWebhookSecurityConfigRequest {
+            repository_url: "https://example.com/repo.git".to_string(),
+            provider: ScmProvider::Github,
+            secret: "super-secret".to_string(),
+            allowed_ips: vec!["203.0.113.10".to_string()],
+        })
+        .await
+        .expect("upsert webhook config");
+    let app = tardigrade_api::build_router(state);
+
+    let create_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/jobs")
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(
+                    br#"{"name":"repo-build","repository_url":"https://example.com/repo.git","pipeline_path":"pipeline.yml"}"#.to_vec(),
+                ))
+                .expect("valid request"),
+        )
+        .await
+        .expect("create response");
+    assert_eq!(create_response.status(), StatusCode::CREATED);
+
+    let payload = br#"{"ref":"refs/heads/main","after":"cccccccccccccccccccccccccccccccccccccccc"}"#;
+    let signature = github_signature("super-secret", payload);
+
+    let accepted = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/webhooks/scm")
+                .header("x-scm-provider", "github")
+                .header("x-scm-repository", "https://example.com/repo.git")
+                .header("x-scm-timestamp", Utc::now().timestamp().to_string())
+                .header("x-forwarded-for", "203.0.113.10")
+                .header("x-github-event", "push")
+                .header("x-github-delivery", "delivery-987")
+                .header("x-hub-signature-256", &signature)
+                .body(Body::from(payload.to_vec()))
+                .expect("valid request"),
+        )
+        .await
+        .expect("webhook response");
+    assert_eq!(accepted.status(), StatusCode::ACCEPTED);
+
+    let duplicate = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/webhooks/scm")
+                .header("x-scm-provider", "github")
+                .header("x-scm-repository", "https://example.com/repo.git")
+                .header("x-scm-timestamp", Utc::now().timestamp().to_string())
+                .header("x-forwarded-for", "203.0.113.10")
+                .header("x-github-event", "push")
+                .header("x-github-delivery", "delivery-987")
+                .header("x-hub-signature-256", &signature)
+                .body(Body::from(payload.to_vec()))
+                .expect("valid request"),
+        )
+        .await
+        .expect("webhook response");
+    assert_eq!(duplicate.status(), StatusCode::ACCEPTED);
+
+    let rejected = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/webhooks/scm")
+                .header("x-scm-provider", "github")
+                .header("x-scm-repository", "https://example.com/repo.git")
+                .header("x-scm-timestamp", Utc::now().timestamp().to_string())
+                .header("x-forwarded-for", "203.0.113.10")
+                .header("x-github-event", "push")
+                .body(Body::from(payload.to_vec()))
+                .expect("valid request"),
+        )
+        .await
+        .expect("webhook response");
+    assert_eq!(rejected.status(), StatusCode::UNAUTHORIZED);
+
+    let metrics_response = app
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/metrics")
+                .body(Body::empty())
+                .expect("valid metrics request"),
+        )
+        .await
+        .expect("metrics response");
+    assert_eq!(metrics_response.status(), StatusCode::OK);
+    let metrics: RuntimeMetricsResponse =
+        serde_json::from_value(read_json(metrics_response).await).expect("metrics body");
+
+    assert_eq!(metrics.scm_webhook_received_total, 3);
+    assert_eq!(metrics.scm_webhook_accepted_total, 2);
+    assert_eq!(metrics.scm_webhook_rejected_total, 1);
+    assert_eq!(metrics.scm_webhook_duplicate_total, 1);
+    assert_eq!(metrics.scm_trigger_enqueued_builds_total, 1);
+}
+
+#[tokio::test]
+/// Verifies polling metrics count tick executions, polled repos, and enqueued builds.
+async fn scm_polling_metrics_expose_tick_activity() {
+    let state = ApiState::new("tardigrade-ci-test");
+    state
+        .upsert_scm_polling_config(UpsertScmPollingConfigRequest {
+            repository_url: "https://example.com/repo.git".to_string(),
+            provider: ScmProvider::Github,
+            enabled: true,
+            interval_secs: 30,
+            branches: vec!["main".to_string()],
+        })
+        .await
+        .expect("upsert polling config");
+    let app = tardigrade_api::build_router(state);
+
+    let create_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/jobs")
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(
+                    br#"{"name":"repo-build","repository_url":"https://example.com/repo.git","pipeline_path":"pipeline.yml"}"#.to_vec(),
+                ))
+                .expect("valid request"),
+        )
+        .await
+        .expect("create response");
+    assert_eq!(create_response.status(), StatusCode::CREATED);
+
+    let tick_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/scm/polling/tick")
+                .body(Body::empty())
+                .expect("valid request"),
+        )
+        .await
+        .expect("tick response");
+    assert_eq!(tick_response.status(), StatusCode::OK);
+
+    let metrics_response = app
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/metrics")
+                .body(Body::empty())
+                .expect("valid metrics request"),
+        )
+        .await
+        .expect("metrics response");
+    assert_eq!(metrics_response.status(), StatusCode::OK);
+    let metrics: RuntimeMetricsResponse =
+        serde_json::from_value(read_json(metrics_response).await).expect("metrics body");
+
+    assert_eq!(metrics.scm_polling_ticks_total, 1);
+    assert_eq!(metrics.scm_polling_repositories_total, 1);
+    assert!(metrics.scm_polling_enqueued_builds_total >= 1);
 }
 
 #[tokio::test]
