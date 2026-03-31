@@ -250,9 +250,16 @@ Refinement outcome for `REFAC-01` (2026-03-31):
 - Execution order: `core` -> `storage` -> `scheduler` -> `plugins` -> `executor` -> `api` -> `server` -> `worker` -> `auth` -> `xtask`.
 - Safety constraint: no behavior changes in this epic, only structure and readability improvements.
 - Validation gate: run `cargo test --workspace` on every `REFAC-*` ticket.
+- Naming convention: file names use `snake_case` and match their primary object (example: `definition.rs` for `PipelineDefinition` inside `pipeline/`).
+- Domain folder rule: group sources by domain folders (examples: `job/`, `pipeline/`, `scm/`, `technology/`) instead of root-level prefix-based files.
+- Module policy: keep crate root as re-export facade (`lib.rs`/`main.rs`) and avoid deep `mod.rs` nesting unless required by submodule grouping.
+- Re-export policy: expose public API from crate root with stable `pub use`, keep internal wiring private by default.
+- Test proximity rule: place tests as close as possible to modules using dedicated files in the same domain folder (for example `pipeline/tests.rs` or `pipeline/definition_tests.rs`).
+- Test isolation rule: no inline `mod tests` inside production implementation files; keep test code in dedicated test files.
+- Test layering rule: keep crate-root tests for cross-module behavior only; module/domain behavior should be validated in colocated tests.
 
-- [-] `REFAC-01` Define and document one-object-per-file conventions (naming, `mod.rs` usage, re-export policy).
-- [ ] `REFAC-02` Refactor `crates/core` into one-object-per-file module structure.
+- [x] `REFAC-01` Define and document one-object-per-file conventions (naming, domain folders, `mod.rs` usage, re-export policy, test placement).
+- [x] `REFAC-02` Refactor `crates/core` into one-object-per-file module structure.
 - [ ] `REFAC-03` Refactor `crates/storage` and `crates/scheduler` into one-object-per-file module structure.
 - [ ] `REFAC-04` Refactor `crates/plugins` and `crates/executor` into one-object-per-file module structure.
 - [ ] `REFAC-05` Refactor `crates/api` and `crates/server` into one-object-per-file module structure.
@@ -262,8 +269,10 @@ Refinement outcome for `REFAC-01` (2026-03-31):
 Definition of done:
 
 - Rust source modules follow one-primary-object-per-file convention across targeted crates.
+- Rust source layout is organized by domain folders instead of filename prefixes.
 - Public crate APIs remain backward compatible unless explicitly approved.
 - Formatting, linting, and tests pass after refactor.
+- Tests are colocated near modules in dedicated test files, with root tests reserved for cross-module coverage.
 - Contribution docs describe the convention for future changes.
 
 ## Queue reliability follow-ups
