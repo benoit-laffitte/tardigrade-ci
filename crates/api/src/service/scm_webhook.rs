@@ -4,9 +4,10 @@ use hmac::{Hmac, Mac};
 use serde_json::Value as JsonValue;
 use sha2::Sha256;
 use std::time::Duration;
+use tardigrade_core::ScmProvider;
 
 use super::ScmTriggerEvent;
-use crate::{ApiError, ScmProvider};
+use crate::ApiError;
 
 /// Reads one required header value and trims surrounding spaces.
 pub(crate) fn header_value(headers: &HeaderMap, key: &'static str) -> Result<String, ApiError> {
