@@ -180,12 +180,41 @@ interface ObservabilityFilter {
   window_minutes: string;
 }
 
+type AdminRole = "viewer" | "operator" | "admin";
+
+interface AdminActivityEntry {
+  at: string;
+  actor_role: AdminRole;
+  action: string;
+  target: string;
+}
+
+interface AdminRoleCapabilities {
+  can_run_operations: boolean;
+  can_mutate_sensitive: boolean;
+}
+
 interface ApiErrorPayload {
   code?: string;
   message?: string;
 }
 
 const PLUGIN_CAPABILITY_OPTIONS = ["network", "filesystem", "secrets", "runtime_hooks"];
+
+const ADMIN_ROLE_CAPABILITIES: Record<AdminRole, AdminRoleCapabilities> = {
+  viewer: {
+    can_run_operations: false,
+    can_mutate_sensitive: false
+  },
+  operator: {
+    can_run_operations: true,
+    can_mutate_sensitive: false
+  },
+  admin: {
+    can_run_operations: true,
+    can_mutate_sensitive: true
+  }
+};
 
 type WorkerCompletionStatus = "success" | "failed";
 
@@ -425,6 +454,8 @@ export function App() {
     dead_letter_builds: []
   });
   const [liveEvents, setLiveEvents] = useState<LiveEvent[]>([]);
+  const [adminRole, setAdminRole] = useState<AdminRole>("admin");
+  const [adminActivity, setAdminActivity] = useState<AdminActivityEntry[]>([]);
   const [logs, setLogs] = useState("");
   const [createMessage, setCreateMessage] = useState("");
   const [form, setForm] = useState<CreateJobInput>({
@@ -496,6 +527,15 @@ export function App() {
     const prefix = kind.toUpperCase().padEnd(5, " ");
     setLogs((prev) => `[${now}] ${prefix} ${message}\n${prev}`);
   }, []);
+
+  // Appends one local audit entry for admin actions and role-gated attempts.
+  const audit = useCallback((action: string, target: string) => {
+    const at = new Date().toISOString();
+    setAdminActivity((previous) => [{ at, actor_role: adminRole, action, target }, ...previous].slice(0, 40));
+  }, [adminRole]);
+
+  // Checks whether current role grants operation/sensitive mutation capability.
+  const roleCapabilities = useMemo(() => ADMIN_ROLE_CAPABILITIES[adminRole], [adminRole]);
 
   // Pulls snapshot data from GraphQL and updates all dashboard panels.
   const refreshAll = useCallback(async () => {
