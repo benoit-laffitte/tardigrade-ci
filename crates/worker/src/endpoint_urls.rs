@@ -9,3 +9,6 @@ pub(crate) fn claim_url(server_url: &str, worker_id: &str) -> String {
 pub(crate) fn complete_url(server_url: &str, worker_id: &str, build_id: Uuid) -> String {
     format!("{server_url}/workers/{worker_id}/builds/{build_id}/complete")
 }
+
+#[cfg(test)]
+mod tests;

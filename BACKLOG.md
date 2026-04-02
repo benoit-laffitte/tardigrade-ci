@@ -264,7 +264,7 @@ Refinement outcome for `REFAC-01` (2026-03-31):
 - [x] `REFAC-04` Refactor `crates/plugins` and `crates/executor` into one-object-per-file module structure.
 - [x] `REFAC-05` Refactor `crates/api` and `crates/server` into one-object-per-file module structure.
 - [x] `REFAC-06` Refactor `crates/worker`, `crates/auth`, and `crates/xtask` into one-object-per-file module structure.
-- [ ] `REFAC-07` Validate workspace stability (`cargo test --workspace`) and update docs/contribution guidelines.
+- [x] `REFAC-07` Validate workspace stability (`cargo test --workspace`) and update docs/contribution guidelines.
 
 Definition of done:
 

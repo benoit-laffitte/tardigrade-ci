@@ -1,6 +1,6 @@
 use super::ApiKeyAuth;
 
-/// Confirms key verifier accepts expected key and rejects mismatched one.
+/// Confirms API key verifier accepts expected key and rejects mismatched key.
 #[test]
 fn verifies_correct_key() {
     let auth = ApiKeyAuth::new("secret");

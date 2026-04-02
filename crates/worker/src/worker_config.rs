@@ -32,3 +32,6 @@ pub(crate) fn load_worker_config() -> WorkerConfig {
         poll_ms: parse_poll_ms(std::env::var("TARDIGRADE_WORKER_POLL_MS").ok().as_deref()),
     }
 }
+
+#[cfg(test)]
+mod tests;

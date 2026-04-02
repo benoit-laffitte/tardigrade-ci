@@ -42,3 +42,6 @@ pub(crate) async fn complete_step(
         }
     }
 }
+
+#[cfg(test)]
+mod tests;

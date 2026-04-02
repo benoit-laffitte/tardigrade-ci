@@ -7,3 +7,6 @@ pub(crate) fn completion_body() -> CompleteBuildRequest {
         log_line: Some("Completed by tardigrade-worker".to_string()),
     }
 }
+
+#[cfg(test)]
+mod tests;

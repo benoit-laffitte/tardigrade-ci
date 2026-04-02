@@ -12,7 +12,7 @@ mod worker_steps;
 pub(crate) use completion_payload::completion_body;
 pub(crate) use endpoint_urls::{claim_url, complete_url};
 pub(crate) use worker_api::{HttpWorkerApi, WorkerApi};
-pub(crate) use worker_config::{load_worker_config, parse_poll_ms, resolve_server_url, resolve_worker_id};
+use worker_config::load_worker_config;
 pub(crate) use worker_steps::{ClaimStep, claim_step, complete_step};
 
 /// Runs polling worker loop against API claim/complete endpoints.
@@ -55,5 +55,3 @@ async fn main() -> Result<()> {
     }
 }
 
-#[cfg(test)]
-mod tests;

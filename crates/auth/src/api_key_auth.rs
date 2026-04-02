@@ -18,3 +18,6 @@ impl ApiKeyAuth {
         provided == self.expected_key
     }
 }
+
+#[cfg(test)]
+mod tests;
