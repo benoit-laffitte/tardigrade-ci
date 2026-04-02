@@ -1752,6 +1752,82 @@ export function App() {
             </p>
           </article>
 
+          <article className="panel panel-form reveal" style={{ ["--delay" as string]: "0.119s" }}>
+            <h2>Webhook Security Operations</h2>
+            <div className="metrics-grid">
+              <div className="metric-card">
+                <p className="metric-label">Received</p>
+                <p className="metric-value">{scmWebhookMetrics?.scm_webhook_received_total ?? 0}</p>
+              </div>
+              <div className="metric-card">
+                <p className="metric-label">Accepted</p>
+                <p className="metric-value">{scmWebhookMetrics?.scm_webhook_accepted_total ?? 0}</p>
+              </div>
+              <div className="metric-card">
+                <p className="metric-label">Rejected</p>
+                <p className="metric-value">{scmWebhookMetrics?.scm_webhook_rejected_total ?? 0}</p>
+              </div>
+              <div className="metric-card">
+                <p className="metric-label">Duplicate</p>
+                <p className="metric-value">{scmWebhookMetrics?.scm_webhook_duplicate_total ?? 0}</p>
+              </div>
+            </div>
+            <form className="form" onSubmit={(event) => event.preventDefault()}>
+              <label>
+                <span>Provider filter</span>
+                <select
+                  name="scm_webhook_ops_provider"
+                  value={scmWebhookOpsFilter.provider}
+                  onChange={(event) =>
+                    setScmWebhookOpsFilter((previous) => ({ ...previous, provider: event.target.value }))
+                  }
+                >
+                  <option value="">all</option>
+                  <option value="github">github</option>
+                  <option value="gitlab">gitlab</option>
+                </select>
+              </label>
+              <label>
+                <span>Repository filter</span>
+                <input
+                  name="scm_webhook_ops_repository"
+                  placeholder="https://example.com/repo.git"
+                  value={scmWebhookOpsFilter.repository_url}
+                  onChange={(event) =>
+                    setScmWebhookOpsFilter((previous) => ({ ...previous, repository_url: event.target.value }))
+                  }
+                />
+              </label>
+              <div className="actions">
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={() => void refreshScmWebhookOperations()}
+                >
+                  Refresh diagnostics
+                </button>
+              </div>
+            </form>
+            <p className="hint">{scmWebhookOpsMessage}</p>
+            <div className="list">
+              {scmWebhookRejections.length === 0 ? (
+                <p className="hint">Aucun rejet webhook pour les filtres courants.</p>
+              ) : (
+                scmWebhookRejections.map((entry, index) => (
+                  <div className="list-item" key={`${entry.at}-${entry.reason_code}-${index}`}>
+                    <div>
+                      <p className="item-title">{entry.reason_code}</p>
+                      <p className="item-subtitle">
+                        {entry.provider ?? "unknown provider"} | {entry.repository_url ?? "unknown repository"}
+                      </p>
+                      <p className="item-subtitle">{formatDateTime(entry.at)}</p>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </article>
+
           <article className="panel reveal" style={{ ["--delay" as string]: "0.12s" }}>
             <div className="panel-head">
               <h2>Jobs</h2>

@@ -52,7 +52,7 @@ pub(crate) struct CiService {
     pub(crate) seen_webhook_events: Arc<Mutex<HashMap<String, DateTime<Utc>>>>,
     pub(crate) webhook_dedup_ttl: Duration,
     /// webhook_rejections stores recent rejection diagnostics for operator troubleshooting.
-    pub(crate) webhook_rejections: Arc<Mutex<VecDeque<WebhookRejectionRecord>>>,
+    webhook_rejections: Arc<Mutex<VecDeque<WebhookRejectionRecord>>>,
     /// Internal broadcast bus feeding the SSE /events endpoint.
     pub(crate) event_tx: broadcast::Sender<LiveEvent>,
 }

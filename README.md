@@ -188,6 +188,7 @@ env -u https_proxy -u http_proxy -u PXY_FAB_FONC cargo test --workspace postgres
 - POST /plugins/policies
 - POST /webhooks/scm
 - POST /scm/webhook-security/configs
+- GET /scm/webhook-security/rejections
 - POST /scm/polling/configs
 - POST /scm/polling/tick
 - POST /workers/{worker_id}/claim
