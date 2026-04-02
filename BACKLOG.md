@@ -222,6 +222,125 @@ Refinement decisions (MVP):
 - Any new admin action must provide visible success/error feedback in UI.
 - Security-sensitive actions require explicit confirmation UX and audit-friendly event messaging.
 
+Refinement outcome for `UIADM-01` (2026-04-02):
+
+- UX scope: add a dedicated "SCM Webhook Security" admin panel in dashboard with repository, provider, secret, and IP allowlist form.
+- Primary actions: create/update one repository security config, clear form, and test payload helper (copy/paste headers checklist for provider setup).
+- Validation rules: reject empty repository/provider/secret in UI before submit; normalize allowlist as trimmed unique list.
+- Security UX: mask secret input by default, explicit reveal toggle, and confirmation prompt before overwriting an existing config.
+- Feedback model: show request outcome with clear status banner (`saved`, `invalid input`, `forbidden`, `internal error`) and append event in operator log feed.
+- API prerequisite: expose one admin write endpoint (or GraphQL mutation) that maps to existing `UpsertWebhookSecurityConfigRequest` state/service path.
+- API compatibility note: current route surface exposes `/webhooks/scm` ingestion but does not yet expose a public admin route for webhook security upsert.
+- Test scope: dashboard integration tests for happy path save, invalid form submit, and server error surfacing.
+
+Refinement outcome for `UIADM-02` (2026-04-02):
+
+- UX scope: add a dedicated "SCM Polling" admin panel with repository/provider selector, enable toggle, interval input, and branches editor.
+- Primary actions: save polling configuration, disable polling for a repository, and run one manual polling tick from UI.
+- Validation rules: repository required, provider required, interval must be integer > 0; branches input normalized to trimmed unique list.
+- Trigger UX: manual tick button returns immediate summary (`polled_repositories`, `enqueued_builds`) and writes one operator log line.
+- Safety UX: confirmation prompt before disabling an active polling configuration.
+- API mapping: use existing `/scm/polling/configs` upsert and `/scm/polling/tick` trigger endpoints.
+- State visibility: surface last known polling config values and last tick result in panel for operator verification.
+- Test scope: dashboard integration tests for config save/update, validation errors, disable flow, and manual tick outcome rendering.
+
+Refinement outcome for `UIADM-03` (2026-04-02):
+
+- UX scope: add a "Worker Control" panel focused on day-2 diagnostics and manual worker-flow simulation.
+- Primary actions: list workers, claim next build for a selected worker id, and complete a claimed build with `success`/`failed` + optional log line.
+- Validation rules: worker id required for claim/complete simulation; build id required for completion action; status limited to known enum values.
+- Diagnostic UX: display claim result (`no build` vs `build id`), completion result, active builds count, last seen timestamp, and worker status.
+- Error UX: expose ownership conflict (`409`) and invalid transitions as explicit operator-friendly messages.
+- API mapping: use existing `/workers`, `/workers/{worker_id}/claim`, and `/workers/{worker_id}/builds/{id}/complete` endpoints.
+- Safety UX: completion simulation requires explicit confirmation when status is `failed` to avoid accidental retries/dead-letter side effects.
+- Test scope: dashboard integration tests for claim success/empty queue, completion success, completion conflict, and error banner rendering.
+
+Refinement outcome for `UIADM-04` (2026-04-02):
+
+- UX scope: add a "Plugin Administration" panel with inventory table (name, lifecycle state, declared capabilities, source manifest entry).
+- Primary actions: load plugin, initialize plugin, execute plugin (diagnostic), unload plugin, and refresh plugin state snapshot.
+- Visibility requirements: show per-plugin lifecycle (`Loaded`, `Initialized`, `Unloaded`) and normalized capability set.
+- Error UX: map lifecycle errors (`duplicate`, `invalid state`, `not found`, `execution failed`, `execution panicked`) to actionable operator messages.
+- Safety UX: require explicit confirmation before `unload` and before diagnostic `execute` on production-tagged contexts.
+- API prerequisite: expose plugin registry read/write admin endpoints or GraphQL fields/mutations (list plugins, lifecycle actions, capability metadata).
+- API compatibility note: plugin registry capabilities currently exist in `crates/plugins`, but API/dashboard layer does not yet expose plugin inventory/lifecycle operations.
+- Test scope: dashboard integration tests for lifecycle happy path (load->init->execute->unload), invalid transition error rendering, and panic-safe execution reporting.
+
+Refinement outcome for `UIADM-05` (2026-04-02):
+
+- UX scope: add a "Plugin Policy" panel to manage granted capabilities per execution context (global default + optional context override).
+- Primary actions: edit granted capabilities set, preview effective permissions for a plugin, and run a dry-run authorization check before execution.
+- Policy model: represent granted set using existing capability taxonomy (`network`, `filesystem`, `secrets`, `runtime_hooks`) with explicit toggles.
+- Decision UX: display required vs granted diff and explicit deny reason when one required capability is missing.
+- Error UX: map `UnauthorizedCapability(...)` to a clear remediation hint (grant missing capability or choose another context).
+- Safety UX: changes to contexts that grant `secrets` require confirmation and are logged in operator event feed.
+- API prerequisite: expose policy persistence/read APIs and one authorization-check endpoint (or GraphQL mutation) returning allow/deny + missing capabilities.
+- API compatibility note: runtime authorization exists through `execute_authorized`, but there is no API-managed policy store/context mapping yet.
+- Test scope: dashboard integration tests for allow path, deny path with missing capability highlight, and secrets-grant confirmation flow.
+
+Refinement outcome for `UIADM-06` (2026-04-02):
+
+- UX scope: add a "Webhook Security Operations" panel focused on signature/replay/allowlist health and rejection diagnostics.
+- Primary views: webhook counters (`received`, `accepted`, `rejected`, `duplicate`) plus recent rejection reasons timeline.
+- Primary actions: filter by provider/repository, inspect last failed webhook summary, and copy remediation checklist for provider configuration.
+- Security diagnostics: classify failures into missing/invalid signature, replay-window violation, and forbidden IP/repository/provider.
+- Metric mapping: reuse existing SCM counters from runtime metrics endpoint as top-level KPI cards.
+- API prerequisite: expose rejection-reason breakdown stream or query endpoint (current counters are aggregate-only and do not include per-reason history).
+- API compatibility note: ingestion path already returns typed 400/401/403 responses, but dashboard does not yet receive structured per-event security diagnostics.
+- UX guardrails: redact secrets/tokens from any displayed payload snippets and keep IP visibility limited to diagnostics context.
+- Test scope: dashboard integration tests for counters rendering, rejection reason drill-down fallback states, and no-secret-leak assertions in UI logs.
+
+Refinement outcome for `UIADM-07` (2026-04-02):
+
+- UX scope: add an "Advanced Observability" panel combining runtime counters, live event stream, and troubleshooting filters in one operator workspace.
+- Primary views: time-sliced counters dashboard + searchable event timeline (`kind`, `severity`, `message`, `job_id`, `build_id`, `worker_id`, `at`).
+- Primary actions: filter by severity/kind/resource id, pin a time window preset, and export current view (JSON/CSV) for incident handoff.
+- Metric mapping: use existing runtime metrics endpoint fields (queue reliability + SCM counters) as source of truth.
+- Stream mapping: use existing SSE `/events` feed as near-real-time source, with polling fallback when stream is unavailable.
+- Reliability UX: show stream health badge (`online`, `degraded`, `offline`) and explicit data freshness timestamp.
+- API prerequisite: add optional server-side event query endpoint for historical pagination (SSE is best-effort and not a durable history source).
+- API compatibility note: current event model carries enough identifiers for drill-down, but there is no persisted event history API yet.
+- Test scope: dashboard integration tests for filter behavior, export payload schema, stream reconnect fallback, and stale-data indicator rendering.
+
+Refinement outcome for `UIADM-08` (2026-04-02):
+
+- UX scope: harden all administration panels with role-aware visibility, explicit destructive-action confirmations, and audit-trail surfacing.
+- Access model: define baseline admin roles (`viewer`, `operator`, `admin`) with progressively broader action permissions.
+- Guard behavior: unauthorized actions are hidden by default and optionally shown disabled with a "missing permission" hint in troubleshooting mode.
+- Destructive flow: high-impact actions (plugin unload, failed completion simulation, security/policy updates) require typed confirmation and contextual warning copy.
+- Audit UX: every admin mutation surfaces actor, action, target, and timestamp in an "Admin Activity" stream.
+- Compliance UX: secrets/tokens remain masked in all views; copy actions never expose raw secret values.
+- API prerequisite: expose role claims to frontend session context and provide audit-event ingestion/query APIs for admin actions.
+- API compatibility note: current event stream includes operational events but does not yet persist actor-aware audit records for admin mutations.
+- Accessibility requirement: confirmation dialogs and permission-state controls must be keyboard navigable and screen-reader labeled.
+- Test scope: dashboard integration tests for role gating matrix, confirmation bypass prevention, audit entry emission, and accessibility smoke checks.
+
+Refinement outcome for `UIADM-09` (2026-04-02):
+
+- Test scope: establish an end-to-end admin UI suite covering SCM, workers, plugin administration, policy deny/allow flows, and observability panels.
+- Priority journeys: webhook security save, polling config + manual tick, worker claim/complete simulation, plugin lifecycle actions, and policy deny feedback.
+- Negative coverage: invalid forms, unauthorized role attempts, ownership conflict paths, missing capability deny, and stream disconnect fallback.
+- Data strategy: deterministic fixture seed for jobs/builds/workers/plugins to keep snapshots and assertions stable.
+- Environment strategy: run E2E against in-memory backend profile by default, with optional extended run against postgres+redis profile.
+- Tooling expectation: use one browser automation stack with trace/video capture enabled on failures for triage.
+- CI gate: admin E2E suite required on pull requests touching dashboard/admin/API contract surfaces.
+- Reporting: publish flaky-test quarantine list and mean-time-to-fix KPI for admin-critical regressions.
+- API prerequisite: expose test-only or seed endpoints/helpers to preload admin scenarios without brittle UI bootstrapping.
+- Exit criteria: all UIADM panels have at least one happy path and one failure path automated in CI.
+
+Refinement outcome for `UIADM-10` (2026-04-02):
+
+- Documentation scope: publish an operations-oriented admin UI runbook with step-by-step procedures for SCM, workers, plugins, policy, and observability panels.
+- Playbook structure: each playbook must include intent, prerequisites, exact UI path, expected signals, rollback path, and escalation contacts.
+- Incident scenarios: include at least webhook rejection storm, polling stall, worker ownership conflicts, plugin execution panic, and policy deny regressions.
+- Security chapter: document secret-handling rules, role boundaries, and audit-trail review process for sensitive actions.
+- Verification chapter: provide post-action validation checklist using metrics/event panels and expected counter deltas.
+- On-call chapter: define triage severity mapping and first-response checklist for admin UI alerts.
+- Versioning policy: runbook updates are mandatory when UIADM workflows or API contracts change.
+- Ownership model: assign runbook ownership to platform team with named reviewer from operations.
+- Testability requirement: all runbook procedures must be executable in staging using seeded demo scenarios.
+- Exit criteria: new operator can complete core admin tasks without API/CLI fallback using only documented runbook steps.
+
 - [ ] `UIADM-01` Add SCM webhook administration panel (repository/provider/secret/allowlist management).
 - [ ] `UIADM-02` Add SCM polling administration panel (enable/disable, intervals, branches, manual tick).
 - [ ] `UIADM-03` Add worker control panel (manual claim/complete simulation and ownership diagnostics).
