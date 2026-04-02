@@ -347,7 +347,7 @@ Refinement outcome for `UIADM-10` (2026-04-02):
 - [-] `UIADM-04` Add plugin administration panel (manifest entries, lifecycle state, declared capabilities).
 - [-] `UIADM-05` Add plugin policy panel (granted capabilities per execution context with deny feedback).
 - [-] `UIADM-06` Add webhook/security operations panel (signature status, replay-window rejects, allowlist diagnostics).
-- [ ] `UIADM-07` Add advanced observability panel (SCM ingestion counters, filtering, export shortcuts).
+- [-] `UIADM-07` Add advanced observability panel (SCM ingestion counters, filtering, export shortcuts).
 - [ ] `UIADM-08` Add admin UX hardening (role-based view guards, destructive-action confirmations, audit trail surfacing).
 - [ ] `UIADM-09` Add end-to-end UI integration tests for critical admin workflows.
 - [ ] `UIADM-10` Document administration playbooks and UI runbook for operations teams.

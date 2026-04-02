@@ -40,6 +40,9 @@ interface LiveEvent {
   kind?: string;
   message?: string;
   severity?: EventSeverity;
+  job_id?: string;
+  build_id?: string;
+  worker_id?: string;
   at?: string;
 }
 
@@ -168,6 +171,13 @@ interface RuntimeMetricsApiResponse {
 interface ScmWebhookOpsFilter {
   provider: string;
   repository_url: string;
+}
+
+interface ObservabilityFilter {
+  severity: string;
+  kind: string;
+  resource_id: string;
+  window_minutes: string;
 }
 
 interface ApiErrorPayload {
@@ -311,6 +321,90 @@ function missingCapabilities(required: string[], granted: string[]): string[] {
   return required.filter((capability) => !granted.includes(capability));
 }
 
+// Converts event rows to CSV text for incident handoff exports.
+function observabilityEventsToCsv(events: LiveEvent[]): string {
+  const header = ["at", "kind", "severity", "message", "job_id", "build_id", "worker_id"];
+  const escape = (value?: string) => `"${(value ?? "").replaceAll("\"", "\"\"")}"`;
+  const rows = events.map((event) => [
+    event.at ?? "",
+    event.kind ?? "",
+    event.severity ?? "",
+    event.message ?? "",
+    event.job_id ?? "",
+    event.build_id ?? "",
+    event.worker_id ?? ""
+  ]);
+
+  return [header, ...rows].map((row) => row.map((value) => escape(String(value))).join(",")).join("\n");
+}
+
+// Triggers browser download for one text payload using provided mime type.
+function downloadTextPayload(filename: string, content: string, mimeType: string): void {
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+}
+
+// Checks whether filter resource id matches any event resource identifier.
+function matchesEventResource(event: LiveEvent, resourceId: string): boolean {
+  if (!resourceId) {
+    return true;
+  }
+  const resource = `${event.job_id ?? ""} ${event.build_id ?? ""} ${event.worker_id ?? ""}`.toLowerCase();
+  return resource.includes(resourceId);
+}
+
+// Checks whether one event falls inside configured observability time window.
+function matchesEventWindow(event: LiveEvent, windowMinutes: number, nowMs: number): boolean {
+  if (!(Number.isFinite(windowMinutes) && windowMinutes > 0 && windowMinutes < 100000)) {
+    return true;
+  }
+
+  const eventTs = event.at ? new Date(event.at).getTime() : nowMs;
+  if (Number.isNaN(eventTs)) {
+    return true;
+  }
+
+  const ageMinutes = (nowMs - eventTs) / 60000;
+  return ageMinutes <= windowMinutes;
+}
+
+// Applies one observability filter set to one live event.
+function matchesObservabilityFilter(
+  event: LiveEvent,
+  filter: ObservabilityFilter,
+  nowMs: number
+): boolean {
+  const severity = filter.severity.trim().toLowerCase();
+  const kind = filter.kind.trim().toLowerCase();
+  const resourceId = filter.resource_id.trim().toLowerCase();
+  const windowMinutes = Number.parseInt(filter.window_minutes, 10);
+
+  if (severity && String(event.severity ?? "").toLowerCase() !== severity) {
+    return false;
+  }
+
+  if (kind && !String(event.kind ?? "").toLowerCase().includes(kind)) {
+    return false;
+  }
+
+  if (!matchesEventResource(event, resourceId)) {
+    return false;
+  }
+
+  if (!matchesEventWindow(event, windowMinutes, nowMs)) {
+    return false;
+  }
+
+  return true;
+}
+
 // Returns the display stardate used in the top HUD strip.
 function stardateValue(now: Date): string {
   const yearStart = new Date(now.getFullYear(), 0, 1);
@@ -387,6 +481,13 @@ export function App() {
   const [scmWebhookOpsMessage, setScmWebhookOpsMessage] = useState("");
   const [scmWebhookMetrics, setScmWebhookMetrics] = useState<RuntimeMetricsApiResponse | null>(null);
   const [scmWebhookRejections, setScmWebhookRejections] = useState<ScmWebhookRejectionEntry[]>([]);
+  const [observabilityFilter, setObservabilityFilter] = useState<ObservabilityFilter>({
+    severity: "",
+    kind: "",
+    resource_id: "",
+    window_minutes: "15"
+  });
+  const [observabilityMessage, setObservabilityMessage] = useState("");
   const [stardate, setStardate] = useState(() => stardateValue(new Date()));
 
   // Prepends one log line to keep operator feedback visible.
@@ -1305,6 +1406,36 @@ export function App() {
     return summary;
   }, [effectiveGrantedCapabilities, effectivePolicyContext, pluginInventory]);
 
+  // Applies advanced filters to live events for observability triage workflows.
+  const filteredObservabilityEvents = useMemo(() => {
+    const nowMs = Date.now();
+
+    return liveEvents.filter((event) => matchesObservabilityFilter(event, observabilityFilter, nowMs));
+  }, [liveEvents, observabilityFilter]);
+
+  // Computes freshness timestamp shown in observability panel.
+  const observabilityFreshness = useMemo(() => {
+    const latestAt = liveEvents.find((event) => Boolean(event.at))?.at;
+    return latestAt ? formatDateTime(latestAt) : formatDateTime(new Date().toISOString());
+  }, [liveEvents]);
+
+  // Exports currently filtered observability events as JSON.
+  const exportObservabilityJson = useCallback(() => {
+    const filename = `observability-events-${new Date().toISOString().replaceAll(":", "-")}.json`;
+    downloadTextPayload(filename, JSON.stringify(filteredObservabilityEvents, null, 2), "application/json");
+    setObservabilityMessage(`Export JSON genere (${filteredObservabilityEvents.length} events).`);
+    log(`Export observability JSON (${filteredObservabilityEvents.length} events)`, "ok");
+  }, [filteredObservabilityEvents, log]);
+
+  // Exports currently filtered observability events as CSV.
+  const exportObservabilityCsv = useCallback(() => {
+    const filename = `observability-events-${new Date().toISOString().replaceAll(":", "-")}.csv`;
+    const csv = observabilityEventsToCsv(filteredObservabilityEvents);
+    downloadTextPayload(filename, csv, "text/csv;charset=utf-8");
+    setObservabilityMessage(`Export CSV genere (${filteredObservabilityEvents.length} events).`);
+    log(`Export observability CSV (${filteredObservabilityEvents.length} events)`, "ok");
+  }, [filteredObservabilityEvents, log]);
+
   return (
     <>
       <div className="bg-orb orb-1"></div>
@@ -1975,19 +2106,87 @@ export function App() {
 
           <article className="panel panel-events reveal" style={{ ["--delay" as string]: "0.315s" }}>
             <div className="panel-head">
-              <h2>Evenements Live</h2>
-              <span className="pill">{liveEvents.length}</span>
+              <h2>Advanced Observability</h2>
+              <span className="pill">{filteredObservabilityEvents.length}</span>
             </div>
+            <form className="form" onSubmit={(event) => event.preventDefault()}>
+              <label>
+                <span>Severity</span>
+                <select
+                  name="observability_severity"
+                  value={observabilityFilter.severity}
+                  onChange={(event) =>
+                    setObservabilityFilter((previous) => ({ ...previous, severity: event.target.value }))
+                  }
+                >
+                  <option value="">all</option>
+                  <option value="ok">ok</option>
+                  <option value="info">info</option>
+                  <option value="warn">warn</option>
+                  <option value="error">error</option>
+                </select>
+              </label>
+              <label>
+                <span>Kind contains</span>
+                <input
+                  name="observability_kind"
+                  placeholder="build_queued"
+                  value={observabilityFilter.kind}
+                  onChange={(event) =>
+                    setObservabilityFilter((previous) => ({ ...previous, kind: event.target.value }))
+                  }
+                />
+              </label>
+              <label>
+                <span>Resource id contains</span>
+                <input
+                  name="observability_resource"
+                  placeholder="job/build/worker id"
+                  value={observabilityFilter.resource_id}
+                  onChange={(event) =>
+                    setObservabilityFilter((previous) => ({ ...previous, resource_id: event.target.value }))
+                  }
+                />
+              </label>
+              <label>
+                <span>Window (minutes)</span>
+                <select
+                  name="observability_window"
+                  value={observabilityFilter.window_minutes}
+                  onChange={(event) =>
+                    setObservabilityFilter((previous) => ({ ...previous, window_minutes: event.target.value }))
+                  }
+                >
+                  <option value="5">5</option>
+                  <option value="15">15</option>
+                  <option value="60">60</option>
+                  <option value="1440">1440</option>
+                </select>
+              </label>
+              <div className="actions">
+                <button type="button" className="btn btn-secondary" onClick={exportObservabilityJson}>
+                  Export JSON
+                </button>
+                <button type="button" className="btn btn-primary" onClick={exportObservabilityCsv}>
+                  Export CSV
+                </button>
+              </div>
+            </form>
+            <p className="hint">Freshness: {observabilityFreshness}</p>
+            <p className="hint">{observabilityMessage}</p>
             <div className="list events-list">
-              {liveEvents.length === 0 ? (
+              {filteredObservabilityEvents.length === 0 ? (
                 <p className="hint">Aucun evenement recu.</p>
               ) : (
-                liveEvents.map((evt, index) => (
+                filteredObservabilityEvents.map((evt, index) => (
                   <div className="list-item event-item" key={`${evt.kind ?? "event"}-${evt.at ?? "now"}-${index}`}>
                     <div>
                       <p className="item-title">{evt.kind ?? "event"}</p>
                       <p className="item-subtitle">
                         {formatTime(evt.at)} | {evt.message ?? ""}
+                      </p>
+                      <p className="item-subtitle">
+                        job={evt.job_id ?? "-"} | build={evt.build_id ?? "-"} | worker={evt.worker_id ?? "-"}
                       </p>
                     </div>
                     <div className="actions">
