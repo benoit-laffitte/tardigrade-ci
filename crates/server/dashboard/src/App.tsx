@@ -580,6 +580,12 @@ export function App() {
   // Executes one job and refreshes the dashboard after mutation completes.
   const runJob = useCallback(
     async (jobId: string, name: string) => {
+      if (!roleCapabilities.can_run_operations) {
+        log(`Role ${adminRole} ne peut pas lancer de build`, "warn");
+        audit("run_job_denied", name);
+        return;
+      }
+
       try {
         const { data } = await client.mutate<RunJobResponse>({
           mutation: RUN_JOB_MUTATION,
@@ -589,37 +595,52 @@ export function App() {
           throw new Error("run_job did not return a build id");
         }
         log(`Build ${data.run_job.id.slice(0, 8)} lance pour ${name}`, "ok");
+        audit("run_job", name);
         await refreshAll();
       } catch (error) {
         const message = error instanceof Error ? error.message : "Unknown error";
         log(`Impossible de lancer le job ${name}: ${message}`, "error");
       }
     },
-    [client, log, refreshAll]
+    [adminRole, audit, client, log, refreshAll, roleCapabilities.can_run_operations]
   );
 
   // Cancels one build and refreshes dashboard state.
   const cancelBuild = useCallback(
     async (buildId: string) => {
+      if (!roleCapabilities.can_run_operations) {
+        log(`Role ${adminRole} ne peut pas annuler de build`, "warn");
+        audit("cancel_build_denied", buildId);
+        return;
+      }
+
       try {
         await client.mutate<CancelBuildResponse>({
           mutation: CANCEL_BUILD_MUTATION,
           variables: { buildId }
         });
         log(`Build ${buildId.slice(0, 8)} annule`, "ok");
+        audit("cancel_build", buildId);
         await refreshAll();
       } catch (error) {
         const message = error instanceof Error ? error.message : "Unknown error";
         log(`Impossible d'annuler ${buildId.slice(0, 8)}: ${message}`, "error");
       }
     },
-    [client, log, refreshAll]
+    [adminRole, audit, client, log, refreshAll, roleCapabilities.can_run_operations]
   );
 
   // Creates a job from form payload and refreshes dashboard data.
   const createJob = useCallback(
     async (event: { preventDefault: () => void }) => {
       event.preventDefault();
+      if (!roleCapabilities.can_run_operations) {
+        setCreateMessage("Role insuffisant pour creer un job.");
+        log(`Role ${adminRole} ne peut pas creer de job`, "warn");
+        audit("create_job_denied", form.name || "unknown");
+        return;
+      }
+
       setCreateMessage("Creation en cours...");
 
       try {
@@ -634,6 +655,7 @@ export function App() {
 
         setCreateMessage(`Job ${data.create_job.name} cree.`);
         log(`Nouveau job ${data.create_job.name} (${data.create_job.id.slice(0, 8)})`, "ok");
+        audit("create_job", data.create_job.name);
         setForm({ name: "", repository_url: "", pipeline_path: "" });
         await refreshAll();
       } catch (error) {
@@ -642,13 +664,20 @@ export function App() {
         log(`Creation job en erreur: ${message}`, "error");
       }
     },
-    [client, form, log, refreshAll]
+    [adminRole, audit, client, form, log, refreshAll, roleCapabilities.can_run_operations]
   );
 
   // Saves webhook security settings for one repository/provider pair.
   const saveWebhookSecurityConfig = useCallback(
     async (event: { preventDefault: () => void }) => {
       event.preventDefault();
+      if (!roleCapabilities.can_mutate_sensitive) {
+        setWebhookMessage("Role insuffisant pour modifier la securite webhook.");
+        log(`Role ${adminRole} ne peut pas modifier webhook security`, "warn");
+        audit("webhook_security_update_denied", webhookForm.repository_url || "unknown");
+        return;
+      }
+
       const repository = webhookForm.repository_url.trim();
       const secret = webhookForm.secret.trim();
       const configKey = `${repository.toLowerCase()}::${webhookForm.provider}`;
@@ -689,6 +718,7 @@ export function App() {
           setWebhookMessage("Configuration webhook enregistree.");
           setKnownWebhookConfigs((previous) => new Set(previous).add(configKey));
           log(`Webhook security sauvegardee pour ${repository} (${webhookForm.provider})`, "ok");
+          audit("webhook_security_update", repository);
           return;
         }
 
@@ -712,13 +742,20 @@ export function App() {
         log(`Configuration webhook en echec: ${message}`, "error");
       }
     },
-    [knownWebhookConfigs, log, webhookForm]
+    [adminRole, audit, knownWebhookConfigs, log, roleCapabilities.can_mutate_sensitive, webhookForm]
   );
 
   // Saves one SCM polling configuration for repository/provider pair.
   const saveScmPollingConfig = useCallback(
     async (event: { preventDefault: () => void }) => {
       event.preventDefault();
+      if (!roleCapabilities.can_mutate_sensitive) {
+        setPollingMessage("Role insuffisant pour modifier la configuration polling.");
+        log(`Role ${adminRole} ne peut pas modifier polling config`, "warn");
+        audit("polling_config_update_denied", pollingForm.repository_url || "unknown");
+        return;
+      }
+
       const repository = pollingForm.repository_url.trim();
       const configKey = `${repository.toLowerCase()}::${pollingForm.provider}`;
       const interval = Number.parseInt(pollingForm.interval_secs_text, 10);
@@ -766,6 +803,7 @@ export function App() {
             pollingForm.enabled ? "Configuration polling enregistree." : "Polling desactive."
           );
           log(`Polling config sauvegardee pour ${repository} (${pollingForm.provider})`, "ok");
+          audit("polling_config_update", repository);
           return;
         }
 
@@ -783,7 +821,14 @@ export function App() {
         log(`Configuration polling en echec: ${message}`, "error");
       }
     },
-    [knownPollingStates, log, pollingForm]
+    [
+      adminRole,
+      audit,
+      knownPollingStates,
+      log,
+      pollingForm,
+      roleCapabilities.can_mutate_sensitive
+    ]
   );
 
   // Triggers one manual SCM polling tick and renders immediate summary.
@@ -850,6 +895,13 @@ export function App() {
 
   // Loads one plugin from built-in server catalog.
   const loadPlugin = useCallback(async () => {
+    if (!roleCapabilities.can_mutate_sensitive) {
+      setPluginAdminMessage("Role insuffisant pour charger un plugin.");
+      log(`Role ${adminRole} ne peut pas charger de plugin`, "warn");
+      audit("plugin_load_denied", pluginAdminForm.name || "unknown");
+      return;
+    }
+
     const name = pluginAdminForm.name.trim();
     if (!name) {
       setPluginAdminMessage("Nom plugin requis.");
@@ -876,16 +928,32 @@ export function App() {
       const payload = (await response.json()) as PluginActionResponse;
       setPluginAdminMessage(`Plugin ${payload.plugin.name} ${payload.status}.`);
       log(`Plugin ${payload.plugin.name} ${payload.status}`, "ok");
+      audit("plugin_load", payload.plugin.name);
       await refreshPluginInventory();
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown error";
       setPluginAdminMessage("Erreur reseau lors du chargement plugin.");
       log(`Load plugin ${name} en echec: ${message}`, "error");
     }
-  }, [log, parseApiErrorMessage, pluginAdminForm.name, refreshPluginInventory]);
+  }, [
+    adminRole,
+    audit,
+    log,
+    parseApiErrorMessage,
+    pluginAdminForm.name,
+    refreshPluginInventory,
+    roleCapabilities.can_mutate_sensitive
+  ]);
 
   // Initializes one already loaded plugin.
   const initPlugin = useCallback(async () => {
+    if (!roleCapabilities.can_run_operations) {
+      setPluginAdminMessage("Role insuffisant pour initialiser un plugin.");
+      log(`Role ${adminRole} ne peut pas initialiser de plugin`, "warn");
+      audit("plugin_init_denied", pluginAdminForm.name || "unknown");
+      return;
+    }
+
     const name = pluginAdminForm.name.trim();
     if (!name) {
       setPluginAdminMessage("Nom plugin requis.");
@@ -907,16 +975,32 @@ export function App() {
       const payload = (await response.json()) as PluginActionResponse;
       setPluginAdminMessage(`Plugin ${payload.plugin.name} ${payload.status}.`);
       log(`Plugin ${payload.plugin.name} ${payload.status}`, "ok");
+      audit("plugin_init", payload.plugin.name);
       await refreshPluginInventory();
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown error";
       setPluginAdminMessage("Erreur reseau lors de l'initialisation plugin.");
       log(`Init plugin ${name} en echec: ${message}`, "error");
     }
-  }, [log, parseApiErrorMessage, pluginAdminForm.name, refreshPluginInventory]);
+  }, [
+    adminRole,
+    audit,
+    log,
+    parseApiErrorMessage,
+    pluginAdminForm.name,
+    refreshPluginInventory,
+    roleCapabilities.can_run_operations
+  ]);
 
   // Executes one plugin, requiring confirmation when context is production tagged.
   const executePlugin = useCallback(async () => {
+    if (!roleCapabilities.can_run_operations) {
+      setPluginAdminMessage("Role insuffisant pour executer un plugin.");
+      log(`Role ${adminRole} ne peut pas executer de plugin`, "warn");
+      audit("plugin_execute_denied", pluginAdminForm.name || "unknown");
+      return;
+    }
+
     const name = pluginAdminForm.name.trim();
     if (!name) {
       setPluginAdminMessage("Nom plugin requis.");
@@ -948,16 +1032,32 @@ export function App() {
       const payload = (await response.json()) as PluginActionResponse;
       setPluginAdminMessage(`Plugin ${payload.plugin.name} ${payload.status}.`);
       log(`Plugin ${payload.plugin.name} ${payload.status}`, "ok");
+      audit("plugin_execute", payload.plugin.name);
       await refreshPluginInventory();
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown error";
       setPluginAdminMessage("Erreur reseau lors de l'execution plugin.");
       log(`Execute plugin ${name} en echec: ${message}`, "error");
     }
-  }, [log, parseApiErrorMessage, pluginAdminForm, refreshPluginInventory]);
+  }, [
+    adminRole,
+    audit,
+    log,
+    parseApiErrorMessage,
+    pluginAdminForm,
+    refreshPluginInventory,
+    roleCapabilities.can_run_operations
+  ]);
 
   // Unloads one plugin after explicit operator confirmation.
   const unloadPlugin = useCallback(async () => {
+    if (!roleCapabilities.can_mutate_sensitive) {
+      setPluginAdminMessage("Role insuffisant pour decharger un plugin.");
+      log(`Role ${adminRole} ne peut pas decharger de plugin`, "warn");
+      audit("plugin_unload_denied", pluginAdminForm.name || "unknown");
+      return;
+    }
+
     const name = pluginAdminForm.name.trim();
     if (!name) {
       setPluginAdminMessage("Nom plugin requis.");
@@ -985,13 +1085,22 @@ export function App() {
       const payload = (await response.json()) as PluginActionResponse;
       setPluginAdminMessage(`Plugin ${payload.plugin.name} ${payload.status}.`);
       log(`Plugin ${payload.plugin.name} ${payload.status}`, "ok");
+      audit("plugin_unload", payload.plugin.name);
       await refreshPluginInventory();
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown error";
       setPluginAdminMessage("Erreur reseau lors du dechargement plugin.");
       log(`Unload plugin ${name} en echec: ${message}`, "error");
     }
-  }, [log, parseApiErrorMessage, pluginAdminForm.name, refreshPluginInventory]);
+  }, [
+    adminRole,
+    audit,
+    log,
+    parseApiErrorMessage,
+    pluginAdminForm.name,
+    refreshPluginInventory,
+    roleCapabilities.can_mutate_sensitive
+  ]);
 
   // Toggles one capability in plugin policy form while preserving uniqueness.
   const togglePluginPolicyCapability = useCallback((capability: string, checked: boolean) => {
@@ -1042,6 +1151,13 @@ export function App() {
 
   // Saves granted capabilities for selected plugin execution context.
   const savePluginPolicy = useCallback(async () => {
+    if (!roleCapabilities.can_mutate_sensitive) {
+      setPluginPolicyMessage("Role insuffisant pour modifier la policy plugin.");
+      log(`Role ${adminRole} ne peut pas modifier plugin policy`, "warn");
+      audit("plugin_policy_update_denied", pluginPolicyForm.context || "global");
+      return;
+    }
+
     const context = pluginPolicyForm.context.trim() || "global";
     const wantsSecrets = pluginPolicyForm.granted_capabilities.includes("secrets");
 
@@ -1080,6 +1196,7 @@ export function App() {
       setPluginPolicyMessage(
         `Policy enregistree (${payload.context}): ${payload.granted_capabilities.join(", ") || "none"}.`
       );
+      audit("plugin_policy_update", payload.context);
       log(
         `Policy plugin sauvegardee (${payload.context}) caps=${payload.granted_capabilities.join(",") || "none"}`,
         "ok"
@@ -1089,7 +1206,14 @@ export function App() {
       setPluginPolicyMessage("Erreur reseau lors de la sauvegarde policy.");
       log(`Policy plugin en echec: ${message}`, "error");
     }
-  }, [log, parseApiErrorMessage, pluginPolicyForm]);
+  }, [
+    adminRole,
+    audit,
+    log,
+    parseApiErrorMessage,
+    pluginPolicyForm,
+    roleCapabilities.can_mutate_sensitive
+  ]);
 
   // Runs authorization dry-run for selected plugin and context, then renders allow/deny diff.
   const runPluginAuthorizationCheck = useCallback(async () => {
@@ -1214,6 +1338,13 @@ export function App() {
 
   // Claims one pending build for selected worker.
   const claimBuildForWorker = useCallback(async () => {
+    if (!roleCapabilities.can_run_operations) {
+      setWorkerControlMessage("Role insuffisant pour claim build.");
+      log(`Role ${adminRole} ne peut pas claim de build`, "warn");
+      audit("worker_claim_denied", workerControlForm.worker_id || "unknown");
+      return;
+    }
+
     const workerId = workerControlForm.worker_id.trim();
     if (!workerId) {
       setWorkerControlMessage("Worker id requis pour claim.");
@@ -1248,16 +1379,32 @@ export function App() {
       setLastClaimResult(`Build ${payload.build.id.slice(0, 8)} claim.`);
       setWorkerControlMessage(`Claim reussi: build ${payload.build.id.slice(0, 8)}.`);
       log(`Claim worker ${workerId}: build ${payload.build.id.slice(0, 8)}`, "ok");
+      audit("worker_claim", workerId);
       await refreshAll();
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown error";
       setWorkerControlMessage("Erreur reseau lors du claim worker.");
       log(`Claim worker en echec (${workerId}): ${message}`, "error");
     }
-  }, [log, refreshAll, refreshWorkers, workerControlForm.worker_id]);
+  }, [
+    adminRole,
+    audit,
+    log,
+    refreshAll,
+    refreshWorkers,
+    roleCapabilities.can_run_operations,
+    workerControlForm.worker_id
+  ]);
 
   // Completes one claimed build for selected worker.
   const completeBuildForWorker = useCallback(async () => {
+    if (!roleCapabilities.can_run_operations) {
+      setWorkerControlMessage("Role insuffisant pour complete build.");
+      log(`Role ${adminRole} ne peut pas completer de build`, "warn");
+      audit("worker_complete_denied", workerControlForm.build_id || "unknown");
+      return;
+    }
+
     const workerId = workerControlForm.worker_id.trim();
     const buildId = workerControlForm.build_id.trim();
 
@@ -1268,6 +1415,13 @@ export function App() {
     }
 
     if (workerControlForm.completion_status === "failed") {
+      if (!roleCapabilities.can_mutate_sensitive) {
+        setWorkerControlMessage("Role insuffisant pour completion failed.");
+        log(`Role ${adminRole} ne peut pas forcer un failed`, "warn");
+        audit("worker_complete_failed_denied", buildId || "unknown");
+        return;
+      }
+
       const confirmed = globalThis.confirm(
         "Confirmer une completion en echec ? Cela peut declencher retry/dead-letter."
       );
@@ -1321,13 +1475,22 @@ export function App() {
         `Completion worker ${workerId}: build ${completion.build.id.slice(0, 8)} -> ${completion.build.status}`,
         "ok"
       );
+      audit("worker_complete", workerId);
       await refreshAll();
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown error";
       setWorkerControlMessage("Erreur reseau lors de la completion worker.");
       log(`Completion worker en echec (${workerId}, ${buildId.slice(0, 8)}): ${message}`, "error");
     }
-  }, [log, refreshAll, workerControlForm]);
+  }, [
+    adminRole,
+    audit,
+    log,
+    refreshAll,
+    roleCapabilities.can_mutate_sensitive,
+    roleCapabilities.can_run_operations,
+    workerControlForm
+  ]);
 
   // Initializes dashboard data and baseline log once on first mount.
   useEffect(() => {
@@ -1508,6 +1671,18 @@ export function App() {
             <div className={`status-chip ${streamConnected ? "connected" : "disconnected"}`}>
               {streamStatusText}
             </div>
+            <label>
+              <span>Role</span>
+              <select
+                name="admin_role"
+                value={adminRole}
+                onChange={(event) => setAdminRole(event.target.value as AdminRole)}
+              >
+                <option value="viewer">viewer</option>
+                <option value="operator">operator</option>
+                <option value="admin">admin</option>
+              </select>
+            </label>
             <button className="btn btn-ghost" onClick={() => void refreshAll()} type="button">
               Synchroniser
             </button>
@@ -2231,6 +2406,30 @@ export function App() {
                     </div>
                     <div className="actions">
                       <span className={`status ${severityToStatusClass(evt.severity)}`}>{evt.severity ?? "info"}</span>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </article>
+
+          <article className="panel reveal" style={{ ["--delay" as string]: "0.318s" }}>
+            <div className="panel-head">
+              <h2>Admin Activity</h2>
+              <span className="pill">{adminActivity.length}</span>
+            </div>
+            <div className="list">
+              {adminActivity.length === 0 ? (
+                <p className="hint">Aucune action admin enregistree.</p>
+              ) : (
+                adminActivity.map((entry, index) => (
+                  <div className="list-item" key={`${entry.at}-${entry.action}-${index}`}>
+                    <div>
+                      <p className="item-title">{entry.action}</p>
+                      <p className="item-subtitle">
+                        role={entry.actor_role} | target={entry.target}
+                      </p>
+                      <p className="item-subtitle">{formatDateTime(entry.at)}</p>
                     </div>
                   </div>
                 ))
