@@ -65,8 +65,8 @@ Definition of done:
 
 Current gap note (2026-04-02):
 
-- `Makefile` includes `mk/docker.mk`, but this file is currently missing in repository.
-- As a consequence, `make help`/`make ci` fail to resolve make includes locally until the Docker make module is restored.
+- Docker make module and related cloud/container artifacts are intentionally removed for a clean reimplementation later in the project lifecycle.
+- `INDUS-207` stays pending until the new Docker scope is reintroduced.
 
 ### Epic 1: Pipeline DSL (YAML) parser and validator
 

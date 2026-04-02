@@ -143,7 +143,7 @@ Unified automation entrypoints from repository root:
 
 Current note:
 
-- `make docker-build` and `make docker-scan` are planned but currently unavailable because `mk/docker.mk` is not present in this repository snapshot.
+- `make docker-build` and `make docker-scan` are intentionally unavailable for now while the Docker/cloud delivery scope is being redesigned.
 
 Coverage (line threshold gate, default 75%):
 
