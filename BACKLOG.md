@@ -25,6 +25,11 @@ Context update:
 - Epic 1b (`TECH-*`) is complete.
 - Docker/cloud scope has been deferred and tracked under Epic 5 (`CLOUD-*`).
 
+Release note (2026-04-02):
+
+- Docker/container delivery artifacts and make module were intentionally removed from the active delivery surface.
+- Existing non-Docker Make entrypoints remain the canonical local/CI workflow while cloud scope is redesigned under Epic 5 (`CLOUD-*`).
+
 ## Status legend
 
 - `[ ]` not started
@@ -194,10 +199,10 @@ Refinement outcome for `PLUG-03` (2026-03-31):
 - [x] `PLUG-01` Define plugin lifecycle (`load`, `init`, `execute`, `unload`).
 - [x] `PLUG-02` Add plugin discovery/loading strategy (filesystem manifest first).
 - [x] `PLUG-03` Add plugin capability model (network, fs, secrets, runtime hooks).
-- [ ] `PLUG-04` Add authorization checks for plugin capabilities.
-- [ ] `PLUG-05` Add plugin isolation/guardrails and failure containment.
-- [ ] `PLUG-06` Add tests for duplicate names, denied capabilities, and load failures.
-- [ ] `PLUG-07` Document plugin authoring and permission declaration.
+- [x] `PLUG-04` Add authorization checks for plugin capabilities.
+- [x] `PLUG-05` Add plugin isolation/guardrails and failure containment.
+- [x] `PLUG-06` Add tests for duplicate names, denied capabilities, and load failures.
+- [x] `PLUG-07` Document plugin authoring and permission declaration.
 
 Definition of done:
 

@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
+use std::panic::{AssertUnwindSafe, catch_unwind};
 
 use crate::{
     Plugin, PluginCapability, PluginLifecycleError, PluginLifecycleState, PluginManifest,
@@ -107,15 +108,33 @@ impl PluginRegistry {
     /// Executes an initialized plugin.
     pub fn execute(&self, name: &str) -> Result<(), PluginLifecycleError> {
         let entry = self.plugins.get(name).ok_or(PluginLifecycleError::NotFound)?;
+        self.execute_authorized(name, &entry.capabilities)
+    }
+
+    /// Executes an initialized plugin after explicit capability authorization checks.
+    pub fn execute_authorized(
+        &self,
+        name: &str,
+        granted_capabilities: &[PluginCapability],
+    ) -> Result<(), PluginLifecycleError> {
+        let entry = self.plugins.get(name).ok_or(PluginLifecycleError::NotFound)?;
 
         if entry.state != PluginLifecycleState::Initialized {
             return Err(PluginLifecycleError::InvalidState);
         }
 
-        entry
-            .plugin
-            .on_execute()
-            .map_err(|_| PluginLifecycleError::ExecutionFailed)
+        for required in &entry.capabilities {
+            if !granted_capabilities.contains(required) {
+                return Err(PluginLifecycleError::UnauthorizedCapability(*required));
+            }
+        }
+
+        // Catching panics here prevents one plugin crash from taking down orchestrator flow.
+        let result = catch_unwind(AssertUnwindSafe(|| entry.plugin.on_execute()));
+        match result {
+            Ok(execute_result) => execute_result.map_err(|_| PluginLifecycleError::ExecutionFailed),
+            Err(_) => Err(PluginLifecycleError::ExecutionPanicked),
+        }
     }
 
     /// Unloads a plugin and marks it as no longer executable.

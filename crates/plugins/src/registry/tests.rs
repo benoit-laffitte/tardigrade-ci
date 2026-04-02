@@ -16,6 +16,7 @@ struct TestPlugin {
     execute_count: Arc<AtomicUsize>,
     unload_count: Arc<AtomicUsize>,
     fail_execute: bool,
+    panic_execute: bool,
     required_capabilities: Vec<PluginCapability>,
 }
 
@@ -44,6 +45,9 @@ impl Plugin for TestPlugin {
     /// Increments execute counter and optionally fails execution.
     fn on_execute(&self) -> Result<(), PluginLifecycleError> {
         self.execute_count.fetch_add(1, Ordering::SeqCst);
+        if self.panic_execute {
+            panic!("test panic from plugin execution");
+        }
         if self.fail_execute {
             return Err(PluginLifecycleError::ExecutionFailed);
         }
@@ -72,6 +76,7 @@ fn register_accepts_unique_name_and_invokes_on_load_once() {
         execute_count: execute_count.clone(),
         unload_count: unload_count.clone(),
         fail_execute: false,
+        panic_execute: false,
         required_capabilities: vec![],
     }));
 
@@ -98,6 +103,7 @@ fn register_rejects_duplicate_name_without_second_on_load() {
         execute_count: execute_count.clone(),
         unload_count: unload_count.clone(),
         fail_execute: false,
+        panic_execute: false,
         required_capabilities: vec![],
     }));
     let second_insert = registry.register(Box::new(TestPlugin {
@@ -107,6 +113,7 @@ fn register_rejects_duplicate_name_without_second_on_load() {
         execute_count: execute_count.clone(),
         unload_count: unload_count.clone(),
         fail_execute: false,
+        panic_execute: false,
         required_capabilities: vec![],
     }));
 
@@ -134,6 +141,7 @@ fn lifecycle_transitions_succeed_in_order() {
             execute_count: execute_count.clone(),
             unload_count: unload_count.clone(),
             fail_execute: false,
+            panic_execute: false,
             required_capabilities: vec![],
         }))
         .expect("load should succeed");
@@ -167,6 +175,7 @@ fn execute_before_init_is_rejected() {
             execute_count: count.clone(),
             unload_count: count.clone(),
             fail_execute: false,
+            panic_execute: false,
             required_capabilities: vec![],
         }))
         .expect("load should succeed");
@@ -191,6 +200,7 @@ fn execute_failure_is_reported() {
             execute_count: count.clone(),
             unload_count: count.clone(),
             fail_execute: true,
+            panic_execute: false,
             required_capabilities: vec![],
         }))
         .expect("load should succeed");
@@ -274,6 +284,7 @@ fn load_from_manifest_path_loads_enabled_entries() {
                 execute_count: execute_count.clone(),
                 unload_count: unload_count.clone(),
                 fail_execute: false,
+                panic_execute: false,
                 required_capabilities: vec![PluginCapability::Filesystem],
             })),
             _ => None,
@@ -322,6 +333,7 @@ fn load_uses_plugin_required_capabilities() {
             execute_count: count.clone(),
             unload_count: count.clone(),
             fail_execute: false,
+            panic_execute: false,
             required_capabilities: vec![
                 PluginCapability::RuntimeHooks,
                 PluginCapability::Network,
@@ -337,4 +349,146 @@ fn load_uses_plugin_required_capabilities() {
             PluginCapability::RuntimeHooks,
         ])
     );
+}
+
+/// Verifies explicit execution authorization rejects missing required capability grants.
+#[test]
+fn execute_authorized_rejects_missing_required_capability() {
+    let mut registry = PluginRegistry::default();
+    let count = Arc::new(AtomicUsize::new(0));
+
+    registry
+        .load(Box::new(TestPlugin {
+            name: "secrets-plugin",
+            load_count: count.clone(),
+            init_count: count.clone(),
+            execute_count: count.clone(),
+            unload_count: count.clone(),
+            fail_execute: false,
+            panic_execute: false,
+            required_capabilities: vec![PluginCapability::Secrets],
+        }))
+        .expect("load should succeed");
+    registry
+        .init("secrets-plugin")
+        .expect("init should succeed");
+
+    let err = registry
+        .execute_authorized("secrets-plugin", &[PluginCapability::Network])
+        .expect_err("missing secrets capability should be denied");
+
+    assert_eq!(err, PluginLifecycleError::UnauthorizedCapability(PluginCapability::Secrets));
+}
+
+/// Verifies explicit execution authorization succeeds when all required capabilities are granted.
+#[test]
+fn execute_authorized_accepts_when_all_required_capabilities_are_granted() {
+    let mut registry = PluginRegistry::default();
+    let execute_count = Arc::new(AtomicUsize::new(0));
+    let count = Arc::new(AtomicUsize::new(0));
+
+    registry
+        .load(Box::new(TestPlugin {
+            name: "runtime-hook-plugin",
+            load_count: count.clone(),
+            init_count: count.clone(),
+            execute_count: execute_count.clone(),
+            unload_count: count.clone(),
+            fail_execute: false,
+            panic_execute: false,
+            required_capabilities: vec![
+                PluginCapability::RuntimeHooks,
+                PluginCapability::Network,
+            ],
+        }))
+        .expect("load should succeed");
+    registry
+        .init("runtime-hook-plugin")
+        .expect("init should succeed");
+
+    registry
+        .execute_authorized(
+            "runtime-hook-plugin",
+            &[PluginCapability::Network, PluginCapability::RuntimeHooks],
+        )
+        .expect("authorized execution should succeed");
+
+    assert_eq!(execute_count.load(Ordering::SeqCst), 1);
+}
+
+/// Verifies execution panic is contained and surfaced as typed lifecycle error.
+#[test]
+fn execute_panicked_plugin_is_reported_without_process_crash() {
+    let mut registry = PluginRegistry::default();
+    let count = Arc::new(AtomicUsize::new(0));
+
+    registry
+        .load(Box::new(TestPlugin {
+            name: "panic-plugin",
+            load_count: count.clone(),
+            init_count: count.clone(),
+            execute_count: count.clone(),
+            unload_count: count.clone(),
+            fail_execute: false,
+            panic_execute: true,
+            required_capabilities: vec![],
+        }))
+        .expect("load should succeed");
+    registry.init("panic-plugin").expect("init should succeed");
+
+    let err = registry
+        .execute("panic-plugin")
+        .expect_err("panic should be contained and mapped");
+    assert_eq!(err, PluginLifecycleError::ExecutionPanicked);
+}
+
+/// Verifies one plugin panic does not block later execution of healthy plugins.
+#[test]
+fn panic_in_one_plugin_does_not_block_other_plugins() {
+    let mut registry = PluginRegistry::default();
+    let panic_count = Arc::new(AtomicUsize::new(0));
+    let healthy_exec_count = Arc::new(AtomicUsize::new(0));
+    let shared_count = Arc::new(AtomicUsize::new(0));
+
+    registry
+        .load(Box::new(TestPlugin {
+            name: "panic-plugin",
+            load_count: shared_count.clone(),
+            init_count: shared_count.clone(),
+            execute_count: panic_count.clone(),
+            unload_count: shared_count.clone(),
+            fail_execute: false,
+            panic_execute: true,
+            required_capabilities: vec![],
+        }))
+        .expect("panic plugin load should succeed");
+    registry
+        .load(Box::new(TestPlugin {
+            name: "healthy-plugin",
+            load_count: shared_count.clone(),
+            init_count: shared_count.clone(),
+            execute_count: healthy_exec_count.clone(),
+            unload_count: shared_count.clone(),
+            fail_execute: false,
+            panic_execute: false,
+            required_capabilities: vec![],
+        }))
+        .expect("healthy plugin load should succeed");
+
+    registry
+        .init("panic-plugin")
+        .expect("panic plugin init should succeed");
+    registry
+        .init("healthy-plugin")
+        .expect("healthy plugin init should succeed");
+
+    let panic_err = registry
+        .execute("panic-plugin")
+        .expect_err("panic plugin should fail with panic-mapped error");
+    assert_eq!(panic_err, PluginLifecycleError::ExecutionPanicked);
+
+    registry
+        .execute("healthy-plugin")
+        .expect("healthy plugin should still execute after panic in another plugin");
+    assert_eq!(healthy_exec_count.load(Ordering::SeqCst), 1);
 }

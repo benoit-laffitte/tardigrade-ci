@@ -213,6 +213,7 @@ Pipeline DSL reference and examples:
 - [docs/pipeline-schema.md](docs/pipeline-schema.md)
 - [docs/pipeline-recipes.md](docs/pipeline-recipes.md)
 - [docs/technology-profile-onboarding.md](docs/technology-profile-onboarding.md)
+- [docs/plugin-authoring-permissions.md](docs/plugin-authoring-permissions.md)
 
 Invalid pipeline behavior:
 
