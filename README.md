@@ -25,6 +25,14 @@ This workspace is a starting point for building an enterprise-grade open-source 
 - Worker API endpoints allow external workers to claim and complete builds.
 - Example configuration at config/example.toml.
 
+## Plugin runtime status
+
+- Plugins support explicit lifecycle transitions: load, init, execute, unload.
+- Discovery supports filesystem manifest loading via `plugins.toml`.
+- Capability permissions are enforced through explicit authorized execution checks.
+- Plugin execution failures are typed (`ExecutionFailed`) and panic-safe (`ExecutionPanicked`).
+- One plugin failure does not block execution of other healthy plugins.
+
 ## Architecture target
 
 - Multi-language CI via plugin-driven runtime adapters.
