@@ -342,8 +342,8 @@ Refinement outcome for `UIADM-10` (2026-04-02):
 - Exit criteria: new operator can complete core admin tasks without API/CLI fallback using only documented runbook steps.
 
 - [-] `UIADM-01` Add SCM webhook administration panel (repository/provider/secret/allowlist management).
-- [ ] `UIADM-02` Add SCM polling administration panel (enable/disable, intervals, branches, manual tick).
-- [ ] `UIADM-03` Add worker control panel (manual claim/complete simulation and ownership diagnostics).
+- [-] `UIADM-02` Add SCM polling administration panel (enable/disable, intervals, branches, manual tick).
+- [-] `UIADM-03` Add worker control panel (manual claim/complete simulation and ownership diagnostics).
 - [ ] `UIADM-04` Add plugin administration panel (manifest entries, lifecycle state, declared capabilities).
 - [ ] `UIADM-05` Add plugin policy panel (granted capabilities per execution context with deny feedback).
 - [ ] `UIADM-06` Add webhook/security operations panel (signature status, replay-window rejects, allowlist diagnostics).

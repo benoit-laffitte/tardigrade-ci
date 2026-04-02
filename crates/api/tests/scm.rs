@@ -75,6 +75,52 @@ async fn scm_webhook_security_config_upsert_endpoint_rejects_invalid_payload() {
 }
 
 #[tokio::test]
+/// Accepts valid SCM polling config upsert through admin endpoint.
+async fn scm_polling_config_upsert_endpoint_accepts_valid_payload() {
+    let state = ApiState::new("tardigrade-ci-test");
+    let app = tardigrade_api::build_router(state);
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/scm/polling/configs")
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(
+                    br#"{"repository_url":"https://example.com/repo.git","provider":"github","enabled":true,"interval_secs":30,"branches":["main"]}"#.to_vec(),
+                ))
+                .expect("valid request"),
+        )
+        .await
+        .expect("response");
+
+    assert_eq!(response.status(), StatusCode::NO_CONTENT);
+}
+
+#[tokio::test]
+/// Rejects polling config upsert when interval is zero.
+async fn scm_polling_config_upsert_endpoint_rejects_zero_interval() {
+    let state = ApiState::new("tardigrade-ci-test");
+    let app = tardigrade_api::build_router(state);
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/scm/polling/configs")
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(
+                    br#"{"repository_url":"https://example.com/repo.git","provider":"github","enabled":true,"interval_secs":0,"branches":["main"]}"#.to_vec(),
+                ))
+                .expect("valid request"),
+        )
+        .await
+        .expect("response");
+
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
 /// Accepts a valid GitHub webhook when signature, replay window, and allowlist all match.
 async fn scm_webhook_github_valid_signature_is_accepted() {
     let state = ApiState::new("tardigrade-ci-test");

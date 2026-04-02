@@ -21,6 +21,7 @@ tardigrade-core = { path = "../core" }
 tardigrade-storage = { path = "../storage" }
 tardigrade-scheduler = { path = "../scheduler" }
 tardigrade-executor = { path = "../executor" }
+tardigrade-plugins = { path = "../plugins" }
 
 [dev-dependencies]
 tower = "0.5"

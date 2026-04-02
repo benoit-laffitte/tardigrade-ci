@@ -11,7 +11,8 @@ pub use events::LiveEvent;
 pub use http_models::{
     ApiErrorResponse, CancelBuildResponse, ClaimBuildResponse, CompleteBuildRequest,
     CompleteBuildResponse, CreateJobRequest, CreateJobResponse, DeadLetterBuildsResponse,
-    HealthResponse, ListBuildsResponse, ListJobsResponse, ListWorkersResponse, LiveResponse,
+    HealthResponse, ListBuildsResponse, ListJobsResponse, ListPluginsResponse,
+    ListWorkersResponse, LiveResponse, LoadPluginRequest, PluginActionResponse, PluginInfo,
     ReadyResponse, RunJobResponse, RuntimeMetricsResponse, ScmPollingTickResponse,
     ScmWebhookAcceptedResponse, UpsertScmPollingConfigRequest,
     UpsertWebhookSecurityConfigRequest, WorkerBuildStatus, WorkerInfo,

@@ -82,6 +82,40 @@ interface WebhookSecurityInput {
   allowed_ips_text: string;
 }
 
+interface ScmPollingInput {
+  repository_url: string;
+  provider: ScmProvider;
+  enabled: boolean;
+  interval_secs_text: string;
+  branches_text: string;
+}
+
+interface ScmPollingTickSummary {
+  polled_repositories: number;
+  enqueued_builds: number;
+}
+
+interface ListWorkersResponse {
+  workers: Worker[];
+}
+
+interface ClaimBuildResponse {
+  build: Build | null;
+}
+
+interface CompleteBuildResponse {
+  build: Build;
+}
+
+type WorkerCompletionStatus = "success" | "failed";
+
+interface WorkerControlInput {
+  worker_id: string;
+  build_id: string;
+  completion_status: WorkerCompletionStatus;
+  completion_log_line: string;
+}
+
 const DASHBOARD_SNAPSHOT_QUERY = gql`
   query DashboardSnapshot {
     dashboard_snapshot {
@@ -183,13 +217,23 @@ function formatTime(value?: string | null): string {
   return date.toLocaleTimeString();
 }
 
-// Normalizes allowlist text input into unique trimmed IP entries.
-function normalizeAllowlistInput(raw: string): string[] {
+// Normalizes comma/newline-delimited text into unique trimmed entries.
+function normalizeDelimitedInput(raw: string): string[] {
   const values = raw
     .split(/[,\n]/)
     .map((value) => value.trim())
     .filter((value) => value.length > 0);
   return Array.from(new Set(values));
+}
+
+// Normalizes allowlist text input into unique trimmed IP entries.
+function normalizeAllowlistInput(raw: string): string[] {
+  return normalizeDelimitedInput(raw);
+}
+
+// Normalizes branch text input into unique trimmed branch names.
+function normalizeBranchesInput(raw: string): string[] {
+  return normalizeDelimitedInput(raw);
 }
 
 // Returns the display stardate used in the top HUD strip.
@@ -228,6 +272,24 @@ export function App() {
   const [webhookMessage, setWebhookMessage] = useState("");
   const [showWebhookSecret, setShowWebhookSecret] = useState(false);
   const [knownWebhookConfigs, setKnownWebhookConfigs] = useState<Set<string>>(new Set());
+  const [pollingForm, setPollingForm] = useState<ScmPollingInput>({
+    repository_url: "",
+    provider: "github",
+    enabled: true,
+    interval_secs_text: "30",
+    branches_text: "main"
+  });
+  const [pollingMessage, setPollingMessage] = useState("");
+  const [pollingTickSummary, setPollingTickSummary] = useState<ScmPollingTickSummary | null>(null);
+  const [knownPollingStates, setKnownPollingStates] = useState<Map<string, boolean>>(new Map());
+  const [workerControlForm, setWorkerControlForm] = useState<WorkerControlInput>({
+    worker_id: "",
+    build_id: "",
+    completion_status: "success",
+    completion_log_line: ""
+  });
+  const [workerControlMessage, setWorkerControlMessage] = useState("");
+  const [lastClaimResult, setLastClaimResult] = useState<string>("");
   const [stardate, setStardate] = useState(() => stardateValue(new Date()));
 
   // Prepends one log line to keep operator feedback visible.
@@ -415,6 +477,245 @@ export function App() {
     [knownWebhookConfigs, log, webhookForm]
   );
 
+  // Saves one SCM polling configuration for repository/provider pair.
+  const saveScmPollingConfig = useCallback(
+    async (event: { preventDefault: () => void }) => {
+      event.preventDefault();
+      const repository = pollingForm.repository_url.trim();
+      const configKey = `${repository.toLowerCase()}::${pollingForm.provider}`;
+      const interval = Number.parseInt(pollingForm.interval_secs_text, 10);
+
+      if (!repository || !Number.isFinite(interval) || interval <= 0) {
+        setPollingMessage("Parametres invalides: repository requis et interval > 0.");
+        log("Configuration polling invalide", "warn");
+        return;
+      }
+
+      if (knownPollingStates.get(configKey) === true && !pollingForm.enabled) {
+        const confirmed = globalThis.confirm(
+          "Confirmer la desactivation de ce polling repository/provider ?"
+        );
+        if (!confirmed) {
+          setPollingMessage("Desactivation annulee.");
+          return;
+        }
+      }
+
+      const payload = {
+        repository_url: repository,
+        provider: pollingForm.provider,
+        enabled: pollingForm.enabled,
+        interval_secs: interval,
+        branches: normalizeBranchesInput(pollingForm.branches_text)
+      };
+
+      try {
+        const response = await fetch("/scm/polling/configs", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json"
+          },
+          body: JSON.stringify(payload)
+        });
+
+        if (response.status === 204) {
+          setKnownPollingStates((previous) => {
+            const next = new Map(previous);
+            next.set(configKey, pollingForm.enabled);
+            return next;
+          });
+          setPollingMessage(
+            pollingForm.enabled ? "Configuration polling enregistree." : "Polling desactive."
+          );
+          log(`Polling config sauvegardee pour ${repository} (${pollingForm.provider})`, "ok");
+          return;
+        }
+
+        if (response.status === 400) {
+          setPollingMessage("Configuration polling invalide.");
+          log("Rejet configuration polling (400)", "warn");
+          return;
+        }
+
+        setPollingMessage("Erreur interne lors de la sauvegarde polling.");
+        log(`Configuration polling en echec: HTTP ${response.status}`, "error");
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Unknown error";
+        setPollingMessage("Erreur reseau lors de la sauvegarde polling.");
+        log(`Configuration polling en echec: ${message}`, "error");
+      }
+    },
+    [knownPollingStates, log, pollingForm]
+  );
+
+  // Triggers one manual SCM polling tick and renders immediate summary.
+  const runManualScmPollingTick = useCallback(async () => {
+    try {
+      const response = await fetch("/scm/polling/tick", {
+        method: "POST"
+      });
+
+      if (!response.ok) {
+        setPollingMessage(`Tick polling en echec (HTTP ${response.status}).`);
+        log(`Tick polling en echec: HTTP ${response.status}`, "error");
+        return;
+      }
+
+      const payload = (await response.json()) as ScmPollingTickSummary;
+      setPollingTickSummary(payload);
+      setPollingMessage(
+        `Tick execute: ${payload.polled_repositories} repo(s), ${payload.enqueued_builds} build(s) enqueued.`
+      );
+      log(
+        `Tick polling: repos=${payload.polled_repositories}, enqueued=${payload.enqueued_builds}`,
+        "ok"
+      );
+      await refreshAll();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error";
+      setPollingMessage("Erreur reseau lors du tick polling.");
+      log(`Tick polling en echec: ${message}`, "error");
+    }
+  }, [log, refreshAll]);
+
+  // Fetches worker list from worker API and updates worker panel state.
+  const refreshWorkers = useCallback(async () => {
+    try {
+      const response = await fetch("/workers", { method: "GET" });
+      if (!response.ok) {
+        setWorkerControlMessage(`Impossible de charger les workers (HTTP ${response.status}).`);
+        log(`Chargement workers en echec: HTTP ${response.status}`, "error");
+        return;
+      }
+
+      const payload = (await response.json()) as ListWorkersResponse;
+      setSnapshot((previous) => ({ ...previous, workers: payload.workers }));
+      setWorkerControlMessage(`Workers rafraichis: ${payload.workers.length}.`);
+      log(`Workers rafraichis (${payload.workers.length})`, "ok");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error";
+      setWorkerControlMessage("Erreur reseau lors du chargement workers.");
+      log(`Chargement workers en echec: ${message}`, "error");
+    }
+  }, [log]);
+
+  // Claims one pending build for selected worker.
+  const claimBuildForWorker = useCallback(async () => {
+    const workerId = workerControlForm.worker_id.trim();
+    if (!workerId) {
+      setWorkerControlMessage("Worker id requis pour claim.");
+      log("Claim worker refuse: worker id manquant", "warn");
+      return;
+    }
+
+    try {
+      const response = await fetch(`/workers/${encodeURIComponent(workerId)}/claim`, {
+        method: "POST"
+      });
+
+      if (!response.ok) {
+        setWorkerControlMessage(`Claim en echec (HTTP ${response.status}).`);
+        log(`Claim worker en echec (${workerId}): HTTP ${response.status}`, "error");
+        return;
+      }
+
+      const payload = (await response.json()) as ClaimBuildResponse;
+      if (!payload.build) {
+        setLastClaimResult("Aucun build disponible.");
+        setWorkerControlMessage("Claim termine: file vide.");
+        log(`Claim worker ${workerId}: aucun build disponible`, "info");
+        await refreshWorkers();
+        return;
+      }
+
+      setWorkerControlForm((previous) => ({
+        ...previous,
+        build_id: payload.build?.id ?? previous.build_id
+      }));
+      setLastClaimResult(`Build ${payload.build.id.slice(0, 8)} claim.`);
+      setWorkerControlMessage(`Claim reussi: build ${payload.build.id.slice(0, 8)}.`);
+      log(`Claim worker ${workerId}: build ${payload.build.id.slice(0, 8)}`, "ok");
+      await refreshAll();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error";
+      setWorkerControlMessage("Erreur reseau lors du claim worker.");
+      log(`Claim worker en echec (${workerId}): ${message}`, "error");
+    }
+  }, [log, refreshAll, refreshWorkers, workerControlForm.worker_id]);
+
+  // Completes one claimed build for selected worker.
+  const completeBuildForWorker = useCallback(async () => {
+    const workerId = workerControlForm.worker_id.trim();
+    const buildId = workerControlForm.build_id.trim();
+
+    if (!workerId || !buildId) {
+      setWorkerControlMessage("Worker id et build id requis pour completion.");
+      log("Completion worker refusee: worker/build id manquant", "warn");
+      return;
+    }
+
+    if (workerControlForm.completion_status === "failed") {
+      const confirmed = globalThis.confirm(
+        "Confirmer une completion en echec ? Cela peut declencher retry/dead-letter."
+      );
+      if (!confirmed) {
+        setWorkerControlMessage("Completion en echec annulee.");
+        return;
+      }
+    }
+
+    const payload = {
+      status: workerControlForm.completion_status,
+      log_line: workerControlForm.completion_log_line.trim() || null
+    };
+
+    try {
+      const response = await fetch(
+        `/workers/${encodeURIComponent(workerId)}/builds/${encodeURIComponent(buildId)}/complete`,
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json"
+          },
+          body: JSON.stringify(payload)
+        }
+      );
+
+      if (response.status === 409) {
+        setWorkerControlMessage("Conflit de possession: ce build appartient a un autre worker.");
+        log(`Completion worker conflit (${workerId}, ${buildId.slice(0, 8)})`, "warn");
+        return;
+      }
+
+      if (response.status === 400) {
+        setWorkerControlMessage("Transition invalide pour completion worker.");
+        log(`Completion worker invalide (${workerId}, ${buildId.slice(0, 8)})`, "warn");
+        return;
+      }
+
+      if (!response.ok) {
+        setWorkerControlMessage(`Completion en echec (HTTP ${response.status}).`);
+        log(`Completion worker en echec (${workerId}, ${buildId.slice(0, 8)}): HTTP ${response.status}`, "error");
+        return;
+      }
+
+      const completion = (await response.json()) as CompleteBuildResponse;
+      setWorkerControlMessage(
+        `Completion reussie: build ${completion.build.id.slice(0, 8)} -> ${completion.build.status}.`
+      );
+      setWorkerControlForm((previous) => ({ ...previous, build_id: "", completion_log_line: "" }));
+      log(
+        `Completion worker ${workerId}: build ${completion.build.id.slice(0, 8)} -> ${completion.build.status}`,
+        "ok"
+      );
+      await refreshAll();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error";
+      setWorkerControlMessage("Erreur reseau lors de la completion worker.");
+      log(`Completion worker en echec (${workerId}, ${buildId.slice(0, 8)}): ${message}`, "error");
+    }
+  }, [log, refreshAll, workerControlForm]);
+
   // Initializes dashboard data and baseline log once on first mount.
   useEffect(() => {
     log("Console initialisee", "ok");
@@ -492,6 +793,15 @@ export function App() {
     () => (streamConnected ? "Realtime Online" : "Realtime Offline"),
     [streamConnected]
   );
+
+  // Resolves selected worker details for quick diagnostics in control panel.
+  const selectedWorker = useMemo(() => {
+    const workerId = workerControlForm.worker_id.trim().toLowerCase();
+    if (!workerId) {
+      return null;
+    }
+    return snapshot.workers.find((worker) => worker.id.toLowerCase() === workerId) ?? null;
+  }, [snapshot.workers, workerControlForm.worker_id]);
 
   return (
     <>
@@ -655,6 +965,163 @@ export function App() {
               </div>
             </form>
             <p className="hint">{webhookMessage}</p>
+          </article>
+
+          <article className="panel panel-form reveal" style={{ ["--delay" as string]: "0.1s" }}>
+            <h2>SCM Polling</h2>
+            <form className="form" onSubmit={(event) => void saveScmPollingConfig(event)}>
+              <label>
+                <span>Repository URL</span>
+                <input
+                  name="polling_repository_url"
+                  placeholder="https://example.com/repo.git"
+                  required
+                  value={pollingForm.repository_url}
+                  onChange={(event) =>
+                    setPollingForm((previous) => ({ ...previous, repository_url: event.target.value }))
+                  }
+                />
+              </label>
+              <label>
+                <span>Provider</span>
+                <select
+                  name="polling_provider"
+                  value={pollingForm.provider}
+                  onChange={(event) =>
+                    setPollingForm((previous) => ({
+                      ...previous,
+                      provider: event.target.value as ScmProvider
+                    }))
+                  }
+                >
+                  <option value="github">github</option>
+                  <option value="gitlab">gitlab</option>
+                </select>
+              </label>
+              <label>
+                <span>Interval (seconds)</span>
+                <input
+                  name="polling_interval_secs"
+                  type="number"
+                  min={1}
+                  required
+                  value={pollingForm.interval_secs_text}
+                  onChange={(event) =>
+                    setPollingForm((previous) => ({ ...previous, interval_secs_text: event.target.value }))
+                  }
+                />
+              </label>
+              <label>
+                <span>Branches (comma/newline)</span>
+                <textarea
+                  name="polling_branches"
+                  placeholder="main, develop"
+                  value={pollingForm.branches_text}
+                  onChange={(event) =>
+                    setPollingForm((previous) => ({ ...previous, branches_text: event.target.value }))
+                  }
+                />
+              </label>
+              <label>
+                <span>Enabled</span>
+                <input
+                  name="polling_enabled"
+                  type="checkbox"
+                  checked={pollingForm.enabled}
+                  onChange={(event) =>
+                    setPollingForm((previous) => ({ ...previous, enabled: event.target.checked }))
+                  }
+                />
+              </label>
+              <div className="actions">
+                <button type="submit" className="btn btn-primary">
+                  Enregistrer
+                </button>
+                <button type="button" className="btn btn-secondary" onClick={() => void runManualScmPollingTick()}>
+                  Tick manuel
+                </button>
+              </div>
+            </form>
+            <p className="hint">{pollingMessage}</p>
+            <p className="hint">
+              {pollingTickSummary
+                ? `Dernier tick: ${pollingTickSummary.polled_repositories} repo(s), ${pollingTickSummary.enqueued_builds} build(s).`
+                : "Aucun tick manuel execute."}
+            </p>
+          </article>
+
+          <article className="panel panel-form reveal" style={{ ["--delay" as string]: "0.11s" }}>
+            <h2>Worker Control</h2>
+            <form className="form" onSubmit={(event) => event.preventDefault()}>
+              <label>
+                <span>Worker ID</span>
+                <input
+                  name="worker_control_worker_id"
+                  placeholder="worker-1"
+                  required
+                  value={workerControlForm.worker_id}
+                  onChange={(event) =>
+                    setWorkerControlForm((previous) => ({ ...previous, worker_id: event.target.value }))
+                  }
+                />
+              </label>
+              <label>
+                <span>Build ID</span>
+                <input
+                  name="worker_control_build_id"
+                  placeholder="UUID build"
+                  value={workerControlForm.build_id}
+                  onChange={(event) =>
+                    setWorkerControlForm((previous) => ({ ...previous, build_id: event.target.value }))
+                  }
+                />
+              </label>
+              <label>
+                <span>Completion status</span>
+                <select
+                  name="worker_control_completion_status"
+                  value={workerControlForm.completion_status}
+                  onChange={(event) =>
+                    setWorkerControlForm((previous) => ({
+                      ...previous,
+                      completion_status: event.target.value as WorkerCompletionStatus
+                    }))
+                  }
+                >
+                  <option value="success">success</option>
+                  <option value="failed">failed</option>
+                </select>
+              </label>
+              <label>
+                <span>Log line (optional)</span>
+                <textarea
+                  name="worker_control_log_line"
+                  placeholder="worker note"
+                  value={workerControlForm.completion_log_line}
+                  onChange={(event) =>
+                    setWorkerControlForm((previous) => ({ ...previous, completion_log_line: event.target.value }))
+                  }
+                />
+              </label>
+              <div className="actions">
+                <button type="button" className="btn btn-ghost" onClick={() => void refreshWorkers()}>
+                  Rafraichir workers
+                </button>
+                <button type="button" className="btn btn-secondary" onClick={() => void claimBuildForWorker()}>
+                  Claim next build
+                </button>
+                <button type="button" className="btn btn-primary" onClick={() => void completeBuildForWorker()}>
+                  Complete build
+                </button>
+              </div>
+            </form>
+            <p className="hint">{workerControlMessage}</p>
+            <p className="hint">{lastClaimResult || "Aucun claim execute."}</p>
+            <p className="hint">
+              {selectedWorker
+                ? `Worker ${selectedWorker.id}: ${selectedWorker.status}, active builds ${selectedWorker.active_builds}, last seen ${formatDateTime(selectedWorker.last_seen_at)}.`
+                : "Aucun worker selectionne pour diagnostic."}
+            </p>
           </article>
 
           <article className="panel reveal" style={{ ["--delay" as string]: "0.12s" }}>

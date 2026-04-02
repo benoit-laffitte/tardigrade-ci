@@ -173,4 +173,9 @@ impl PluginRegistry {
     pub fn count(&self) -> usize {
         self.plugins.len()
     }
+
+    /// Returns registered plugin names in deterministic order.
+    pub fn names(&self) -> Vec<String> {
+        self.plugins.keys().cloned().collect()
+    }
 }
