@@ -1,6 +1,7 @@
 mod builds;
 mod graphql;
 mod jobs;
+mod plugins;
 mod probes;
 mod scm;
 mod telemetry;
@@ -9,6 +10,7 @@ mod workers;
 pub(crate) use builds::{cancel_build, list_builds};
 pub(crate) use graphql::{graphql_handler, graphql_playground};
 pub(crate) use jobs::{create_job, list_jobs, run_job};
+pub(crate) use plugins::{execute_plugin, init_plugin, list_plugins, load_plugin, unload_plugin};
 pub(crate) use probes::{health, live, ready};
 pub(crate) use scm::{
 	ingest_scm_webhook, run_scm_polling_tick, upsert_scm_polling_config,

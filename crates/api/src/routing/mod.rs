@@ -5,10 +5,10 @@ use crate::ApiState;
 use crate::graphql::{MutationRoot, QueryRoot};
 use crate::handlers::{
     cancel_build, create_job, dead_letter_builds, events, graphql_handler, graphql_playground,
-    health, ingest_scm_webhook, list_builds, list_jobs, list_workers, live, metrics, ready,
-    run_job, run_scm_polling_tick, upsert_scm_polling_config, upsert_webhook_security_config,
-    worker_claim_build,
-    worker_complete_build,
+    health, ingest_scm_webhook, list_builds, list_jobs, list_plugins, list_workers, live,
+    load_plugin, metrics, ready, run_job, run_scm_polling_tick, upsert_scm_polling_config,
+    upsert_webhook_security_config, worker_claim_build, worker_complete_build, execute_plugin,
+    init_plugin, unload_plugin,
 };
 
 /// Builds the full HTTP router for CI control-plane API.
@@ -29,6 +29,7 @@ pub fn build_router(state: ApiState) -> Router {
         .route("/dead-letter-builds", get(dead_letter_builds))
         .route("/jobs", post(create_job).get(list_jobs))
         .route("/builds", get(list_builds))
+        .route("/plugins", get(list_plugins).post(load_plugin))
         .route("/workers", get(list_workers))
         .route("/webhooks/scm", post(ingest_scm_webhook))
         .route("/scm/webhook-security/configs", post(upsert_webhook_security_config))
@@ -37,6 +38,9 @@ pub fn build_router(state: ApiState) -> Router {
         .route("/jobs/{id}/run", post(run_job))
         .route("/builds/{id}/cancel", post(cancel_build))
         .route("/workers/{worker_id}/claim", post(worker_claim_build))
+        .route("/plugins/{name}/init", post(init_plugin))
+        .route("/plugins/{name}/execute", post(execute_plugin))
+        .route("/plugins/{name}/unload", post(unload_plugin))
         .route(
             "/workers/{worker_id}/builds/{id}/complete",
             post(worker_complete_build),

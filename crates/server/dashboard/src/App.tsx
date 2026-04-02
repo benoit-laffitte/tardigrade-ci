@@ -107,6 +107,32 @@ interface CompleteBuildResponse {
   build: Build;
 }
 
+interface PluginInfo {
+  name: string;
+  state: string;
+  capabilities: string[];
+  source_manifest_entry: string;
+}
+
+interface ListPluginsResponse {
+  plugins: PluginInfo[];
+}
+
+interface PluginActionResponse {
+  status: string;
+  plugin: PluginInfo;
+}
+
+interface PluginAdminInput {
+  name: string;
+  production_tagged_context: boolean;
+}
+
+interface ApiErrorPayload {
+  code?: string;
+  message?: string;
+}
+
 type WorkerCompletionStatus = "success" | "failed";
 
 interface WorkerControlInput {
@@ -290,6 +316,12 @@ export function App() {
   });
   const [workerControlMessage, setWorkerControlMessage] = useState("");
   const [lastClaimResult, setLastClaimResult] = useState<string>("");
+  const [pluginAdminForm, setPluginAdminForm] = useState<PluginAdminInput>({
+    name: "",
+    production_tagged_context: false
+  });
+  const [pluginAdminMessage, setPluginAdminMessage] = useState("");
+  const [pluginInventory, setPluginInventory] = useState<PluginInfo[]>([]);
   const [stardate, setStardate] = useState(() => stardateValue(new Date()));
 
   // Prepends one log line to keep operator feedback visible.
@@ -578,6 +610,183 @@ export function App() {
     }
   }, [log, refreshAll]);
 
+  // Reads one API error payload and extracts actionable message for operator feedback.
+  const parseApiErrorMessage = useCallback(async (response: Response): Promise<string> => {
+    try {
+      const payload = (await response.json()) as ApiErrorPayload;
+      return payload.message ?? `HTTP ${response.status}`;
+    } catch {
+      return `HTTP ${response.status}`;
+    }
+  }, []);
+
+  // Refreshes plugin registry inventory for administration panel.
+  const refreshPluginInventory = useCallback(async () => {
+    try {
+      const response = await fetch("/plugins", { method: "GET" });
+      if (!response.ok) {
+        const details = await parseApiErrorMessage(response);
+        setPluginAdminMessage(`Chargement plugins en echec: ${details}.`);
+        log(`Chargement plugins en echec: ${details}`, "error");
+        return;
+      }
+
+      const payload = (await response.json()) as ListPluginsResponse;
+      setPluginInventory(payload.plugins);
+      setPluginAdminMessage(`Inventaire plugins rafraichi (${payload.plugins.length}).`);
+      log(`Inventaire plugins rafraichi (${payload.plugins.length})`, "ok");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error";
+      setPluginAdminMessage("Erreur reseau lors du chargement plugins.");
+      log(`Chargement plugins en echec: ${message}`, "error");
+    }
+  }, [log, parseApiErrorMessage]);
+
+  // Loads one plugin from built-in server catalog.
+  const loadPlugin = useCallback(async () => {
+    const name = pluginAdminForm.name.trim();
+    if (!name) {
+      setPluginAdminMessage("Nom plugin requis.");
+      log("Load plugin refuse: nom manquant", "warn");
+      return;
+    }
+
+    try {
+      const response = await fetch("/plugins", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json"
+        },
+        body: JSON.stringify({ name })
+      });
+
+      if (!response.ok) {
+        const details = await parseApiErrorMessage(response);
+        setPluginAdminMessage(`Load plugin en echec: ${details}.`);
+        log(`Load plugin ${name} en echec: ${details}`, "error");
+        return;
+      }
+
+      const payload = (await response.json()) as PluginActionResponse;
+      setPluginAdminMessage(`Plugin ${payload.plugin.name} ${payload.status}.`);
+      log(`Plugin ${payload.plugin.name} ${payload.status}`, "ok");
+      await refreshPluginInventory();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error";
+      setPluginAdminMessage("Erreur reseau lors du chargement plugin.");
+      log(`Load plugin ${name} en echec: ${message}`, "error");
+    }
+  }, [log, parseApiErrorMessage, pluginAdminForm.name, refreshPluginInventory]);
+
+  // Initializes one already loaded plugin.
+  const initPlugin = useCallback(async () => {
+    const name = pluginAdminForm.name.trim();
+    if (!name) {
+      setPluginAdminMessage("Nom plugin requis.");
+      log("Init plugin refuse: nom manquant", "warn");
+      return;
+    }
+
+    try {
+      const response = await fetch(`/plugins/${encodeURIComponent(name)}/init`, {
+        method: "POST"
+      });
+      if (!response.ok) {
+        const details = await parseApiErrorMessage(response);
+        setPluginAdminMessage(`Init plugin en echec: ${details}.`);
+        log(`Init plugin ${name} en echec: ${details}`, "error");
+        return;
+      }
+
+      const payload = (await response.json()) as PluginActionResponse;
+      setPluginAdminMessage(`Plugin ${payload.plugin.name} ${payload.status}.`);
+      log(`Plugin ${payload.plugin.name} ${payload.status}`, "ok");
+      await refreshPluginInventory();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error";
+      setPluginAdminMessage("Erreur reseau lors de l'initialisation plugin.");
+      log(`Init plugin ${name} en echec: ${message}`, "error");
+    }
+  }, [log, parseApiErrorMessage, pluginAdminForm.name, refreshPluginInventory]);
+
+  // Executes one plugin, requiring confirmation when context is production tagged.
+  const executePlugin = useCallback(async () => {
+    const name = pluginAdminForm.name.trim();
+    if (!name) {
+      setPluginAdminMessage("Nom plugin requis.");
+      log("Execute plugin refuse: nom manquant", "warn");
+      return;
+    }
+
+    if (pluginAdminForm.production_tagged_context) {
+      const confirmed = globalThis.confirm(
+        "Contexte tagge production: confirmer l'execution diagnostique du plugin ?"
+      );
+      if (!confirmed) {
+        setPluginAdminMessage("Execution plugin annulee.");
+        return;
+      }
+    }
+
+    try {
+      const response = await fetch(`/plugins/${encodeURIComponent(name)}/execute`, {
+        method: "POST"
+      });
+      if (!response.ok) {
+        const details = await parseApiErrorMessage(response);
+        setPluginAdminMessage(`Execute plugin en echec: ${details}.`);
+        log(`Execute plugin ${name} en echec: ${details}`, "error");
+        return;
+      }
+
+      const payload = (await response.json()) as PluginActionResponse;
+      setPluginAdminMessage(`Plugin ${payload.plugin.name} ${payload.status}.`);
+      log(`Plugin ${payload.plugin.name} ${payload.status}`, "ok");
+      await refreshPluginInventory();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error";
+      setPluginAdminMessage("Erreur reseau lors de l'execution plugin.");
+      log(`Execute plugin ${name} en echec: ${message}`, "error");
+    }
+  }, [log, parseApiErrorMessage, pluginAdminForm, refreshPluginInventory]);
+
+  // Unloads one plugin after explicit operator confirmation.
+  const unloadPlugin = useCallback(async () => {
+    const name = pluginAdminForm.name.trim();
+    if (!name) {
+      setPluginAdminMessage("Nom plugin requis.");
+      log("Unload plugin refuse: nom manquant", "warn");
+      return;
+    }
+
+    const confirmed = globalThis.confirm(`Confirmer le dechargement du plugin ${name} ?`);
+    if (!confirmed) {
+      setPluginAdminMessage("Dechargement plugin annule.");
+      return;
+    }
+
+    try {
+      const response = await fetch(`/plugins/${encodeURIComponent(name)}/unload`, {
+        method: "POST"
+      });
+      if (!response.ok) {
+        const details = await parseApiErrorMessage(response);
+        setPluginAdminMessage(`Unload plugin en echec: ${details}.`);
+        log(`Unload plugin ${name} en echec: ${details}`, "error");
+        return;
+      }
+
+      const payload = (await response.json()) as PluginActionResponse;
+      setPluginAdminMessage(`Plugin ${payload.plugin.name} ${payload.status}.`);
+      log(`Plugin ${payload.plugin.name} ${payload.status}`, "ok");
+      await refreshPluginInventory();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error";
+      setPluginAdminMessage("Erreur reseau lors du dechargement plugin.");
+      log(`Unload plugin ${name} en echec: ${message}`, "error");
+    }
+  }, [log, parseApiErrorMessage, pluginAdminForm.name, refreshPluginInventory]);
+
   // Fetches worker list from worker API and updates worker panel state.
   const refreshWorkers = useCallback(async () => {
     try {
@@ -720,6 +929,7 @@ export function App() {
   useEffect(() => {
     log("Console initialisee", "ok");
     void refreshAll();
+    void refreshPluginInventory();
   }, [log, refreshAll]);
 
   // Keeps stardate indicator updated each minute.
@@ -1122,6 +1332,75 @@ export function App() {
                 ? `Worker ${selectedWorker.id}: ${selectedWorker.status}, active builds ${selectedWorker.active_builds}, last seen ${formatDateTime(selectedWorker.last_seen_at)}.`
                 : "Aucun worker selectionne pour diagnostic."}
             </p>
+          </article>
+
+          <article className="panel panel-form reveal" style={{ ["--delay" as string]: "0.115s" }}>
+            <h2>Plugin Administration</h2>
+            <form className="form" onSubmit={(event) => event.preventDefault()}>
+              <label>
+                <span>Plugin name</span>
+                <input
+                  name="plugin_admin_name"
+                  placeholder="net-diagnostics"
+                  required
+                  value={pluginAdminForm.name}
+                  onChange={(event) =>
+                    setPluginAdminForm((previous) => ({ ...previous, name: event.target.value }))
+                  }
+                />
+              </label>
+              <label>
+                <span>Production tagged context</span>
+                <input
+                  name="plugin_admin_production_tagged"
+                  type="checkbox"
+                  checked={pluginAdminForm.production_tagged_context}
+                  onChange={(event) =>
+                    setPluginAdminForm((previous) => ({
+                      ...previous,
+                      production_tagged_context: event.target.checked
+                    }))
+                  }
+                />
+              </label>
+              <div className="actions">
+                <button type="button" className="btn btn-ghost" onClick={() => void refreshPluginInventory()}>
+                  Refresh
+                </button>
+                <button type="button" className="btn btn-secondary" onClick={() => void loadPlugin()}>
+                  Load
+                </button>
+                <button type="button" className="btn btn-secondary" onClick={() => void initPlugin()}>
+                  Init
+                </button>
+                <button type="button" className="btn btn-secondary" onClick={() => void executePlugin()}>
+                  Execute
+                </button>
+                <button type="button" className="btn btn-primary" onClick={() => void unloadPlugin()}>
+                  Unload
+                </button>
+              </div>
+            </form>
+            <p className="hint">{pluginAdminMessage}</p>
+            <div className="list">
+              {pluginInventory.length === 0 ? (
+                <p className="hint">Aucun plugin charge.</p>
+              ) : (
+                pluginInventory.map((plugin) => (
+                  <div className="list-item" key={plugin.name}>
+                    <div>
+                      <p className="item-title">{plugin.name}</p>
+                      <p className="item-subtitle">
+                        {plugin.source_manifest_entry} | caps: {plugin.capabilities.join(", ") || "none"}
+                      </p>
+                    </div>
+                    <div className="actions">
+                      <span className="status pending">{plugin.state}</span>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
           </article>
 
           <article className="panel reveal" style={{ ["--delay" as string]: "0.12s" }}>
