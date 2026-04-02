@@ -1,5 +1,5 @@
 import { gql, useApolloClient } from "@apollo/client";
-import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type BuildStatus = "Pending" | "Running" | "Success" | "Failed" | "Canceled";
 type EventSeverity = "ok" | "error" | "warn" | "info";
@@ -71,6 +71,15 @@ interface CreateJobInput {
   name: string;
   repository_url: string;
   pipeline_path: string;
+}
+
+type ScmProvider = "github" | "gitlab";
+
+interface WebhookSecurityInput {
+  repository_url: string;
+  provider: ScmProvider;
+  secret: string;
+  allowed_ips_text: string;
 }
 
 const DASHBOARD_SNAPSHOT_QUERY = gql`
@@ -174,6 +183,15 @@ function formatTime(value?: string | null): string {
   return date.toLocaleTimeString();
 }
 
+// Normalizes allowlist text input into unique trimmed IP entries.
+function normalizeAllowlistInput(raw: string): string[] {
+  const values = raw
+    .split(/[,\n]/)
+    .map((value) => value.trim())
+    .filter((value) => value.length > 0);
+  return Array.from(new Set(values));
+}
+
 // Returns the display stardate used in the top HUD strip.
 function stardateValue(now: Date): string {
   const yearStart = new Date(now.getFullYear(), 0, 1);
@@ -201,6 +219,15 @@ export function App() {
     repository_url: "",
     pipeline_path: ""
   });
+  const [webhookForm, setWebhookForm] = useState<WebhookSecurityInput>({
+    repository_url: "",
+    provider: "github",
+    secret: "",
+    allowed_ips_text: ""
+  });
+  const [webhookMessage, setWebhookMessage] = useState("");
+  const [showWebhookSecret, setShowWebhookSecret] = useState(false);
+  const [knownWebhookConfigs, setKnownWebhookConfigs] = useState<Set<string>>(new Set());
   const [stardate, setStardate] = useState(() => stardateValue(new Date()));
 
   // Prepends one log line to keep operator feedback visible.
@@ -228,9 +255,9 @@ export function App() {
   const scheduleRefresh = useCallback(
     (delayMs: number = 120) => {
       if (refreshTimerRef.current) {
-        window.clearTimeout(refreshTimerRef.current);
+        globalThis.clearTimeout(refreshTimerRef.current);
       }
-      refreshTimerRef.current = window.setTimeout(() => {
+      refreshTimerRef.current = globalThis.setTimeout(() => {
         refreshTimerRef.current = null;
         void refreshAll();
       }, delayMs);
@@ -291,7 +318,7 @@ export function App() {
 
   // Creates a job from form payload and refreshes dashboard data.
   const createJob = useCallback(
-    async (event: FormEvent<HTMLFormElement>) => {
+    async (event: { preventDefault: () => void }) => {
       event.preventDefault();
       setCreateMessage("Creation en cours...");
 
@@ -318,6 +345,76 @@ export function App() {
     [client, form, log, refreshAll]
   );
 
+  // Saves webhook security settings for one repository/provider pair.
+  const saveWebhookSecurityConfig = useCallback(
+    async (event: { preventDefault: () => void }) => {
+      event.preventDefault();
+      const repository = webhookForm.repository_url.trim();
+      const secret = webhookForm.secret.trim();
+      const configKey = `${repository.toLowerCase()}::${webhookForm.provider}`;
+
+      if (!repository || !secret) {
+        setWebhookMessage("Parametres invalides: repository et secret requis.");
+        log("Configuration webhook invalide: repository/secret manquant", "warn");
+        return;
+      }
+
+      if (knownWebhookConfigs.has(configKey)) {
+        const confirmed = globalThis.confirm(
+          "Une configuration existe deja pour ce repository/provider. Confirmer l'ecrasement ?"
+        );
+        if (!confirmed) {
+          setWebhookMessage("Ecrasement annule.");
+          return;
+        }
+      }
+
+      const payload = {
+        repository_url: repository,
+        provider: webhookForm.provider,
+        secret,
+        allowed_ips: normalizeAllowlistInput(webhookForm.allowed_ips_text)
+      };
+
+      try {
+        const response = await fetch("/scm/webhook-security/configs", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json"
+          },
+          body: JSON.stringify(payload)
+        });
+
+        if (response.status === 204) {
+          setWebhookMessage("Configuration webhook enregistree.");
+          setKnownWebhookConfigs((previous) => new Set(previous).add(configKey));
+          log(`Webhook security sauvegardee pour ${repository} (${webhookForm.provider})`, "ok");
+          return;
+        }
+
+        if (response.status === 400) {
+          setWebhookMessage("Configuration invalide.");
+          log("Rejet de configuration webhook: payload invalide", "warn");
+          return;
+        }
+
+        if (response.status === 403) {
+          setWebhookMessage("Configuration refusee (forbidden).");
+          log("Configuration webhook refusee (403)", "error");
+          return;
+        }
+
+        setWebhookMessage("Erreur interne lors de la sauvegarde webhook.");
+        log(`Configuration webhook en echec: HTTP ${response.status}`, "error");
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Unknown error";
+        setWebhookMessage("Erreur reseau lors de la sauvegarde webhook.");
+        log(`Configuration webhook en echec: ${message}`, "error");
+      }
+    },
+    [knownWebhookConfigs, log, webhookForm]
+  );
+
   // Initializes dashboard data and baseline log once on first mount.
   useEffect(() => {
     log("Console initialisee", "ok");
@@ -326,25 +423,25 @@ export function App() {
 
   // Keeps stardate indicator updated each minute.
   useEffect(() => {
-    const id = window.setInterval(() => {
+    const id = globalThis.setInterval(() => {
       setStardate(stardateValue(new Date()));
     }, 60000);
-    return () => window.clearInterval(id);
+    return () => globalThis.clearInterval(id);
   }, []);
 
   // Polling fallback ensures updates continue while SSE is disconnected.
   useEffect(() => {
-    const id = window.setInterval(() => {
+    const id = globalThis.setInterval(() => {
       if (!streamConnected) {
         void refreshAll();
       }
     }, 5000);
-    return () => window.clearInterval(id);
+    return () => globalThis.clearInterval(id);
   }, [streamConnected, refreshAll]);
 
   // Opens SSE stream and wires realtime events to logs + snapshot refresh.
   useEffect(() => {
-    if (typeof window.EventSource === "undefined") {
+    if (globalThis.EventSource === undefined) {
       log("EventSource non supporte, mode polling uniquement", "warn");
       return;
     }
@@ -385,7 +482,7 @@ export function App() {
   useEffect(() => {
     return () => {
       if (refreshTimerRef.current) {
-        window.clearTimeout(refreshTimerRef.current);
+        globalThis.clearTimeout(refreshTimerRef.current);
       }
     };
   }, []);
@@ -439,7 +536,7 @@ export function App() {
             <h2>Nouveau Job</h2>
             <form className="form" onSubmit={(event) => void createJob(event)}>
               <label>
-                Nom du job
+                <span>Nom du job</span>
                 <input
                   name="name"
                   placeholder="build-api"
@@ -449,7 +546,7 @@ export function App() {
                 />
               </label>
               <label>
-                Depot git
+                <span>Depot git</span>
                 <input
                   name="repository_url"
                   placeholder="https://example.com/project.git"
@@ -459,7 +556,7 @@ export function App() {
                 />
               </label>
               <label>
-                Pipeline file
+                <span>Pipeline file</span>
                 <input
                   name="pipeline_path"
                   placeholder="pipelines/api.yml"
@@ -473,6 +570,91 @@ export function App() {
               </button>
             </form>
             <p className="hint">{createMessage}</p>
+          </article>
+
+          <article className="panel panel-form reveal" style={{ ["--delay" as string]: "0.06s" }}>
+            <h2>SCM Webhook Security</h2>
+            <form className="form" onSubmit={(event) => void saveWebhookSecurityConfig(event)}>
+              <label>
+                <span>Repository URL</span>
+                <input
+                  name="webhook_repository_url"
+                  placeholder="https://example.com/repo.git"
+                  required
+                  value={webhookForm.repository_url}
+                  onChange={(event) =>
+                    setWebhookForm((previous) => ({ ...previous, repository_url: event.target.value }))
+                  }
+                />
+              </label>
+              <label>
+                <span>Provider</span>
+                <select
+                  name="webhook_provider"
+                  value={webhookForm.provider}
+                  onChange={(event) =>
+                    setWebhookForm((previous) => ({
+                      ...previous,
+                      provider: event.target.value as ScmProvider
+                    }))
+                  }
+                >
+                  <option value="github">github</option>
+                  <option value="gitlab">gitlab</option>
+                </select>
+              </label>
+              <label>
+                <span>Secret</span>
+                <input
+                  name="webhook_secret"
+                  type={showWebhookSecret ? "text" : "password"}
+                  placeholder="super-secret"
+                  required
+                  value={webhookForm.secret}
+                  onChange={(event) => setWebhookForm((previous) => ({ ...previous, secret: event.target.value }))}
+                />
+              </label>
+              <div className="actions">
+                <button
+                  className="btn btn-small btn-secondary"
+                  type="button"
+                  onClick={() => setShowWebhookSecret((previous) => !previous)}
+                >
+                  {showWebhookSecret ? "Masquer" : "Reveler"}
+                </button>
+              </div>
+              <label>
+                <span>IP allowlist (comma/newline)</span>
+                <textarea
+                  name="webhook_allowed_ips"
+                  placeholder="203.0.113.10, 198.51.100.20"
+                  value={webhookForm.allowed_ips_text}
+                  onChange={(event) =>
+                    setWebhookForm((previous) => ({ ...previous, allowed_ips_text: event.target.value }))
+                  }
+                />
+              </label>
+              <div className="actions">
+                <button type="submit" className="btn btn-primary">
+                  Enregistrer
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  onClick={() =>
+                    setWebhookForm({
+                      repository_url: "",
+                      provider: "github",
+                      secret: "",
+                      allowed_ips_text: ""
+                    })
+                  }
+                >
+                  Effacer
+                </button>
+              </div>
+            </form>
+            <p className="hint">{webhookMessage}</p>
           </article>
 
           <article className="panel reveal" style={{ ["--delay" as string]: "0.12s" }}>

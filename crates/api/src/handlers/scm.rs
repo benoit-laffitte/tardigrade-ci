@@ -8,7 +8,7 @@ use axum::{
 
 use crate::{
     ApiError, ApiErrorResponse, ApiState, ScmPollingTickResponse, ScmWebhookAcceptedResponse,
-    UpsertScmPollingConfigRequest,
+    UpsertScmPollingConfigRequest, UpsertWebhookSecurityConfigRequest,
 };
 
 /// Ingests one SCM webhook with strict signature, replay-window, and IP allowlist checks.
@@ -79,6 +79,15 @@ pub(crate) async fn upsert_scm_polling_config(
     Json(payload): Json<UpsertScmPollingConfigRequest>,
 ) -> Result<StatusCode, StatusCode> {
     state.upsert_scm_polling_config(payload).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// Upserts webhook security configuration for one repository/provider.
+pub(crate) async fn upsert_webhook_security_config(
+    State(state): State<ApiState>,
+    Json(payload): Json<UpsertWebhookSecurityConfigRequest>,
+) -> Result<StatusCode, StatusCode> {
+    state.upsert_webhook_security_config(payload).await?;
     Ok(StatusCode::NO_CONTENT)
 }
 

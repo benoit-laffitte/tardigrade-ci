@@ -29,6 +29,52 @@ async fn read_json(response: axum::response::Response) -> Value {
 }
 
 #[tokio::test]
+/// Accepts valid webhook security config upsert through admin endpoint.
+async fn scm_webhook_security_config_upsert_endpoint_accepts_valid_payload() {
+    let state = ApiState::new("tardigrade-ci-test");
+    let app = tardigrade_api::build_router(state);
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/scm/webhook-security/configs")
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(
+                    br#"{"repository_url":"https://example.com/repo.git","provider":"github","secret":"super-secret","allowed_ips":["203.0.113.10"]}"#.to_vec(),
+                ))
+                .expect("valid request"),
+        )
+        .await
+        .expect("response");
+
+    assert_eq!(response.status(), StatusCode::NO_CONTENT);
+}
+
+#[tokio::test]
+/// Rejects webhook security upsert when required fields are empty.
+async fn scm_webhook_security_config_upsert_endpoint_rejects_invalid_payload() {
+    let state = ApiState::new("tardigrade-ci-test");
+    let app = tardigrade_api::build_router(state);
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/scm/webhook-security/configs")
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(
+                    br#"{"repository_url":"https://example.com/repo.git","provider":"github","secret":"   "}"#.to_vec(),
+                ))
+                .expect("valid request"),
+        )
+        .await
+        .expect("response");
+
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
 /// Accepts a valid GitHub webhook when signature, replay window, and allowlist all match.
 async fn scm_webhook_github_valid_signature_is_accepted() {
     let state = ApiState::new("tardigrade-ci-test");

@@ -6,7 +6,8 @@ use crate::graphql::{MutationRoot, QueryRoot};
 use crate::handlers::{
     cancel_build, create_job, dead_letter_builds, events, graphql_handler, graphql_playground,
     health, ingest_scm_webhook, list_builds, list_jobs, list_workers, live, metrics, ready,
-    run_job, run_scm_polling_tick, upsert_scm_polling_config, worker_claim_build,
+    run_job, run_scm_polling_tick, upsert_scm_polling_config, upsert_webhook_security_config,
+    worker_claim_build,
     worker_complete_build,
 };
 
@@ -30,6 +31,7 @@ pub fn build_router(state: ApiState) -> Router {
         .route("/builds", get(list_builds))
         .route("/workers", get(list_workers))
         .route("/webhooks/scm", post(ingest_scm_webhook))
+        .route("/scm/webhook-security/configs", post(upsert_webhook_security_config))
         .route("/scm/polling/configs", post(upsert_scm_polling_config))
         .route("/scm/polling/tick", post(run_scm_polling_tick))
         .route("/jobs/{id}/run", post(run_job))

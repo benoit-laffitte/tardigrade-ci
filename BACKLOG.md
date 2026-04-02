@@ -341,7 +341,7 @@ Refinement outcome for `UIADM-10` (2026-04-02):
 - Testability requirement: all runbook procedures must be executable in staging using seeded demo scenarios.
 - Exit criteria: new operator can complete core admin tasks without API/CLI fallback using only documented runbook steps.
 
-- [ ] `UIADM-01` Add SCM webhook administration panel (repository/provider/secret/allowlist management).
+- [-] `UIADM-01` Add SCM webhook administration panel (repository/provider/secret/allowlist management).
 - [ ] `UIADM-02` Add SCM polling administration panel (enable/disable, intervals, branches, manual tick).
 - [ ] `UIADM-03` Add worker control panel (manual claim/complete simulation and ownership diagnostics).
 - [ ] `UIADM-04` Add plugin administration panel (manifest entries, lifecycle state, declared capabilities).
