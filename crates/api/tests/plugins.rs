@@ -17,13 +17,14 @@ async fn read_json(response: axum::response::Response) -> Value {
 
 /// Builds a JSON POST request with optional body payload.
 fn json_post(uri: &str, body: Option<&str>) -> Request<Body> {
+    let payload = body.unwrap_or("{}").to_string();
     let mut builder = Request::builder().method("POST").uri(uri);
     if body.is_some() {
         builder = builder.header(header::CONTENT_TYPE, "application/json");
     }
 
     builder
-        .body(Body::from(body.unwrap_or("{}")))
+        .body(Body::from(payload))
         .expect("valid request")
 }
 

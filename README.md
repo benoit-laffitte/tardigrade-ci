@@ -182,12 +182,17 @@ env -u https_proxy -u http_proxy -u PXY_FAB_FONC cargo test --workspace postgres
 - POST /builds/{id}/cancel
 - GET /builds
 - GET /workers
+- GET /plugins
+- POST /plugins
 - POST /webhooks/scm
 - POST /scm/webhook-security/configs
 - POST /scm/polling/configs
 - POST /scm/polling/tick
 - POST /workers/{worker_id}/claim
 - POST /workers/{worker_id}/builds/{id}/complete
+- POST /plugins/{name}/init
+- POST /plugins/{name}/execute
+- POST /plugins/{name}/unload
 
 GraphQL snapshot example (single request for dashboard panels):
 
