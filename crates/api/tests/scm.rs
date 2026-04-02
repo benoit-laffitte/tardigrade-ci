@@ -7,8 +7,9 @@ use hmac::{Hmac, Mac};
 use serde_json::Value;
 use sha2::Sha256;
 use tardigrade_api::{
-    ApiState, CreateJobResponse, ListBuildsResponse, RuntimeMetricsResponse, ScmPollingTickResponse,
-    ScmWebhookAcceptedResponse, UpsertScmPollingConfigRequest, UpsertWebhookSecurityConfigRequest,
+    ApiState, CreateJobResponse, ListBuildsResponse, ListScmWebhookRejectionsResponse,
+    RuntimeMetricsResponse, ScmPollingTickResponse, ScmWebhookAcceptedResponse,
+    UpsertScmPollingConfigRequest, UpsertWebhookSecurityConfigRequest,
 };
 use tardigrade_core::ScmProvider;
 use tower::ServiceExt;
@@ -193,6 +194,146 @@ async fn scm_webhook_missing_signature_is_unauthorized() {
         .expect("response");
 
     assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+/// Exposes webhook rejection diagnostics timeline with reason/provider/repository fields.
+async fn scm_webhook_rejection_diagnostics_expose_reason_timeline() {
+    let state = ApiState::new("tardigrade-ci-test");
+    state
+        .upsert_webhook_security_config(UpsertWebhookSecurityConfigRequest {
+            repository_url: "https://example.com/repo.git".to_string(),
+            provider: ScmProvider::Github,
+            secret: "super-secret".to_string(),
+            allowed_ips: vec!["203.0.113.10".to_string()],
+        })
+        .await
+        .expect("upsert webhook config");
+    let app = tardigrade_api::build_router(state);
+
+    let _ = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/webhooks/scm")
+                .header("x-scm-provider", "github")
+                .header("x-scm-repository", "https://example.com/repo.git")
+                .header("x-scm-timestamp", Utc::now().timestamp().to_string())
+                .header("x-forwarded-for", "203.0.113.10")
+                .body(Body::from(br#"{"event":"push"}"#.to_vec()))
+                .expect("valid request"),
+        )
+        .await
+        .expect("response");
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/scm/webhook-security/rejections?provider=github&repository_url=https%3A%2F%2Fexample.com%2Frepo.git")
+                .body(Body::empty())
+                .expect("valid request"),
+        )
+        .await
+        .expect("response");
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let payload: ListScmWebhookRejectionsResponse =
+        serde_json::from_value(read_json(response).await).expect("diagnostics payload");
+    assert!(!payload.rejections.is_empty());
+
+    let first = &payload.rejections[0];
+    assert_eq!(first.reason_code, "invalid_webhook_signature");
+    assert_eq!(first.provider.as_deref(), Some("github"));
+    assert_eq!(
+        first.repository_url.as_deref(),
+        Some("https://example.com/repo.git")
+    );
+    assert!(!first.at.is_empty());
+}
+
+#[tokio::test]
+/// Filters diagnostics by provider so unrelated rejection events stay excluded.
+async fn scm_webhook_rejection_diagnostics_provider_filter_excludes_others() {
+    let state = ApiState::new("tardigrade-ci-test");
+    state
+        .upsert_webhook_security_config(UpsertWebhookSecurityConfigRequest {
+            repository_url: "https://example.com/repo.git".to_string(),
+            provider: ScmProvider::Github,
+            secret: "super-secret".to_string(),
+            allowed_ips: vec!["203.0.113.10".to_string()],
+        })
+        .await
+        .expect("upsert github config");
+    state
+        .upsert_webhook_security_config(UpsertWebhookSecurityConfigRequest {
+            repository_url: "https://gitlab.example.com/group/repo.git".to_string(),
+            provider: ScmProvider::Gitlab,
+            secret: "gitlab-secret".to_string(),
+            allowed_ips: vec!["192.0.2.42".to_string()],
+        })
+        .await
+        .expect("upsert gitlab config");
+
+    let app = tardigrade_api::build_router(state);
+
+    let _ = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/webhooks/scm")
+                .header("x-scm-provider", "github")
+                .header("x-scm-repository", "https://example.com/repo.git")
+                .header("x-scm-timestamp", Utc::now().timestamp().to_string())
+                .header("x-forwarded-for", "203.0.113.10")
+                .body(Body::from(br#"{"event":"push"}"#.to_vec()))
+                .expect("valid request"),
+        )
+        .await
+        .expect("github response");
+
+    let _ = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/webhooks/scm")
+                .header("x-scm-provider", "gitlab")
+                .header(
+                    "x-scm-repository",
+                    "https://gitlab.example.com/group/repo.git",
+                )
+                .header("x-scm-timestamp", Utc::now().timestamp().to_string())
+                .header("x-forwarded-for", "192.0.2.42")
+                .body(Body::from(br#"{"event":"push"}"#.to_vec()))
+                .expect("valid request"),
+        )
+        .await
+        .expect("gitlab response");
+
+    let filtered = app
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/scm/webhook-security/rejections?provider=gitlab")
+                .body(Body::empty())
+                .expect("valid request"),
+        )
+        .await
+        .expect("filtered response");
+
+    assert_eq!(filtered.status(), StatusCode::OK);
+    let payload: ListScmWebhookRejectionsResponse =
+        serde_json::from_value(read_json(filtered).await).expect("diagnostics payload");
+    assert!(!payload.rejections.is_empty());
+    assert!(
+        payload
+            .rejections
+            .iter()
+            .all(|entry| entry.provider.as_deref() == Some("gitlab"))
+    );
 }
 
 #[tokio::test]

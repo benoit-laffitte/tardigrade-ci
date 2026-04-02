@@ -1,7 +1,7 @@
 use chrono::{DateTime, Duration as ChronoDuration, Utc};
 use std::time::Duration;
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{HashMap, HashSet, VecDeque},
     sync::{Arc, Mutex},
 };
 use tardigrade_core::{BuildRecord, JobDefinition, PipelineDefinition};
@@ -17,9 +17,21 @@ use super::{
     validate_replay_window, verify_signature,
 };
 use crate::{
-    ApiError, CreateJobRequest, LiveEvent, RuntimeMetricsResponse, ScmPollingTickResponse,
-    ServiceSettings, WorkerBuildStatus, WorkerInfo,
+    ApiError, CreateJobRequest, LiveEvent, RuntimeMetricsResponse,
+    ScmWebhookRejectionEntry, ScmPollingTickResponse, ServiceSettings, WorkerBuildStatus,
+    WorkerInfo,
 };
+
+const WEBHOOK_REJECTION_HISTORY_LIMIT: usize = 100;
+
+/// Internal diagnostics entry for one rejected SCM webhook request.
+#[derive(Clone)]
+struct WebhookRejectionRecord {
+    reason_code: String,
+    provider: Option<String>,
+    repository_url: Option<String>,
+    at: DateTime<Utc>,
+}
 
 /// Service owns all domain orchestration (storage, scheduler, metrics, events).
 #[derive(Clone)]
@@ -39,6 +51,8 @@ pub(crate) struct CiService {
     /// seen_webhook_events stores recent dedup keys to enforce idempotent ingestion.
     pub(crate) seen_webhook_events: Arc<Mutex<HashMap<String, DateTime<Utc>>>>,
     pub(crate) webhook_dedup_ttl: Duration,
+    /// webhook_rejections stores recent rejection diagnostics for operator troubleshooting.
+    pub(crate) webhook_rejections: Arc<Mutex<VecDeque<WebhookRejectionRecord>>>,
     /// Internal broadcast bus feeding the SSE /events endpoint.
     pub(crate) event_tx: broadcast::Sender<LiveEvent>,
 }
@@ -64,6 +78,7 @@ impl CiService {
             dead_letter_builds: Arc::new(Mutex::new(HashSet::new())),
             seen_webhook_events: Arc::new(Mutex::new(HashMap::new())),
             webhook_dedup_ttl: Duration::from_secs(settings.webhook_dedup_ttl_secs),
+            webhook_rejections: Arc::new(Mutex::new(VecDeque::new())),
             event_tx,
         }
     }
@@ -177,6 +192,88 @@ impl CiService {
         if let Ok(mut metrics) = self.metrics.lock() {
             metrics.scm_webhook_rejected_total += 1;
         }
+    }
+
+    /// Stores one rejected webhook diagnostic entry for UI troubleshooting filters.
+    pub(crate) fn record_scm_webhook_rejection(
+        &self,
+        reason_code: &str,
+        provider: Option<&str>,
+        repository_url: Option<&str>,
+    ) {
+        let Ok(mut history) = self.webhook_rejections.lock() else {
+            return;
+        };
+
+        history.push_front(WebhookRejectionRecord {
+            reason_code: reason_code.to_string(),
+            provider: provider.map(ToString::to_string),
+            repository_url: repository_url.map(ToString::to_string),
+            at: Utc::now(),
+        });
+
+        while history.len() > WEBHOOK_REJECTION_HISTORY_LIMIT {
+            let _ = history.pop_back();
+        }
+    }
+
+    /// Lists recent rejection diagnostics, optionally filtered by provider/repository and limit.
+    pub(crate) fn list_scm_webhook_rejections(
+        &self,
+        provider: Option<&str>,
+        repository_url: Option<&str>,
+        limit: usize,
+    ) -> Vec<ScmWebhookRejectionEntry> {
+        let Ok(history) = self.webhook_rejections.lock() else {
+            return Vec::new();
+        };
+
+        let provider_filter = provider
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(str::to_ascii_lowercase);
+        let repository_filter = repository_url
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(str::to_string);
+
+        let max_items = limit.min(WEBHOOK_REJECTION_HISTORY_LIMIT);
+
+        history
+            .iter()
+            .filter(|record| {
+                if let Some(filter) = provider_filter.as_ref() {
+                    let matches = record
+                        .provider
+                        .as_ref()
+                        .map(|value| value.eq_ignore_ascii_case(filter))
+                        .unwrap_or(false);
+                    if !matches {
+                        return false;
+                    }
+                }
+
+                if let Some(filter) = repository_filter.as_ref() {
+                    let matches = record
+                        .repository_url
+                        .as_ref()
+                        .map(|value| value == filter)
+                        .unwrap_or(false);
+                    if !matches {
+                        return false;
+                    }
+                }
+
+                true
+            })
+            .take(max_items)
+            .map(|record| ScmWebhookRejectionEntry {
+                reason_code: record.reason_code.clone(),
+                provider: record.provider.clone(),
+                repository_url: record.repository_url.clone(),
+                at: record.at.to_rfc3339(),
+            })
+            .collect()
     }
 
     /// Updates worker heartbeat timestamp for dashboard visibility.

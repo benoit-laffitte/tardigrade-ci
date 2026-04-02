@@ -1,5 +1,6 @@
 use axum::http::StatusCode;
 use chrono::Utc;
+use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tardigrade_plugins::{
@@ -11,8 +12,11 @@ use tardigrade_storage::{InMemoryStorage, Storage};
 
 use crate::service::CiService;
 use crate::{
-    PluginInfo, ServiceSettings, UpsertScmPollingConfigRequest, UpsertWebhookSecurityConfigRequest,
+    PluginAuthorizationCheckResponse, PluginInfo, PluginPolicyResponse, ServiceSettings,
+    UpsertScmPollingConfigRequest, UpsertWebhookSecurityConfigRequest,
 };
+
+const GLOBAL_POLICY_CONTEXT: &str = "global";
 
 /// Shared runtime state injected into HTTP and GraphQL handlers.
 #[derive(Clone)]
@@ -22,6 +26,8 @@ pub struct ApiState {
     pub(crate) service: Arc<CiService>,
     /// Plugin registry stores loaded lifecycle state for administration endpoints.
     pub(crate) plugin_registry: Arc<Mutex<PluginRegistry>>,
+    /// Plugin policy store maps execution context to granted capabilities.
+    pub(crate) plugin_policy_store: Arc<Mutex<BTreeMap<String, Vec<PluginCapability>>>>,
     pub(crate) run_embedded_worker: bool,
 }
 
@@ -80,6 +86,7 @@ impl ApiState {
             service_name: service_name.into(),
             service: Arc::new(CiService::new(storage, scheduler, settings)),
             plugin_registry: Arc::new(Mutex::new(PluginRegistry::default())),
+            plugin_policy_store: Arc::new(Mutex::new(BTreeMap::new())),
             run_embedded_worker,
         }
     }
@@ -139,6 +146,106 @@ impl ApiState {
             .map_err(|_| PluginLifecycleError::ExecutionFailed)?;
         registry.unload(name)?;
         plugin_info_from_registry(&registry, name).ok_or(PluginLifecycleError::NotFound)
+    }
+
+    /// Upserts granted capabilities for one plugin policy context.
+    pub fn upsert_plugin_policy(
+        &self,
+        context: Option<&str>,
+        granted_capabilities: Vec<String>,
+    ) -> Result<PluginPolicyResponse, StatusCode> {
+        let normalized_context = normalize_policy_context(context);
+        let parsed = parse_and_normalize_capabilities(&granted_capabilities)
+            .map_err(|_| StatusCode::BAD_REQUEST)?;
+
+        let mut store = self
+            .plugin_policy_store
+            .lock()
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        store.insert(normalized_context.clone(), parsed.clone());
+
+        Ok(PluginPolicyResponse {
+            context: normalized_context,
+            granted_capabilities: parsed
+                .iter()
+                .copied()
+                .map(plugin_capability_as_str)
+                .map(ToString::to_string)
+                .collect(),
+        })
+    }
+
+    /// Returns current granted capabilities for one context with global fallback.
+    pub fn plugin_policy(&self, context: Option<&str>) -> Result<PluginPolicyResponse, StatusCode> {
+        let normalized_context = normalize_policy_context(context);
+        let store = self
+            .plugin_policy_store
+            .lock()
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+        let granted = resolve_granted_capabilities(&store, &normalized_context);
+        Ok(PluginPolicyResponse {
+            context: normalized_context,
+            granted_capabilities: granted
+                .into_iter()
+                .map(plugin_capability_as_str)
+                .map(ToString::to_string)
+                .collect(),
+        })
+    }
+
+    /// Evaluates whether one plugin is authorized in one context and returns missing capabilities.
+    pub fn plugin_authorization_check(
+        &self,
+        plugin_name: &str,
+        context: Option<&str>,
+    ) -> Result<PluginAuthorizationCheckResponse, StatusCode> {
+        let normalized_context = normalize_policy_context(context);
+
+        let registry = self
+            .plugin_registry
+            .lock()
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        let required = registry
+            .capabilities(plugin_name)
+            .ok_or(StatusCode::NOT_FOUND)?;
+        drop(registry);
+
+        let store = self
+            .plugin_policy_store
+            .lock()
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        let granted = resolve_granted_capabilities(&store, &normalized_context);
+
+        let missing: Vec<PluginCapability> = required
+            .iter()
+            .copied()
+            .filter(|capability| !granted.contains(capability))
+            .collect();
+
+        Ok(PluginAuthorizationCheckResponse {
+            plugin_name: plugin_name.to_string(),
+            context: normalized_context,
+            required_capabilities: required
+                .iter()
+                .copied()
+                .map(plugin_capability_as_str)
+                .map(ToString::to_string)
+                .collect(),
+            granted_capabilities: granted
+                .iter()
+                .copied()
+                .map(plugin_capability_as_str)
+                .map(ToString::to_string)
+                .collect(),
+            missing_capabilities: missing
+                .iter()
+                .copied()
+                .map(plugin_capability_as_str)
+                .map(ToString::to_string)
+                .collect(),
+            allowed: missing.is_empty(),
+        })
     }
 
     /// Upserts one repository-level webhook verification configuration.
@@ -237,6 +344,56 @@ fn plugin_capability_as_str(capability: PluginCapability) -> &'static str {
         PluginCapability::Secrets => "secrets",
         PluginCapability::RuntimeHooks => "runtime_hooks",
     }
+}
+
+/// Parses capability strings, validates them, and normalizes ordering/deduplication.
+fn parse_and_normalize_capabilities(
+    capabilities: &[String],
+) -> Result<Vec<PluginCapability>, &'static str> {
+    let mut parsed = Vec::with_capacity(capabilities.len());
+    for capability in capabilities {
+        let parsed_capability = match capability.trim().to_ascii_lowercase().as_str() {
+            "network" => PluginCapability::Network,
+            "filesystem" => PluginCapability::Filesystem,
+            "secrets" => PluginCapability::Secrets,
+            "runtime_hooks" => PluginCapability::RuntimeHooks,
+            _ => return Err("unknown capability"),
+        };
+        parsed.push(parsed_capability);
+    }
+
+    parsed.sort();
+    parsed.dedup();
+    Ok(parsed)
+}
+
+/// Normalizes policy context and falls back to global context when absent.
+fn normalize_policy_context(context: Option<&str>) -> String {
+    let Some(value) = context else {
+        return GLOBAL_POLICY_CONTEXT.to_string();
+    };
+
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return GLOBAL_POLICY_CONTEXT.to_string();
+    }
+
+    trimmed.to_string()
+}
+
+/// Resolves granted capabilities for context with fallback to global default context.
+fn resolve_granted_capabilities(
+    store: &BTreeMap<String, Vec<PluginCapability>>,
+    context: &str,
+) -> Vec<PluginCapability> {
+    if let Some(capabilities) = store.get(context) {
+        return capabilities.clone();
+    }
+
+    store
+        .get(GLOBAL_POLICY_CONTEXT)
+        .cloned()
+        .unwrap_or_default()
 }
 
 /// Resolves one built-in plugin implementation by stable name.

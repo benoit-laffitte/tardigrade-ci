@@ -128,10 +128,54 @@ interface PluginAdminInput {
   production_tagged_context: boolean;
 }
 
+interface PluginPolicyInput {
+  context: string;
+  granted_capabilities: string[];
+}
+
+interface PluginPolicyResponse {
+  context: string;
+  granted_capabilities: string[];
+}
+
+interface PluginAuthorizationCheckResponse {
+  plugin_name: string;
+  context: string;
+  required_capabilities: string[];
+  granted_capabilities: string[];
+  missing_capabilities: string[];
+  allowed: boolean;
+}
+
+interface ScmWebhookRejectionEntry {
+  reason_code: string;
+  provider?: string;
+  repository_url?: string;
+  at: string;
+}
+
+interface ListScmWebhookRejectionsResponse {
+  rejections: ScmWebhookRejectionEntry[];
+}
+
+interface RuntimeMetricsApiResponse {
+  scm_webhook_received_total: number;
+  scm_webhook_accepted_total: number;
+  scm_webhook_rejected_total: number;
+  scm_webhook_duplicate_total: number;
+}
+
+interface ScmWebhookOpsFilter {
+  provider: string;
+  repository_url: string;
+}
+
 interface ApiErrorPayload {
   code?: string;
   message?: string;
 }
+
+const PLUGIN_CAPABILITY_OPTIONS = ["network", "filesystem", "secrets", "runtime_hooks"];
 
 type WorkerCompletionStatus = "success" | "failed";
 
@@ -262,6 +306,11 @@ function normalizeBranchesInput(raw: string): string[] {
   return normalizeDelimitedInput(raw);
 }
 
+// Computes missing capabilities from required/granted sets for policy explainability.
+function missingCapabilities(required: string[], granted: string[]): string[] {
+  return required.filter((capability) => !granted.includes(capability));
+}
+
 // Returns the display stardate used in the top HUD strip.
 function stardateValue(now: Date): string {
   const yearStart = new Date(now.getFullYear(), 0, 1);
@@ -322,6 +371,22 @@ export function App() {
   });
   const [pluginAdminMessage, setPluginAdminMessage] = useState("");
   const [pluginInventory, setPluginInventory] = useState<PluginInfo[]>([]);
+  const [pluginPolicyForm, setPluginPolicyForm] = useState<PluginPolicyInput>({
+    context: "global",
+    granted_capabilities: []
+  });
+  const [pluginPolicyMessage, setPluginPolicyMessage] = useState("");
+  const [pluginAuthorizationResult, setPluginAuthorizationResult] =
+    useState<PluginAuthorizationCheckResponse | null>(null);
+  const [effectivePolicyContext, setEffectivePolicyContext] = useState("global");
+  const [effectiveGrantedCapabilities, setEffectiveGrantedCapabilities] = useState<string[]>([]);
+  const [scmWebhookOpsFilter, setScmWebhookOpsFilter] = useState<ScmWebhookOpsFilter>({
+    provider: "",
+    repository_url: ""
+  });
+  const [scmWebhookOpsMessage, setScmWebhookOpsMessage] = useState("");
+  const [scmWebhookMetrics, setScmWebhookMetrics] = useState<RuntimeMetricsApiResponse | null>(null);
+  const [scmWebhookRejections, setScmWebhookRejections] = useState<ScmWebhookRejectionEntry[]>([]);
   const [stardate, setStardate] = useState(() => stardateValue(new Date()));
 
   // Prepends one log line to keep operator feedback visible.
@@ -787,6 +852,204 @@ export function App() {
     }
   }, [log, parseApiErrorMessage, pluginAdminForm.name, refreshPluginInventory]);
 
+  // Toggles one capability in plugin policy form while preserving uniqueness.
+  const togglePluginPolicyCapability = useCallback((capability: string, checked: boolean) => {
+    setPluginPolicyForm((previous) => {
+      const nextCapabilities = checked
+        ? Array.from(new Set([...previous.granted_capabilities, capability]))
+        : previous.granted_capabilities.filter((value) => value !== capability);
+      return { ...previous, granted_capabilities: nextCapabilities };
+    });
+  }, []);
+
+  // Loads effective policy values for selected context and syncs form toggles.
+  const loadPluginPolicy = useCallback(async () => {
+    const context = pluginPolicyForm.context.trim() || "global";
+    try {
+      const response = await fetch(`/plugins/policies?context=${encodeURIComponent(context)}`, {
+        method: "GET"
+      });
+
+      if (!response.ok) {
+        const details = await parseApiErrorMessage(response);
+        setPluginPolicyMessage(`Chargement policy en echec: ${details}.`);
+        log(`Chargement policy plugin en echec (${context}): ${details}`, "error");
+        return;
+      }
+
+      const payload = (await response.json()) as PluginPolicyResponse;
+      setEffectivePolicyContext(payload.context);
+      setEffectiveGrantedCapabilities(payload.granted_capabilities);
+      setPluginPolicyForm((previous) => ({
+        ...previous,
+        context: payload.context,
+        granted_capabilities: payload.granted_capabilities
+      }));
+      setPluginPolicyMessage(
+        `Policy chargee (${payload.context}): ${payload.granted_capabilities.join(", ") || "none"}.`
+      );
+      log(
+        `Policy plugin chargee (${payload.context}) caps=${payload.granted_capabilities.join(",") || "none"}`,
+        "ok"
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error";
+      setPluginPolicyMessage("Erreur reseau lors du chargement policy.");
+      log(`Chargement policy plugin en echec (${context}): ${message}`, "error");
+    }
+  }, [log, parseApiErrorMessage, pluginPolicyForm.context]);
+
+  // Saves granted capabilities for selected plugin execution context.
+  const savePluginPolicy = useCallback(async () => {
+    const context = pluginPolicyForm.context.trim() || "global";
+    const wantsSecrets = pluginPolicyForm.granted_capabilities.includes("secrets");
+
+    if (wantsSecrets) {
+      const confirmed = globalThis.confirm(
+        "Confirmer l'octroi de la capacite secrets pour ce contexte ?"
+      );
+      if (!confirmed) {
+        setPluginPolicyMessage("Mise a jour policy annulee.");
+        return;
+      }
+    }
+
+    try {
+      const response = await fetch("/plugins/policies", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json"
+        },
+        body: JSON.stringify({
+          context,
+          granted_capabilities: pluginPolicyForm.granted_capabilities
+        })
+      });
+
+      if (!response.ok) {
+        const details = await parseApiErrorMessage(response);
+        setPluginPolicyMessage(`Policy en echec: ${details}.`);
+        log(`Policy plugin en echec (${context}): ${details}`, "error");
+        return;
+      }
+
+      const payload = (await response.json()) as PluginPolicyResponse;
+      setEffectivePolicyContext(payload.context);
+      setEffectiveGrantedCapabilities(payload.granted_capabilities);
+      setPluginPolicyMessage(
+        `Policy enregistree (${payload.context}): ${payload.granted_capabilities.join(", ") || "none"}.`
+      );
+      log(
+        `Policy plugin sauvegardee (${payload.context}) caps=${payload.granted_capabilities.join(",") || "none"}`,
+        "ok"
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error";
+      setPluginPolicyMessage("Erreur reseau lors de la sauvegarde policy.");
+      log(`Policy plugin en echec: ${message}`, "error");
+    }
+  }, [log, parseApiErrorMessage, pluginPolicyForm]);
+
+  // Runs authorization dry-run for selected plugin and context, then renders allow/deny diff.
+  const runPluginAuthorizationCheck = useCallback(async () => {
+    const pluginName = pluginAdminForm.name.trim();
+    const context = pluginPolicyForm.context.trim() || "global";
+
+    if (!pluginName) {
+      setPluginPolicyMessage("Nom plugin requis pour verification policy.");
+      log("Authorize-check refuse: nom plugin manquant", "warn");
+      return;
+    }
+
+    try {
+      const response = await fetch(`/plugins/${encodeURIComponent(pluginName)}/authorize-check`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json"
+        },
+        body: JSON.stringify({ context })
+      });
+
+      if (!response.ok) {
+        const details = await parseApiErrorMessage(response);
+        setPluginPolicyMessage(`Authorize-check en echec: ${details}.`);
+        log(`Authorize-check plugin ${pluginName} en echec: ${details}`, "error");
+        return;
+      }
+
+      const payload = (await response.json()) as PluginAuthorizationCheckResponse;
+      setPluginAuthorizationResult(payload);
+      if (payload.allowed) {
+        setPluginPolicyMessage(`Policy allow pour ${payload.plugin_name} (${payload.context}).`);
+        log(`Policy allow ${payload.plugin_name} (${payload.context})`, "ok");
+      } else {
+        setPluginPolicyMessage(
+          `Policy deny pour ${payload.plugin_name}: missing ${payload.missing_capabilities.join(", ")}.`
+        );
+        log(
+          `Policy deny ${payload.plugin_name} (${payload.context}) missing=${payload.missing_capabilities.join(",")}`,
+          "warn"
+        );
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error";
+      setPluginPolicyMessage("Erreur reseau lors du dry-run policy.");
+      log(`Authorize-check plugin ${pluginName} en echec: ${message}`, "error");
+    }
+  }, [log, parseApiErrorMessage, pluginAdminForm.name, pluginPolicyForm.context]);
+
+  // Refreshes SCM webhook counters and recent rejection diagnostics timeline.
+  const refreshScmWebhookOperations = useCallback(async () => {
+    const provider = scmWebhookOpsFilter.provider.trim();
+    const repositoryUrl = scmWebhookOpsFilter.repository_url.trim();
+
+    const query = new URLSearchParams();
+    if (provider) {
+      query.set("provider", provider);
+    }
+    if (repositoryUrl) {
+      query.set("repository_url", repositoryUrl);
+    }
+    query.set("limit", "20");
+
+    try {
+      const [metricsResponse, diagnosticsResponse] = await Promise.all([
+        fetch("/metrics", { method: "GET" }),
+        fetch(`/scm/webhook-security/rejections?${query.toString()}`, { method: "GET" })
+      ]);
+
+      if (!metricsResponse.ok) {
+        const details = await parseApiErrorMessage(metricsResponse);
+        setScmWebhookOpsMessage(`Chargement metrics webhook en echec: ${details}.`);
+        log(`Metrics webhook en echec: ${details}`, "error");
+        return;
+      }
+
+      if (!diagnosticsResponse.ok) {
+        const details = await parseApiErrorMessage(diagnosticsResponse);
+        setScmWebhookOpsMessage(`Chargement diagnostics webhook en echec: ${details}.`);
+        log(`Diagnostics webhook en echec: ${details}`, "error");
+        return;
+      }
+
+      const metricsPayload = (await metricsResponse.json()) as RuntimeMetricsApiResponse;
+      const diagnosticsPayload = (await diagnosticsResponse.json()) as ListScmWebhookRejectionsResponse;
+      setScmWebhookMetrics(metricsPayload);
+      setScmWebhookRejections(diagnosticsPayload.rejections);
+      setScmWebhookOpsMessage(
+        `Diagnostics webhook rafraichis (${diagnosticsPayload.rejections.length} rejection(s)).`
+      );
+      log(
+        `Diagnostics webhook rafraichis: received=${metricsPayload.scm_webhook_received_total}, rejected=${metricsPayload.scm_webhook_rejected_total}`,
+        "ok"
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error";
+      setScmWebhookOpsMessage("Erreur reseau lors du chargement webhook operations.");
+      log(`Webhook operations en echec: ${message}`, "error");
+    }
+  }, [log, parseApiErrorMessage, scmWebhookOpsFilter.provider, scmWebhookOpsFilter.repository_url]);
+
   // Fetches worker list from worker API and updates worker panel state.
   const refreshWorkers = useCallback(async () => {
     try {
@@ -930,7 +1193,9 @@ export function App() {
     log("Console initialisee", "ok");
     void refreshAll();
     void refreshPluginInventory();
-  }, [log, refreshAll]);
+    void loadPluginPolicy();
+    void refreshScmWebhookOperations();
+  }, [loadPluginPolicy, log, refreshAll, refreshPluginInventory, refreshScmWebhookOperations]);
 
   // Keeps stardate indicator updated each minute.
   useEffect(() => {
@@ -1012,6 +1277,33 @@ export function App() {
     }
     return snapshot.workers.find((worker) => worker.id.toLowerCase() === workerId) ?? null;
   }, [snapshot.workers, workerControlForm.worker_id]);
+
+  // Builds one readable allow/deny summary from last plugin authorization dry-run.
+  const pluginAuthorizationSummary = useMemo(() => {
+    if (!pluginAuthorizationResult) {
+      return "Aucun dry-run execute.";
+    }
+
+    if (pluginAuthorizationResult.allowed) {
+      return `Allow: required=${pluginAuthorizationResult.required_capabilities.join(", ") || "none"}, granted=${pluginAuthorizationResult.granted_capabilities.join(", ") || "none"}.`;
+    }
+
+    return `Deny: missing=${pluginAuthorizationResult.missing_capabilities.join(", ") || "none"}.`;
+  }, [pluginAuthorizationResult]);
+
+  // Computes per-plugin allow/deny summary against current effective policy context.
+  const pluginPolicySummaryByName = useMemo(() => {
+    const summary = new Map<string, string>();
+    for (const plugin of pluginInventory) {
+      const missing = missingCapabilities(plugin.capabilities, effectiveGrantedCapabilities);
+      if (missing.length === 0) {
+        summary.set(plugin.name, `allow (${effectivePolicyContext})`);
+      } else {
+        summary.set(plugin.name, `deny (${effectivePolicyContext}) missing: ${missing.join(", ")}`);
+      }
+    }
+    return summary;
+  }, [effectiveGrantedCapabilities, effectivePolicyContext, pluginInventory]);
 
   return (
     <>
@@ -1393,6 +1685,9 @@ export function App() {
                       <p className="item-subtitle">
                         {plugin.source_manifest_entry} | caps: {plugin.capabilities.join(", ") || "none"}
                       </p>
+                      <p className="item-subtitle">
+                        Policy: {pluginPolicySummaryByName.get(plugin.name) ?? "unknown"}
+                      </p>
                     </div>
                     <div className="actions">
                       <span className="status pending">{plugin.state}</span>
@@ -1401,6 +1696,60 @@ export function App() {
                 ))
               )}
             </div>
+          </article>
+
+          <article className="panel panel-form reveal" style={{ ["--delay" as string]: "0.118s" }}>
+            <h2>Plugin Policy</h2>
+            <form className="form" onSubmit={(event) => event.preventDefault()}>
+              <label>
+                <span>Context</span>
+                <input
+                  name="plugin_policy_context"
+                  placeholder="global"
+                  value={pluginPolicyForm.context}
+                  onChange={(event) =>
+                    setPluginPolicyForm((previous) => ({ ...previous, context: event.target.value }))
+                  }
+                />
+              </label>
+              <label>
+                <span>Granted capabilities</span>
+                <div className="actions">
+                  {PLUGIN_CAPABILITY_OPTIONS.map((capability) => (
+                    <label key={capability}>
+                      <input
+                        type="checkbox"
+                        checked={pluginPolicyForm.granted_capabilities.includes(capability)}
+                        onChange={(event) => togglePluginPolicyCapability(capability, event.target.checked)}
+                      />
+                      <span>{capability}</span>
+                    </label>
+                  ))}
+                </div>
+              </label>
+              <div className="actions">
+                <button type="button" className="btn btn-ghost" onClick={() => void loadPluginPolicy()}>
+                  Load policy
+                </button>
+                <button type="button" className="btn btn-secondary" onClick={() => void savePluginPolicy()}>
+                  Save policy
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={() => void runPluginAuthorizationCheck()}
+                >
+                  Dry-run authorize
+                </button>
+              </div>
+            </form>
+            <p className="hint">{pluginPolicyMessage}</p>
+            <p className="hint">
+              Effective policy: {effectivePolicyContext} | granted: {effectiveGrantedCapabilities.join(", ") || "none"}
+            </p>
+            <p className="hint">
+              {pluginAuthorizationSummary}
+            </p>
           </article>
 
           <article className="panel reveal" style={{ ["--delay" as string]: "0.12s" }}>

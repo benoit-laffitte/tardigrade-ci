@@ -168,3 +168,107 @@ async fn plugin_admin_execute_panic_probe_reports_contained_panic() {
     let payload = read_json(execute_response).await;
     assert_eq!(payload["code"], "plugin_execution_panicked");
 }
+
+#[tokio::test]
+/// Verifies authorization dry-run denies plugin when required capability is not granted.
+async fn plugin_policy_authorize_check_denies_when_required_capability_missing() {
+    let app = tardigrade_api::build_router(tardigrade_api::ApiState::new("tardigrade-ci-test"));
+
+    let _ = app
+        .clone()
+        .oneshot(json_post(
+            "/plugins",
+            Some(r#"{"name":"net-diagnostics"}"#),
+        ))
+        .await
+        .expect("load response");
+
+    let _ = app
+        .clone()
+        .oneshot(json_post(
+            "/plugins/policies",
+            Some(r#"{"context":"global","granted_capabilities":["filesystem"]}"#),
+        ))
+        .await
+        .expect("upsert policy response");
+
+    let check_response = app
+        .oneshot(json_post(
+            "/plugins/net-diagnostics/authorize-check",
+            Some(r#"{"context":"global"}"#),
+        ))
+        .await
+        .expect("authorize response");
+
+    assert_eq!(check_response.status(), StatusCode::OK);
+    let payload = read_json(check_response).await;
+    assert_eq!(payload["allowed"], false);
+    assert_eq!(payload["missing_capabilities"][0], "network");
+}
+
+#[tokio::test]
+/// Verifies authorization dry-run allows plugin when context override grants required capability.
+async fn plugin_policy_authorize_check_allows_with_context_override() {
+    let app = tardigrade_api::build_router(tardigrade_api::ApiState::new("tardigrade-ci-test"));
+
+    let _ = app
+        .clone()
+        .oneshot(json_post(
+            "/plugins",
+            Some(r#"{"name":"net-diagnostics"}"#),
+        ))
+        .await
+        .expect("load response");
+
+    let _ = app
+        .clone()
+        .oneshot(json_post(
+            "/plugins/policies",
+            Some(r#"{"context":"global","granted_capabilities":["filesystem"]}"#),
+        ))
+        .await
+        .expect("global policy response");
+
+    let _ = app
+        .clone()
+        .oneshot(json_post(
+            "/plugins/policies",
+            Some(r#"{"context":"production","granted_capabilities":["network"]}"#),
+        ))
+        .await
+        .expect("context policy response");
+
+    let check_response = app
+        .oneshot(json_post(
+            "/plugins/net-diagnostics/authorize-check",
+            Some(r#"{"context":"production"}"#),
+        ))
+        .await
+        .expect("authorize response");
+
+    assert_eq!(check_response.status(), StatusCode::OK);
+    let payload = read_json(check_response).await;
+    assert_eq!(payload["allowed"], true);
+    assert!(payload["missing_capabilities"]
+        .as_array()
+        .expect("missing caps")
+        .is_empty());
+}
+
+#[tokio::test]
+/// Verifies invalid capability value is rejected by plugin policy endpoint.
+async fn plugin_policy_rejects_unknown_capability() {
+    let app = tardigrade_api::build_router(tardigrade_api::ApiState::new("tardigrade-ci-test"));
+
+    let response = app
+        .oneshot(json_post(
+            "/plugins/policies",
+            Some(r#"{"context":"global","granted_capabilities":["unknown"]}"#),
+        ))
+        .await
+        .expect("policy response");
+
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    let payload = read_json(response).await;
+    assert_eq!(payload["code"], "invalid_plugin_policy");
+}

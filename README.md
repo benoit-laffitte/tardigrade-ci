@@ -184,6 +184,8 @@ env -u https_proxy -u http_proxy -u PXY_FAB_FONC cargo test --workspace postgres
 - GET /workers
 - GET /plugins
 - POST /plugins
+- GET /plugins/policies
+- POST /plugins/policies
 - POST /webhooks/scm
 - POST /scm/webhook-security/configs
 - POST /scm/polling/configs
@@ -193,6 +195,7 @@ env -u https_proxy -u http_proxy -u PXY_FAB_FONC cargo test --workspace postgres
 - POST /plugins/{name}/init
 - POST /plugins/{name}/execute
 - POST /plugins/{name}/unload
+- POST /plugins/{name}/authorize-check
 
 GraphQL snapshot example (single request for dashboard panels):
 
