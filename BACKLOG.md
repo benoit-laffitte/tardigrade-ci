@@ -14,10 +14,11 @@ This file is the delivery backlog derived from the current roadmap.
 
 1. Epic 2 (`SCM-*`) for external trigger automation.
 2. Epic 3 (`PLUG-*`) for extension safety model.
-3. Epic 6 (`REFAC-*`) for Rust source maintainability refactor.
-4. Reliability follow-ups (`REL-*`) as hardening milestones.
-5. Epic 0 (`INDUS-*`) hardening follow-ups.
-6. Epic 5 (`CLOUD-*`) cloud/container delivery track (deferred).
+3. Epic 7 (`UIADM-*`) for product administration IHM coverage.
+4. Epic 6 (`REFAC-*`) for Rust source maintainability refactor.
+5. Reliability follow-ups (`REL-*`) as hardening milestones.
+6. Epic 0 (`INDUS-*`) hardening follow-ups.
+7. Epic 5 (`CLOUD-*`) cloud/container delivery track (deferred).
 
 Context update:
 
@@ -210,6 +211,35 @@ Definition of done:
 - Permission checks are enforced before sensitive actions.
 - Failure in one plugin does not crash core orchestration.
 
+### Epic 7: Product administration IHM coverage
+
+Goal: provide first-class administration UI for all operational features currently exposed only through API/GraphQL.
+
+Refinement decisions (MVP):
+
+- Prioritize operator workflows over developer/debug-only tooling.
+- Reuse existing GraphQL dashboard snapshot/mutations when possible.
+- Any new admin action must provide visible success/error feedback in UI.
+- Security-sensitive actions require explicit confirmation UX and audit-friendly event messaging.
+
+- [ ] `UIADM-01` Add SCM webhook administration panel (repository/provider/secret/allowlist management).
+- [ ] `UIADM-02` Add SCM polling administration panel (enable/disable, intervals, branches, manual tick).
+- [ ] `UIADM-03` Add worker control panel (manual claim/complete simulation and ownership diagnostics).
+- [ ] `UIADM-04` Add plugin administration panel (manifest entries, lifecycle state, declared capabilities).
+- [ ] `UIADM-05` Add plugin policy panel (granted capabilities per execution context with deny feedback).
+- [ ] `UIADM-06` Add webhook/security operations panel (signature status, replay-window rejects, allowlist diagnostics).
+- [ ] `UIADM-07` Add advanced observability panel (SCM ingestion counters, filtering, export shortcuts).
+- [ ] `UIADM-08` Add admin UX hardening (role-based view guards, destructive-action confirmations, audit trail surfacing).
+- [ ] `UIADM-09` Add end-to-end UI integration tests for critical admin workflows.
+- [ ] `UIADM-10` Document administration playbooks and UI runbook for operations teams.
+
+Definition of done:
+
+- Every critical product administration workflow has a discoverable UI path.
+- API-only operations needed for day-2 operations are reachable from dashboard/admin screens.
+- Admin actions expose clear outcomes, errors, and operational telemetry in the interface.
+- UI integration tests cover SCM, plugin, and worker administration happy/error paths.
+
 ### Epic 4: Redis-first production scheduler mode
 
 Goal: make Redis the default production scheduler path and reduce file-backed usage to local/dev only.
@@ -310,7 +340,8 @@ Definition of done:
 
 1. Epic 2 (`SCM-*`) for external trigger automation.
 2. Epic 3 (`PLUG-*`) for extension safety model.
-3. Epic 6 (`REFAC-*`) for Rust source maintainability refactor.
-4. Reliability follow-ups (`REL-*`) as hardening milestones.
-5. Epic 0 (`INDUS-*`) hardening follow-ups.
-6. Epic 5 (`CLOUD-*`) cloud/container delivery track (deferred).
+3. Epic 7 (`UIADM-*`) for product administration IHM coverage.
+4. Epic 6 (`REFAC-*`) for Rust source maintainability refactor.
+5. Reliability follow-ups (`REL-*`) as hardening milestones.
+6. Epic 0 (`INDUS-*`) hardening follow-ups.
+7. Epic 5 (`CLOUD-*`) cloud/container delivery track (deferred).
