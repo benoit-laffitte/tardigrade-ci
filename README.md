@@ -139,9 +139,11 @@ Unified automation entrypoints from repository root:
 - `make dashboard-lint` (frontend lint via `xtask`)
 - `make dashboard-build` (frontend build via `xtask`)
 - `make build` (Rust + dashboard build)
-- `make docker-build` (server + worker images)
-- `make docker-scan` (Trivy image scan when available)
 - `make ci` (local CI-equivalent aggregate)
+
+Current note:
+
+- `make docker-build` and `make docker-scan` are planned but currently unavailable because `mk/docker.mk` is not present in this repository snapshot.
 
 Coverage (line threshold gate, default 75%):
 
@@ -164,12 +166,17 @@ env -u https_proxy -u http_proxy -u PXY_FAB_FONC cargo test --workspace postgres
 - GET /live
 - GET /ready
 - GET /events (SSE stream for live dashboard updates)
+- GET /metrics
+- GET /dead-letter-builds
 - POST /jobs
 - GET /jobs
 - POST /jobs/{id}/run
 - POST /builds/{id}/cancel
 - GET /builds
 - GET /workers
+- POST /webhooks/scm
+- POST /scm/polling/configs
+- POST /scm/polling/tick
 - POST /workers/{worker_id}/claim
 - POST /workers/{worker_id}/builds/{id}/complete
 
@@ -217,53 +224,13 @@ List jobs:
 
 curl http://127.0.0.1:8080/jobs
 
-## Cloud Ready Baseline
+## Cloud/Container Track Status
 
-Build images:
+Cloud and container delivery is deferred for a later planning cycle (see Epic 5 `CLOUD-*` in [BACKLOG.md](BACKLOG.md)).
 
-- docker build -f Dockerfile.server -t tardigrade-server:latest .
-- docker build -f Dockerfile.worker -t tardigrade-worker:latest .
+Current repository snapshot does not include Dockerfiles, Kubernetes manifests, or docker-compose descriptors as first-class tracked artifacts.
 
-Kubernetes manifests:
-
-- deploy/k8s/tardigrade-server.yaml
-- deploy/k8s/tardigrade-worker.yaml
-
-Example apply sequence:
-
-- kubectl apply -f deploy/k8s/tardigrade-server.yaml
-- kubectl apply -f deploy/k8s/tardigrade-worker.yaml
-
-## Docker Compose Cluster (local)
-
-Start controller + workers with one command:
-
-- env -u https_proxy -u http_proxy -u HTTPS_PROXY -u HTTP_PROXY -u ALL_PROXY -u NO_PROXY -u no_proxy -u PXY_FAB_FONC docker compose up --build -d
-- ./scripts/dev-up.sh
-
-The compose stack uses PostgreSQL for jobs/builds storage and Redis as the queue backend for distributed worker coordination.
-
-The compose stack runs an init service (`tardigrade-init-data`) before the controller to ensure `/data` is writable by the runtime user (uid 10001).
-
-All helper scripts in `scripts/` run without proxy variables by default.
-
-- Use `--with-proxy` to keep proxy variables.
-- Use `--without-proxy` to force no-proxy mode.
-
-Scale workers horizontally:
-
-- docker compose up -d --scale tardigrade-worker=3
-
-Check runtime:
-
-- curl http://127.0.0.1:8080/ready
-- curl http://127.0.0.1:8080/workers
-- ./scripts/dev-smoke.sh
-
-Stop cluster:
-
-- docker compose down
-- ./scripts/dev-down.sh
+Local helper scripts under `scripts/` remain available for developer workflows where applicable.
 
 ## Backlog
 

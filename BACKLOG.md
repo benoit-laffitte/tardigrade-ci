@@ -51,9 +51,9 @@ Refinement decisions:
 - [x] `INDUS-204` Add quality targets (`make lint`, `make fmt-check`, `make clippy`).
 - [x] `INDUS-205` Add test matrix targets: `make test-fast` (unit only) and `make test-all` (unit + integration).
 - [x] `INDUS-206` Add Node/dashboard targets via `xtask` (`make dashboard-lint`, `make dashboard-build`).
-- [x] `INDUS-207` Add Docker targets for server/worker build + security scan.
-- [x] `INDUS-208` Add `make ci` as canonical local/CI aggregate target.
-- [x] `INDUS-209` Add discoverability target and docs (`make help` + README command matrix).
+- [ ] `INDUS-207` Add Docker targets for server/worker build + security scan.
+- [-] `INDUS-208` Add `make ci` as canonical local/CI aggregate target.
+- [-] `INDUS-209` Add discoverability target and docs (`make help` + README command matrix).
 - [x] `INDUS-210` Wire CI pipeline to call Make targets as canonical entrypoints.
 - [x] `INDUS-211` Remove CI redundancy by replacing full `make ci` control rerun with a lightweight pipeline-summary gate.
 
@@ -62,6 +62,11 @@ Definition of done:
 - A new contributor can run one command to bootstrap and one command to run the full CI-equivalent flow.
 - CI and local developer workflows use the same Make entrypoints.
 - Rust, Node, and Docker builds are reproducible from repository root.
+
+Current gap note (2026-04-02):
+
+- `Makefile` includes `mk/docker.mk`, but this file is currently missing in repository.
+- As a consequence, `make help`/`make ci` fail to resolve make includes locally until the Docker make module is restored.
 
 ### Epic 1: Pipeline DSL (YAML) parser and validator
 
