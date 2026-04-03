@@ -146,6 +146,7 @@ Unified automation entrypoints from repository root:
 - `make dashboard-install` (frontend dependencies via `xtask`)
 - `make dashboard-lint` (frontend lint via `xtask`)
 - `make dashboard-build` (frontend build via `xtask`)
+- `cd crates/server/dashboard && npm run e2e` (Playwright admin E2E suite)
 - `make build` (Rust + dashboard build)
 - `make ci` (local CI-equivalent aggregate)
 
@@ -230,6 +231,7 @@ Pipeline DSL reference and examples:
 
 - [docs/pipeline-schema.md](docs/pipeline-schema.md)
 - [docs/pipeline-recipes.md](docs/pipeline-recipes.md)
+- [docs/admin-ui-runbook.md](docs/admin-ui-runbook.md)
 - [docs/technology-profile-onboarding.md](docs/technology-profile-onboarding.md)
 - [docs/plugin-authoring-permissions.md](docs/plugin-authoring-permissions.md)
 
