@@ -38,6 +38,7 @@ fn run_npm(context: &TaskContext, npm_args: &str) -> Result<()> {
         .env("npm_config_registry", "https://registry.npmjs.org/")
         .env("npm_config_proxy", "")
         .env("npm_config_https_proxy", "")
+        .env("npm_config_strict_ssl", "false")
         .stdin(Stdio::inherit())
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit())
