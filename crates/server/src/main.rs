@@ -109,10 +109,7 @@ async fn main() -> Result<()> {
 
     if scm_polling_enabled {
         state.start_scm_polling_loop(Duration::from_secs(scm_polling_check_secs));
-        info!(
-            scm_polling_check_secs,
-            "SCM polling loop enabled"
-        );
+        info!(scm_polling_check_secs, "SCM polling loop enabled");
     }
 
     let router = build_router(state)

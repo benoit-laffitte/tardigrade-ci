@@ -3,10 +3,10 @@ use chrono::Utc;
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
+use tardigrade_core::{ScmPollingConfig, WebhookSecurityConfig};
 use tardigrade_plugins::{
     Plugin, PluginCapability, PluginLifecycleError, PluginLifecycleState, PluginRegistry,
 };
-use tardigrade_core::{ScmPollingConfig, WebhookSecurityConfig};
 use tardigrade_scheduler::{InMemoryScheduler, Scheduler};
 use tardigrade_storage::{InMemoryStorage, Storage};
 
@@ -46,7 +46,11 @@ impl ApiState {
         service_name: impl Into<String>,
         storage: Arc<dyn Storage + Send + Sync>,
     ) -> Self {
-        Self::with_components(service_name, storage, Arc::new(InMemoryScheduler::default()))
+        Self::with_components(
+            service_name,
+            storage,
+            Arc::new(InMemoryScheduler::default()),
+        )
     }
 
     /// Builds API state from explicit storage and scheduler components.

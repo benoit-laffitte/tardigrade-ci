@@ -5,8 +5,8 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use uuid::Uuid;
 
-use crate::model::{InFlightEntry, QueueState};
 use crate::Scheduler;
+use crate::model::{InFlightEntry, QueueState};
 
 /// Volatile in-memory scheduler implementation.
 #[derive(Clone, Default)]

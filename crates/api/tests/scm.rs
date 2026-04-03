@@ -158,8 +158,8 @@ async fn scm_webhook_github_valid_signature_is_accepted() {
         .expect("response");
 
     assert_eq!(response.status(), StatusCode::ACCEPTED);
-    let accepted: ScmWebhookAcceptedResponse = serde_json::from_value(read_json(response).await)
-        .expect("accepted body");
+    let accepted: ScmWebhookAcceptedResponse =
+        serde_json::from_value(read_json(response).await).expect("accepted body");
     assert_eq!(accepted.status, "accepted");
 }
 
@@ -635,7 +635,8 @@ async fn scm_webhook_duplicate_event_id_is_idempotent() {
     let created: CreateJobResponse =
         serde_json::from_value(read_json(create_response).await).expect("create body");
 
-    let payload = br#"{"ref":"refs/heads/main","after":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}"#;
+    let payload =
+        br#"{"ref":"refs/heads/main","after":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}"#;
     let signature = github_signature("super-secret", payload);
 
     for _ in 0..2 {
@@ -679,7 +680,10 @@ async fn scm_webhook_duplicate_event_id_is_idempotent() {
         .iter()
         .filter(|build| build.job_id == created.job.id)
         .count();
-    assert_eq!(count, 1, "expected exactly one build for duplicate event id");
+    assert_eq!(
+        count, 1,
+        "expected exactly one build for duplicate event id"
+    );
 }
 
 #[tokio::test]
@@ -714,7 +718,8 @@ async fn scm_webhook_duplicate_fallback_tuple_is_idempotent() {
     let created: CreateJobResponse =
         serde_json::from_value(read_json(create_response).await).expect("create body");
 
-    let payload = br#"{"ref":"refs/heads/main","after":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}"#;
+    let payload =
+        br#"{"ref":"refs/heads/main","after":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}"#;
     let signature = github_signature("super-secret", payload);
 
     for _ in 0..2 {
@@ -757,7 +762,10 @@ async fn scm_webhook_duplicate_fallback_tuple_is_idempotent() {
         .iter()
         .filter(|build| build.job_id == created.job.id)
         .count();
-    assert_eq!(count, 1, "expected exactly one build for fallback dedup key");
+    assert_eq!(
+        count, 1,
+        "expected exactly one build for fallback dedup key"
+    );
 }
 
 #[tokio::test]
@@ -791,7 +799,8 @@ async fn scm_webhook_metrics_expose_ingestion_outcomes() {
         .expect("create response");
     assert_eq!(create_response.status(), StatusCode::CREATED);
 
-    let payload = br#"{"ref":"refs/heads/main","after":"cccccccccccccccccccccccccccccccccccccccc"}"#;
+    let payload =
+        br#"{"ref":"refs/heads/main","after":"cccccccccccccccccccccccccccccccccccccccc"}"#;
     let signature = github_signature("super-secret", payload);
 
     let accepted = app

@@ -1,15 +1,17 @@
 use anyhow::{Result, anyhow};
 use async_trait::async_trait;
 use std::sync::Arc;
-use tardigrade_core::{BuildRecord, JobDefinition, ScmPollingConfig, ScmProvider, WebhookSecurityConfig};
+use tardigrade_core::{
+    BuildRecord, JobDefinition, ScmPollingConfig, ScmProvider, WebhookSecurityConfig,
+};
 use tokio_postgres::NoTls;
 use uuid::Uuid;
 
+use crate::Storage;
 use crate::codec::{scm_provider_to_str, status_to_str};
 use crate::mapping::{
     row_to_build, row_to_job, row_to_scm_polling_config, row_to_webhook_security_config,
 };
-use crate::Storage;
 
 /// Ordered schema migrations applied at startup for postgres-backed persistence.
 const MIGRATIONS: &[(&str, &str)] = &[

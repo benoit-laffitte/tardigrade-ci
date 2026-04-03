@@ -72,7 +72,9 @@ pub(crate) async fn execute_plugin(
     Path(name): Path<String>,
     State(state): State<ApiState>,
 ) -> Result<(StatusCode, Json<PluginActionResponse>), (StatusCode, Json<ApiErrorResponse>)> {
-    let plugin = state.execute_plugin(name.trim()).map_err(map_plugin_error)?;
+    let plugin = state
+        .execute_plugin(name.trim())
+        .map_err(map_plugin_error)?;
     Ok((
         StatusCode::OK,
         Json(PluginActionResponse {
@@ -201,7 +203,11 @@ fn map_plugin_policy_error(status: StatusCode) -> (StatusCode, Json<ApiErrorResp
             "plugin_policy_internal",
             "plugin policy operation failed",
         ),
-        other => error_response(other, "plugin_policy_error", "plugin policy operation failed"),
+        other => error_response(
+            other,
+            "plugin_policy_error",
+            "plugin policy operation failed",
+        ),
     }
 }
 

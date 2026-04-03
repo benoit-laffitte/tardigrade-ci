@@ -8,9 +8,8 @@ use axum::{
 use serde::Deserialize;
 
 use crate::{
-    ApiError, ApiErrorResponse, ApiState, ListScmWebhookRejectionsResponse,
-    ScmPollingTickResponse, ScmWebhookAcceptedResponse, UpsertScmPollingConfigRequest,
-    UpsertWebhookSecurityConfigRequest,
+    ApiError, ApiErrorResponse, ApiState, ListScmWebhookRejectionsResponse, ScmPollingTickResponse,
+    ScmWebhookAcceptedResponse, UpsertScmPollingConfigRequest, UpsertWebhookSecurityConfigRequest,
 };
 
 /// Query payload for webhook rejection diagnostics filtering.

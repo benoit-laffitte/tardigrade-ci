@@ -23,9 +23,7 @@ fn json_post(uri: &str, body: Option<&str>) -> Request<Body> {
         builder = builder.header(header::CONTENT_TYPE, "application/json");
     }
 
-    builder
-        .body(Body::from(payload))
-        .expect("valid request")
+    builder.body(Body::from(payload)).expect("valid request")
 }
 
 #[tokio::test]
@@ -52,10 +50,7 @@ async fn plugin_admin_lifecycle_happy_path() {
 
     let load_response = app
         .clone()
-        .oneshot(json_post(
-            "/plugins",
-            Some(r#"{"name":"net-diagnostics"}"#),
-        ))
+        .oneshot(json_post("/plugins", Some(r#"{"name":"net-diagnostics"}"#)))
         .await
         .expect("load response");
 
@@ -65,7 +60,10 @@ async fn plugin_admin_lifecycle_happy_path() {
     assert_eq!(load_payload.status, "loaded");
     assert_eq!(load_payload.plugin.name, "net-diagnostics");
     assert_eq!(load_payload.plugin.state, "Loaded");
-    assert_eq!(load_payload.plugin.capabilities, vec!["network".to_string()]);
+    assert_eq!(
+        load_payload.plugin.capabilities,
+        vec!["network".to_string()]
+    );
 
     let init_response = app
         .clone()
@@ -176,10 +174,7 @@ async fn plugin_policy_authorize_check_denies_when_required_capability_missing()
 
     let _ = app
         .clone()
-        .oneshot(json_post(
-            "/plugins",
-            Some(r#"{"name":"net-diagnostics"}"#),
-        ))
+        .oneshot(json_post("/plugins", Some(r#"{"name":"net-diagnostics"}"#)))
         .await
         .expect("load response");
 
@@ -213,10 +208,7 @@ async fn plugin_policy_authorize_check_allows_with_context_override() {
 
     let _ = app
         .clone()
-        .oneshot(json_post(
-            "/plugins",
-            Some(r#"{"name":"net-diagnostics"}"#),
-        ))
+        .oneshot(json_post("/plugins", Some(r#"{"name":"net-diagnostics"}"#)))
         .await
         .expect("load response");
 
@@ -249,10 +241,12 @@ async fn plugin_policy_authorize_check_allows_with_context_override() {
     assert_eq!(check_response.status(), StatusCode::OK);
     let payload = read_json(check_response).await;
     assert_eq!(payload["allowed"], true);
-    assert!(payload["missing_capabilities"]
-        .as_array()
-        .expect("missing caps")
-        .is_empty());
+    assert!(
+        payload["missing_capabilities"]
+            .as_array()
+            .expect("missing caps")
+            .is_empty()
+    );
 }
 
 #[tokio::test]

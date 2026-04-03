@@ -178,7 +178,9 @@ impl PipelineDefinition {
                 {
                     hints.push(PipelineValidationHint {
                         field: command_field.clone(),
-                        message: "Python dependency install should prefer requirements lock file via -r".to_string(),
+                        message:
+                            "Python dependency install should prefer requirements lock file via -r"
+                                .to_string(),
                     });
                 }
 
@@ -196,8 +198,9 @@ impl PipelineDefinition {
                 if is_node_step(step) && step_command_starts_with(step, &["npm", "install"]) {
                     hints.push(PipelineValidationHint {
                         field: command_field.clone(),
-                        message: "Node dependency install should prefer npm ci for reproducible installs"
-                            .to_string(),
+                        message:
+                            "Node dependency install should prefer npm ci for reproducible installs"
+                                .to_string(),
                     });
                 }
 

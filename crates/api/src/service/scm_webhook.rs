@@ -31,7 +31,10 @@ pub(crate) fn parse_scm_provider_header(headers: &HeaderMap) -> Result<ScmProvid
 }
 
 /// Enforces webhook replay protection using `x-scm-timestamp` unix seconds header.
-pub(crate) fn validate_replay_window(headers: &HeaderMap, window: Duration) -> Result<(), ApiError> {
+pub(crate) fn validate_replay_window(
+    headers: &HeaderMap,
+    window: Duration,
+) -> Result<(), ApiError> {
     let raw = header_value(headers, "x-scm-timestamp")?;
     let timestamp = raw.parse::<i64>().map_err(|_| ApiError::Unauthorized)?;
     let now = Utc::now().timestamp();
@@ -94,13 +97,15 @@ pub(crate) fn verify_github_signature(
     body: &[u8],
     secret: &str,
 ) -> Result<(), ApiError> {
-    let header = header_value(headers, "x-hub-signature-256").map_err(|_| ApiError::Unauthorized)?;
+    let header =
+        header_value(headers, "x-hub-signature-256").map_err(|_| ApiError::Unauthorized)?;
     let Some(hex_sig) = header.strip_prefix("sha256=") else {
         return Err(ApiError::Unauthorized);
     };
 
     let provided = hex::decode(hex_sig).map_err(|_| ApiError::Unauthorized)?;
-    let mut mac = Hmac::<Sha256>::new_from_slice(secret.as_bytes()).map_err(|_| ApiError::Internal)?;
+    let mut mac =
+        Hmac::<Sha256>::new_from_slice(secret.as_bytes()).map_err(|_| ApiError::Internal)?;
     mac.update(body);
     mac.verify_slice(&provided)
         .map_err(|_| ApiError::Unauthorized)
@@ -155,8 +160,8 @@ pub(crate) fn build_webhook_dedup_key(
         ));
     }
 
-    let commit_sha = parse_event_commit_sha(provider, body)
-        .unwrap_or_else(|| "unknown_commit".to_string());
+    let commit_sha =
+        parse_event_commit_sha(provider, body).unwrap_or_else(|| "unknown_commit".to_string());
 
     Some(format!(
         "fallback:{}:{}:{}:{}",
@@ -168,13 +173,17 @@ pub(crate) fn build_webhook_dedup_key(
 }
 
 /// Extracts provider event identifier from headers when available.
-pub(crate) fn parse_provider_event_id(provider: ScmProvider, headers: &HeaderMap) -> Option<String> {
+pub(crate) fn parse_provider_event_id(
+    provider: ScmProvider,
+    headers: &HeaderMap,
+) -> Option<String> {
     let keys: &[&str] = match provider {
         ScmProvider::Github => &["x-scm-event-id", "x-github-delivery", "x-request-id"],
         ScmProvider::Gitlab => &["x-scm-event-id", "x-gitlab-event-uuid", "x-request-id"],
     };
 
-    keys.iter().find_map(|key| optional_header_value(headers, key))
+    keys.iter()
+        .find_map(|key| optional_header_value(headers, key))
 }
 
 /// Parses commit SHA candidates from provider payload for fallback dedup tuple.
@@ -248,8 +257,7 @@ pub(crate) fn parse_github_trigger_event(
 ) -> Result<Option<ScmTriggerEvent>, ApiError> {
     let event_name = header_value(headers, "x-github-event")?.to_ascii_lowercase();
     if event_name == "push" {
-        let payload: JsonValue =
-            serde_json::from_slice(body).map_err(|_| ApiError::BadRequest)?;
+        let payload: JsonValue = serde_json::from_slice(body).map_err(|_| ApiError::BadRequest)?;
         let is_tag = payload
             .get("ref")
             .and_then(JsonValue::as_str)
@@ -292,8 +300,7 @@ pub(crate) fn parse_gitlab_trigger_event(
     }
 
     if event_name == "pipeline hook" {
-        let payload: JsonValue =
-            serde_json::from_slice(body).map_err(|_| ApiError::BadRequest)?;
+        let payload: JsonValue = serde_json::from_slice(body).map_err(|_| ApiError::BadRequest)?;
         let source = payload
             .get("object_attributes")
             .and_then(|v| v.get("source"))

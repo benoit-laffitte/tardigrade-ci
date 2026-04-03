@@ -1,4 +1,6 @@
-use super::{PipelineDefinition, PipelineDslError, PipelineRetryPolicy, PipelineStage, PipelineStep};
+use super::{
+    PipelineDefinition, PipelineDslError, PipelineRetryPolicy, PipelineStage, PipelineStep,
+};
 
 #[test]
 /// Ensures v1 constructor sets schema version and preserves stage ordering.

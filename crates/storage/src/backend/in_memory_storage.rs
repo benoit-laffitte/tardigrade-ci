@@ -2,7 +2,9 @@ use anyhow::Result;
 use async_trait::async_trait;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use tardigrade_core::{BuildRecord, JobDefinition, ScmPollingConfig, ScmProvider, WebhookSecurityConfig};
+use tardigrade_core::{
+    BuildRecord, JobDefinition, ScmPollingConfig, ScmProvider, WebhookSecurityConfig,
+};
 use uuid::Uuid;
 
 use crate::Storage;
@@ -76,7 +78,9 @@ impl Storage for InMemoryStorage {
             .webhook_security_configs
             .lock()
             .expect("webhook security storage poisoned");
-        Ok(configs.get(&(repository_url.to_string(), provider)).cloned())
+        Ok(configs
+            .get(&(repository_url.to_string(), provider))
+            .cloned())
     }
 
     /// Upserts SCM polling configuration in process memory.

@@ -6,8 +6,8 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use uuid::Uuid;
 
-use crate::model::InFlightEntry;
 use crate::Scheduler;
+use crate::model::InFlightEntry;
 
 /// Redis-backed scheduler for distributed API/worker deployments.
 #[derive(Clone)]

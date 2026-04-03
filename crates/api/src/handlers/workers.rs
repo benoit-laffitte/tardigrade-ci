@@ -6,8 +6,7 @@ use axum::{
 use uuid::Uuid;
 
 use crate::{
-    ApiState, ClaimBuildResponse, CompleteBuildRequest, CompleteBuildResponse,
-    ListWorkersResponse,
+    ApiState, ClaimBuildResponse, CompleteBuildRequest, CompleteBuildResponse, ListWorkersResponse,
 };
 
 /// Lists all known workers.

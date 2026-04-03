@@ -1,7 +1,9 @@
 use super::InMemoryStorage;
 use crate::Storage;
 use chrono::Utc;
-use tardigrade_core::{BuildRecord, JobDefinition, JobStatus, ScmPollingConfig, ScmProvider, WebhookSecurityConfig};
+use tardigrade_core::{
+    BuildRecord, JobDefinition, JobStatus, ScmPollingConfig, ScmProvider, WebhookSecurityConfig,
+};
 
 /// Verifies in-memory storage roundtrip for one job and one build.
 #[tokio::test]

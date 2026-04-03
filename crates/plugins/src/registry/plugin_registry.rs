@@ -1,11 +1,9 @@
 use std::collections::BTreeMap;
 use std::fs;
-use std::path::Path;
 use std::panic::{AssertUnwindSafe, catch_unwind};
+use std::path::Path;
 
-use crate::{
-    Plugin, PluginCapability, PluginLifecycleError, PluginLifecycleState, PluginManifest,
-};
+use crate::{Plugin, PluginCapability, PluginLifecycleError, PluginLifecycleState, PluginManifest};
 
 use super::PluginEntry;
 
@@ -107,7 +105,10 @@ impl PluginRegistry {
 
     /// Executes an initialized plugin.
     pub fn execute(&self, name: &str) -> Result<(), PluginLifecycleError> {
-        let entry = self.plugins.get(name).ok_or(PluginLifecycleError::NotFound)?;
+        let entry = self
+            .plugins
+            .get(name)
+            .ok_or(PluginLifecycleError::NotFound)?;
         self.execute_authorized(name, &entry.capabilities)
     }
 
@@ -117,7 +118,10 @@ impl PluginRegistry {
         name: &str,
         granted_capabilities: &[PluginCapability],
     ) -> Result<(), PluginLifecycleError> {
-        let entry = self.plugins.get(name).ok_or(PluginLifecycleError::NotFound)?;
+        let entry = self
+            .plugins
+            .get(name)
+            .ok_or(PluginLifecycleError::NotFound)?;
 
         if entry.state != PluginLifecycleState::Initialized {
             return Err(PluginLifecycleError::InvalidState);
@@ -161,7 +165,9 @@ impl PluginRegistry {
 
     /// Returns normalized capability list declared for one loaded plugin.
     pub fn capabilities(&self, name: &str) -> Option<Vec<PluginCapability>> {
-        self.plugins.get(name).map(|entry| entry.capabilities.clone())
+        self.plugins
+            .get(name)
+            .map(|entry| entry.capabilities.clone())
     }
 
     /// Backward-compatible alias for load returning boolean success.

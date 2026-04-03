@@ -1,6 +1,4 @@
-use crate::{
-    Plugin, PluginCapability, PluginLifecycleError, PluginLifecycleState, PluginRegistry,
-};
+use crate::{Plugin, PluginCapability, PluginLifecycleError, PluginLifecycleState, PluginRegistry};
 use std::path::PathBuf;
 use std::sync::{
     Arc,
@@ -83,7 +81,10 @@ fn register_accepts_unique_name_and_invokes_on_load_once() {
     assert!(inserted);
     assert_eq!(registry.count(), 1);
     assert_eq!(load_count.load(Ordering::SeqCst), 1);
-    assert_eq!(registry.state("metrics"), Some(PluginLifecycleState::Loaded));
+    assert_eq!(
+        registry.state("metrics"),
+        Some(PluginLifecycleState::Loaded)
+    );
 }
 
 /// Ensures duplicate plugin names are rejected and second load hook is not called.
@@ -145,15 +146,26 @@ fn lifecycle_transitions_succeed_in_order() {
             required_capabilities: vec![],
         }))
         .expect("load should succeed");
-    assert_eq!(registry.state("executor"), Some(PluginLifecycleState::Loaded));
+    assert_eq!(
+        registry.state("executor"),
+        Some(PluginLifecycleState::Loaded)
+    );
 
     registry.init("executor").expect("init should succeed");
-    assert_eq!(registry.state("executor"), Some(PluginLifecycleState::Initialized));
+    assert_eq!(
+        registry.state("executor"),
+        Some(PluginLifecycleState::Initialized)
+    );
 
-    registry.execute("executor").expect("execute should succeed");
+    registry
+        .execute("executor")
+        .expect("execute should succeed");
 
     registry.unload("executor").expect("unload should succeed");
-    assert_eq!(registry.state("executor"), Some(PluginLifecycleState::Unloaded));
+    assert_eq!(
+        registry.state("executor"),
+        Some(PluginLifecycleState::Unloaded)
+    );
 
     assert_eq!(load_count.load(Ordering::SeqCst), 1);
     assert_eq!(init_count.load(Ordering::SeqCst), 1);
@@ -293,7 +305,10 @@ fn load_from_manifest_path_loads_enabled_entries() {
 
     assert_eq!(loaded, vec!["metrics".to_string()]);
     assert_eq!(registry.count(), 1);
-    assert_eq!(registry.state("metrics"), Some(PluginLifecycleState::Loaded));
+    assert_eq!(
+        registry.state("metrics"),
+        Some(PluginLifecycleState::Loaded)
+    );
     assert_eq!(
         registry.capabilities("metrics"),
         Some(vec![PluginCapability::Network, PluginCapability::Secrets])
@@ -377,7 +392,10 @@ fn execute_authorized_rejects_missing_required_capability() {
         .execute_authorized("secrets-plugin", &[PluginCapability::Network])
         .expect_err("missing secrets capability should be denied");
 
-    assert_eq!(err, PluginLifecycleError::UnauthorizedCapability(PluginCapability::Secrets));
+    assert_eq!(
+        err,
+        PluginLifecycleError::UnauthorizedCapability(PluginCapability::Secrets)
+    );
 }
 
 /// Verifies explicit execution authorization succeeds when all required capabilities are granted.
@@ -396,10 +414,7 @@ fn execute_authorized_accepts_when_all_required_capabilities_are_granted() {
             unload_count: count.clone(),
             fail_execute: false,
             panic_execute: false,
-            required_capabilities: vec![
-                PluginCapability::RuntimeHooks,
-                PluginCapability::Network,
-            ],
+            required_capabilities: vec![PluginCapability::RuntimeHooks, PluginCapability::Network],
         }))
         .expect("load should succeed");
     registry

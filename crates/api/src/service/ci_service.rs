@@ -17,9 +17,8 @@ use super::{
     validate_replay_window, verify_signature,
 };
 use crate::{
-    ApiError, CreateJobRequest, LiveEvent, RuntimeMetricsResponse,
-    ScmWebhookRejectionEntry, ScmPollingTickResponse, ServiceSettings, WorkerBuildStatus,
-    WorkerInfo,
+    ApiError, CreateJobRequest, LiveEvent, RuntimeMetricsResponse, ScmPollingTickResponse,
+    ScmWebhookRejectionEntry, ServiceSettings, WorkerBuildStatus, WorkerInfo,
 };
 
 const WEBHOOK_REJECTION_HISTORY_LIMIT: usize = 100;
@@ -284,7 +283,10 @@ impl CiService {
     }
 
     /// Validates and persists a new job definition.
-    pub(crate) async fn create_job(&self, payload: CreateJobRequest) -> Result<JobDefinition, ApiError> {
+    pub(crate) async fn create_job(
+        &self,
+        payload: CreateJobRequest,
+    ) -> Result<JobDefinition, ApiError> {
         if payload.name.trim().is_empty()
             || payload.repository_url.trim().is_empty()
             || payload.pipeline_path.trim().is_empty()
@@ -339,13 +341,9 @@ impl CiService {
         let event = parse_scm_trigger_event(provider, headers, body)?;
 
         if let Some(event) = event {
-            if let Some(dedup_key) = build_webhook_dedup_key(
-                provider,
-                &repository_url,
-                headers,
-                body,
-                event,
-            ) {
+            if let Some(dedup_key) =
+                build_webhook_dedup_key(provider, &repository_url, headers, body, event)
+            {
                 if self.is_duplicate_webhook_event(&dedup_key) {
                     if let Ok(mut metrics) = self.metrics.lock() {
                         metrics.scm_webhook_duplicate_total += 1;
@@ -465,8 +463,7 @@ impl CiService {
 
             if let Some(last) = config.last_polled_at {
                 let elapsed = now - last;
-                if elapsed.num_seconds() < i64::try_from(config.interval_secs).unwrap_or(i64::MAX)
-                {
+                if elapsed.num_seconds() < i64::try_from(config.interval_secs).unwrap_or(i64::MAX) {
                     continue;
                 }
             }

@@ -1,6 +1,8 @@
 use anyhow::Result;
 use async_trait::async_trait;
-use tardigrade_core::{BuildRecord, JobDefinition, ScmPollingConfig, ScmProvider, WebhookSecurityConfig};
+use tardigrade_core::{
+    BuildRecord, JobDefinition, ScmPollingConfig, ScmProvider, WebhookSecurityConfig,
+};
 use uuid::Uuid;
 
 /// Storage is the single source of truth for job/build lifecycle state.

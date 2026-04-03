@@ -7,8 +7,8 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use uuid::Uuid;
 
-use crate::model::{InFlightEntry, QueueState};
 use crate::Scheduler;
+use crate::model::{InFlightEntry, QueueState};
 
 /// Durable scheduler persisting queue/in-flight state to a json file.
 #[derive(Clone)]
