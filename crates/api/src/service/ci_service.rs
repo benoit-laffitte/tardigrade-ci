@@ -343,24 +343,23 @@ impl CiService {
         if let Some(event) = event {
             if let Some(dedup_key) =
                 build_webhook_dedup_key(provider, &repository_url, headers, body, event)
+                && self.is_duplicate_webhook_event(&dedup_key)
             {
-                if self.is_duplicate_webhook_event(&dedup_key) {
-                    if let Ok(mut metrics) = self.metrics.lock() {
-                        metrics.scm_webhook_duplicate_total += 1;
-                    }
-                    self.emit_event(
-                        "scm_webhook_duplicate_ignored",
-                        "info",
-                        format!(
-                            "Duplicate webhook ignored for repository {}",
-                            repository_url
-                        ),
-                        None,
-                        None,
-                        None,
-                    );
-                    return Ok(());
+                if let Ok(mut metrics) = self.metrics.lock() {
+                    metrics.scm_webhook_duplicate_total += 1;
                 }
+                self.emit_event(
+                    "scm_webhook_duplicate_ignored",
+                    "info",
+                    format!(
+                        "Duplicate webhook ignored for repository {}",
+                        repository_url
+                    ),
+                    None,
+                    None,
+                    None,
+                );
+                return Ok(());
             }
 
             self.enqueue_repository_jobs_for_event(&repository_url, event)
