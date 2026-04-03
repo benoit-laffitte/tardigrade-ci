@@ -1,6 +1,6 @@
 use axum::{body::to_bytes, response::IntoResponse};
 
-use super::{app_js, index, styles_css};
+use super::{app_js, index, styles_css, tardigrade_logo_png};
 
 /// Verifies dashboard index handler returns an HTML payload.
 #[tokio::test]
@@ -35,4 +35,21 @@ async fn styles_handler_sets_css_content_type() {
         .and_then(|v| v.to_str().ok())
         .unwrap_or_default();
     assert_eq!(content_type, "text/css; charset=utf-8");
+}
+
+/// Verifies logo asset handler sets png content type and returns bytes.
+#[tokio::test]
+async fn logo_handler_sets_png_content_type() {
+    let response = tardigrade_logo_png().await.into_response();
+    let content_type = response
+        .headers()
+        .get("content-type")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or_default();
+    assert_eq!(content_type, "image/png");
+
+    let body = to_bytes(response.into_body(), usize::MAX)
+        .await
+        .expect("read logo body");
+    assert!(!body.is_empty());
 }

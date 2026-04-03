@@ -1,6 +1,6 @@
 use axum::response::{Html, IntoResponse};
 
-use super::{APP_JS, INDEX_HTML, STYLES_CSS};
+use super::{APP_JS, INDEX_HTML, STYLES_CSS, TARDIGRADE_LOGO_PNG};
 
 /// Serves dashboard index HTML.
 pub async fn index() -> Html<&'static str> {
@@ -18,4 +18,9 @@ pub async fn app_js() -> impl IntoResponse {
 /// Serves dashboard stylesheet with explicit content type.
 pub async fn styles_css() -> impl IntoResponse {
     ([("content-type", "text/css; charset=utf-8")], STYLES_CSS)
+}
+
+/// Serves the embedded dashboard logo with explicit content type.
+pub async fn tardigrade_logo_png() -> impl IntoResponse {
+    ([("content-type", "image/png")], TARDIGRADE_LOGO_PNG)
 }
