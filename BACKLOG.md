@@ -377,13 +377,13 @@ Refinement decisions:
 - [x] `UXREAL-01` Add real-app multi-page shell (Pipelines, Overview, Workers, SCM Security, Plugins & Policy, Observability, Administration).
 - [x] `UXREAL-02` Add explicit API coverage indicator by page (`full`, `partial`, `roadmap`) in real dashboard.
 - [x] `UXREAL-03` Deliver Pipelines page on real API functions (`POST /jobs`, `GET /jobs`, `POST /jobs/{id}/run`, `GET /builds`, `POST /builds/{id}/cancel`).
-- [-] `UXREAL-04` Deliver Overview page with metrics strictly derivable from `GET /health`, `GET /jobs`, `GET /builds`.
+- [x] `UXREAL-04` Deliver Overview page with metrics strictly derivable from `GET /health`, `GET /jobs`, `GET /builds`.
 - [ ] `UXREAL-05` Implement Workers page once worker runtime endpoints are finalized in public API surface.
 - [ ] `UXREAL-06` Implement SCM Security page once webhook-security admin endpoints are finalized.
 - [ ] `UXREAL-07` Implement Plugins & Policy page once plugin registry/policy endpoints are finalized.
 - [ ] `UXREAL-08` Implement Observability page once durable observability query contracts are finalized.
 - [ ] `UXREAL-09` Implement Administration page once role/audit APIs are finalized.
-- [ ] `UXREAL-10` Add frontend integration tests for page navigation, API coverage gating, and Pipelines/Overview flows.
+- [x] `UXREAL-10` Add frontend integration tests for page navigation, API coverage gating, and Pipelines/Overview flows.
 
 Definition of done:
 

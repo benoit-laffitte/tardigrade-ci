@@ -1,10 +1,50 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page, type Route } from "@playwright/test";
 
 /**
- * Mocks baseline dashboard API calls used during app bootstrap.
+ * Mocks dashboard API calls used by the API-backed pages (Pipelines/Overview).
  */
-async function mockDashboardBootstrap(page: Parameters<typeof test>[0]["page"]) {
-  await page.route("**/graphql", async (route) => {
+async function mockDashboardBootstrap(page: Page) {
+  const jobs = [
+    {
+      id: "job-12345678",
+      name: "build-api",
+      repository_url: "https://example.com/repo.git",
+      pipeline_path: "pipelines/api.yml",
+      created_at: new Date().toISOString()
+    }
+  ];
+
+  const builds = [
+    {
+      id: "build-running-1",
+      job_id: "job-12345678",
+      status: "Running",
+      queued_at: new Date().toISOString(),
+      started_at: new Date().toISOString(),
+      finished_at: null,
+      logs: []
+    },
+    {
+      id: "build-success-1",
+      job_id: "job-12345678",
+      status: "Success",
+      queued_at: new Date().toISOString(),
+      started_at: new Date().toISOString(),
+      finished_at: new Date().toISOString(),
+      logs: []
+    },
+    {
+      id: "build-failed-1",
+      job_id: "job-12345678",
+      status: "Failed",
+      queued_at: new Date().toISOString(),
+      started_at: new Date().toISOString(),
+      finished_at: new Date().toISOString(),
+      logs: []
+    }
+  ];
+
+  await page.route("**/graphql", async (route: Route) => {
     const request = route.request();
     const body = request.postDataJSON() as { query?: string };
     const query = body.query ?? "";
@@ -16,8 +56,8 @@ async function mockDashboardBootstrap(page: Parameters<typeof test>[0]["page"]) 
         body: JSON.stringify({
           data: {
             dashboard_snapshot: {
-              jobs: [],
-              builds: [],
+              jobs,
+              builds,
               workers: [],
               metrics: {
                 reclaimed_total: 0,
@@ -33,6 +73,52 @@ async function mockDashboardBootstrap(page: Parameters<typeof test>[0]["page"]) 
       return;
     }
 
+    if (query.includes("CreateJob")) {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          data: {
+            create_job: {
+              id: "job-created-1",
+              name: "build-web"
+            }
+          }
+        })
+      });
+      return;
+    }
+
+    if (query.includes("RunJob")) {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          data: {
+            run_job: {
+              id: "build-new-run-1"
+            }
+          }
+        })
+      });
+      return;
+    }
+
+    if (query.includes("CancelBuild")) {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          data: {
+            cancel_build: {
+              id: "build-running-1"
+            }
+          }
+        })
+      });
+      return;
+    }
+
     await route.fulfill({
       status: 200,
       contentType: "application/json",
@@ -40,7 +126,15 @@ async function mockDashboardBootstrap(page: Parameters<typeof test>[0]["page"]) 
     });
   });
 
-  await page.route("**/plugins", async (route) => {
+  await page.route("**/health", async (route: Route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ status: "ok" })
+    });
+  });
+
+  await page.route("**/plugins", async (route: Route) => {
     if (route.request().method() === "GET") {
       await route.fulfill({
         status: 200,
@@ -65,7 +159,7 @@ async function mockDashboardBootstrap(page: Parameters<typeof test>[0]["page"]) 
     });
   });
 
-  await page.route("**/plugins/policies**", async (route) => {
+  await page.route("**/plugins/policies**", async (route: Route) => {
     if (route.request().method() === "GET") {
       await route.fulfill({
         status: 200,
@@ -88,7 +182,7 @@ async function mockDashboardBootstrap(page: Parameters<typeof test>[0]["page"]) 
     });
   });
 
-  await page.route("**/plugins/**/authorize-check", async (route) => {
+  await page.route("**/plugins/**/authorize-check", async (route: Route) => {
     await route.fulfill({
       status: 200,
       contentType: "application/json",
@@ -103,7 +197,7 @@ async function mockDashboardBootstrap(page: Parameters<typeof test>[0]["page"]) 
     });
   });
 
-  await page.route("**/metrics", async (route) => {
+  await page.route("**/metrics", async (route: Route) => {
     await route.fulfill({
       status: 200,
       contentType: "application/json",
@@ -124,7 +218,7 @@ async function mockDashboardBootstrap(page: Parameters<typeof test>[0]["page"]) 
     });
   });
 
-  await page.route("**/scm/webhook-security/rejections**", async (route) => {
+  await page.route("**/scm/webhook-security/rejections**", async (route: Route) => {
     await route.fulfill({
       status: 200,
       contentType: "application/json",
@@ -141,7 +235,7 @@ async function mockDashboardBootstrap(page: Parameters<typeof test>[0]["page"]) 
     });
   });
 
-  await page.route("**/workers", async (route) => {
+  await page.route("**/workers", async (route: Route) => {
     await route.fulfill({
       status: 200,
       contentType: "application/json",
@@ -149,7 +243,7 @@ async function mockDashboardBootstrap(page: Parameters<typeof test>[0]["page"]) 
     });
   });
 
-  await page.route("**/scm/polling/tick", async (route) => {
+  await page.route("**/scm/polling/tick", async (route: Route) => {
     await route.fulfill({
       status: 200,
       contentType: "application/json",
@@ -157,11 +251,11 @@ async function mockDashboardBootstrap(page: Parameters<typeof test>[0]["page"]) 
     });
   });
 
-  await page.route("**/scm/polling/configs", async (route) => {
+  await page.route("**/scm/polling/configs", async (route: Route) => {
     await route.fulfill({ status: 204, body: "" });
   });
 
-  await page.route("**/scm/webhook-security/configs", async (route) => {
+  await page.route("**/scm/webhook-security/configs", async (route: Route) => {
     await route.fulfill({ status: 500, body: "" });
   });
 }
@@ -169,12 +263,12 @@ async function mockDashboardBootstrap(page: Parameters<typeof test>[0]["page"]) 
 /**
  * Installs EventSource shim so tests do not rely on real SSE server.
  */
-async function mockEventSource(page: Parameters<typeof test>[0]["page"]) {
+async function mockEventSource(page: Page) {
   await page.addInitScript(() => {
     class MockEventSource {
-      onopen: ((this: EventSource, ev: Event) => unknown) | null = null;
-      onerror: ((this: EventSource, ev: Event) => unknown) | null = null;
-      onmessage: ((this: EventSource, ev: MessageEvent<string>) => unknown) | null = null;
+      onopen: ((ev: Event) => unknown) | null = null;
+      onerror: ((ev: Event) => unknown) | null = null;
+      onmessage: ((ev: MessageEvent<string>) => unknown) | null = null;
 
       close() {
         // no-op for tests
@@ -201,7 +295,7 @@ async function mockEventSource(page: Parameters<typeof test>[0]["page"]) {
     }
 
     // @ts-expect-error test shim
-    window.EventSource = MockEventSource;
+    globalThis.EventSource = MockEventSource;
   });
 }
 
@@ -210,49 +304,75 @@ test.beforeEach(async ({ page }) => {
   await mockDashboardBootstrap(page);
 });
 
-test("viewer role blocks sensitive plugin action", async ({ page }) => {
+/**
+ * Verifies that all UX target pages are present in the navigation shell.
+ */
+test("shows 7-page navigation shell", async ({ page }) => {
   await page.goto("/");
 
-  await page.selectOption("select[name='admin_role']", "viewer");
-  await page.fill("input[name='plugin_admin_name']", "net-diagnostics");
-  await page.click("button:has-text('Load')");
-
-  await expect(page.getByText("Role insuffisant pour charger un plugin.")).toBeVisible();
-  await expect(page.getByText("plugin_load_denied")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Pipelines" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Overview" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Workers" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "SCM Security" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Plugins & Policy" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Observability" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Administration" })).toBeVisible();
 });
 
-test("plugin policy dry-run shows deny with missing capability", async ({ page }) => {
+/**
+ * Verifies API coverage gating and roadmap placeholder behavior on non-implemented pages.
+ */
+test("shows roadmap gating on non-implemented page", async ({ page }) => {
   await page.goto("/");
 
-  await page.fill("input[name='plugin_admin_name']", "net-diagnostics");
-  await page.click("button:has-text('Dry-run authorize')");
+  await page.getByRole("button", { name: "Workers" }).click();
 
-  await expect(page.getByText("Policy deny pour net-diagnostics")).toBeVisible();
-  await expect(page.getByText("Deny: missing=network.")).toBeVisible();
+  await expect(page.getByText("Perimetre API reel")).toBeVisible();
+  await expect(page.locator(".api-coverage-panel .pill")).toHaveText("roadmap");
+  await expect(page.getByRole("heading", { name: "Page en mode roadmap" })).toBeVisible();
 });
 
-test("webhook operations panel shows counters and rejection timeline", async ({ page }) => {
+/**
+ * Verifies that Pipelines page exposes API-backed actions and endpoint-labeled controls.
+ */
+test("pipelines page shows API-backed actions", async ({ page }) => {
   await page.goto("/");
 
-  await expect(page.getByText("Webhook Security Operations")).toBeVisible();
-  await expect(page.getByText("Received")).toBeVisible();
-  await expect(page.getByText("invalid_webhook_signature")).toBeVisible();
+  await page.getByRole("button", { name: "Pipelines" }).click();
+
+  await expect(page.locator(".api-coverage-panel .pill")).toHaveText("full");
+  await expect(page.getByRole("button", { name: "POST /jobs", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "POST /jobs/{id}/run" })).toBeVisible();
+  await expect(page.locator("button:has-text('POST /builds/{id}/cancel'):not([disabled])")).toHaveCount(1);
 });
 
-test("observability panel filters event by resource id", async ({ page }) => {
+/**
+ * Verifies create-job flow wired through API-backed Pipelines page.
+ */
+test("creates job from pipelines page", async ({ page }) => {
   await page.goto("/");
 
-  await expect(page.getByText("Advanced Observability")).toBeVisible();
-  await page.fill("input[name='observability_resource']", "worker-123");
-  await expect(page.getByText("job=job-123 | build=build-123 | worker=worker-123")).toBeVisible();
+  await page.getByRole("button", { name: "Pipelines" }).click();
+
+  await page.fill("input[name='name']", "build-web");
+  await page.fill("input[name='repository_url']", "https://example.com/web.git");
+  await page.fill("input[name='pipeline_path']", "pipelines/web.yml");
+  await page.getByRole("button", { name: "POST /jobs", exact: true }).click();
+
+  await expect(page.getByText("Job build-web cree.")).toBeVisible();
 });
 
-test("webhook security save surfaces backend error", async ({ page }) => {
+/**
+ * Verifies Overview page stays API-strict and shows derived build/job/health summary.
+ */
+test("overview page displays API-strict summary", async ({ page }) => {
   await page.goto("/");
 
-  await page.fill("input[name='webhook_repository_url']", "https://example.com/repo.git");
-  await page.fill("input[name='webhook_secret']", "super-secret");
-  await page.click("button:has-text('Enregistrer')");
+  await page.getByRole("button", { name: "Overview" }).click();
 
-  await expect(page.getByText("Erreur interne lors de la sauvegarde webhook.")).toBeVisible();
+  await expect(page.locator(".api-coverage-panel .pill")).toHaveText("partial");
+  await expect(page.getByText("Health & Delivery Snapshot")).toBeVisible();
+  await expect(page.getByText("Build Status Breakdown")).toBeVisible();
+  await expect(page.getByText("API-backed Overview Scope")).toBeVisible();
+  await expect(page.getByText("No reliance on /metrics, /events, /dead-letter-builds for this page.")).toBeVisible();
 });

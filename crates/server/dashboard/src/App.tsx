@@ -1681,6 +1681,49 @@ export function App() {
     return latestAt ? formatDateTime(latestAt) : formatDateTime(new Date().toISOString());
   }, [liveEvents]);
 
+  // Summarizes build statuses for the Overview page using only dashboard snapshot builds.
+  const buildStatusSummary = useMemo(() => {
+    const summary = {
+      running: 0,
+      pending: 0,
+      success: 0,
+      failed: 0,
+      canceled: 0
+    };
+
+    for (const build of snapshot.builds) {
+      const status = String(build.status).toLowerCase();
+      if (status === "running") {
+        summary.running += 1;
+      } else if (status === "pending") {
+        summary.pending += 1;
+      } else if (status === "success") {
+        summary.success += 1;
+      } else if (status === "failed") {
+        summary.failed += 1;
+      } else if (status === "canceled") {
+        summary.canceled += 1;
+      }
+    }
+
+    return summary;
+  }, [snapshot.builds]);
+
+  // Computes one lightweight execution health ratio from build statuses only.
+  const deliverySuccessRatio = useMemo(() => {
+    const finalBuilds = snapshot.builds.filter((build) => {
+      const status = String(build.status).toLowerCase();
+      return status === "success" || status === "failed" || status === "canceled";
+    });
+
+    if (finalBuilds.length === 0) {
+      return "n/a";
+    }
+
+    const successCount = finalBuilds.filter((build) => String(build.status).toLowerCase() === "success").length;
+    return `${Math.round((successCount / finalBuilds.length) * 100)}%`;
+  }, [snapshot.builds]);
+
   // Exports currently filtered observability events as JSON.
   const exportObservabilityJson = useCallback(() => {
     const filename = `observability-events-${new Date().toISOString().replaceAll(":", "-")}.json`;
@@ -1700,7 +1743,11 @@ export function App() {
 
   // Keeps roadmap-only state/actions referenced while pages are progressively wired.
   keepRoadmapReferences(
+    severityToStatusClass,
+    formatTime,
     PLUGIN_CAPABILITY_OPTIONS,
+    adminActivity,
+    setAdminActivity,
     webhookForm,
     setWebhookForm,
     webhookMessage,
@@ -1763,6 +1810,13 @@ export function App() {
     refreshWorkers,
     claimBuildForWorker,
     completeBuildForWorker,
+    observabilityFilter,
+    setObservabilityFilter,
+    observabilityMessage,
+    setObservabilityMessage,
+    observabilityFreshness,
+    exportObservabilityJson,
+    exportObservabilityCsv,
     selectedWorker,
     pluginAuthorizationSummary,
     pluginPolicySummaryByName
@@ -1965,25 +2019,25 @@ export function App() {
               {activePage === "overview" && (
                 <article className="panel panel-metrics reveal" style={{ ["--delay" as string]: "0.3s" }}>
             <div className="panel-head">
-              <h2>Runtime Metrics</h2>
+              <h2>Health & Delivery Snapshot</h2>
               <span className="pill">live</span>
             </div>
             <div className="metrics-grid">
               <div className="metric-card">
-                <p className="metric-label">Reclaims</p>
-                <p className="metric-value">{snapshot.metrics?.reclaimed_total ?? 0}</p>
+                <p className="metric-label">API Health</p>
+                <p className="metric-value">{healthStatus === "ok" ? "OK" : "DEGRADED"}</p>
               </div>
               <div className="metric-card">
-                <p className="metric-label">Retry Requeues</p>
-                <p className="metric-value">{snapshot.metrics?.retry_requeued_total ?? 0}</p>
+                <p className="metric-label">Jobs</p>
+                <p className="metric-value">{snapshot.jobs.length}</p>
               </div>
               <div className="metric-card">
-                <p className="metric-label">Ownership Conflicts</p>
-                <p className="metric-value">{snapshot.metrics?.ownership_conflicts_total ?? 0}</p>
+                <p className="metric-label">Builds</p>
+                <p className="metric-value">{snapshot.builds.length}</p>
               </div>
               <div className="metric-card">
-                <p className="metric-label">Dead-letter</p>
-                <p className="metric-value">{snapshot.metrics?.dead_letter_total ?? 0}</p>
+                <p className="metric-label">Success Ratio</p>
+                <p className="metric-value">{deliverySuccessRatio}</p>
               </div>
             </div>
                 </article>
@@ -1992,149 +2046,75 @@ export function App() {
               {activePage === "overview" && (
                 <article className="panel reveal" style={{ ["--delay" as string]: "0.31s" }}>
             <div className="panel-head">
-              <h2>Dead-letter Builds</h2>
-              <span className="pill">{snapshot.dead_letter_builds.length}</span>
+              <h2>Build Status Breakdown</h2>
+              <span className="pill">{snapshot.builds.length}</span>
             </div>
             <div className="list">
-              {snapshot.dead_letter_builds.length === 0 ? (
-                <p className="hint">Aucun build dead-letter.</p>
-              ) : (
-                snapshot.dead_letter_builds.map((build) => (
-                  <div className="list-item" key={build.id}>
-                    <div>
-                      <p className="item-title">Build {build.id.slice(0, 8)}</p>
-                      <p className="item-subtitle">
-                        Job {build.job_id.slice(0, 8)} | {formatDateTime(build.queued_at)}
-                      </p>
-                    </div>
-                    <div className="actions">
-                      <span className="status failed">dead-letter</span>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-                </article>
-              )}
-
-              {activePage === "overview" && (
-                <article className="panel panel-events reveal" style={{ ["--delay" as string]: "0.315s" }}>
-            <div className="panel-head">
-              <h2>Advanced Observability</h2>
-              <span className="pill">{filteredObservabilityEvents.length}</span>
-            </div>
-            <form className="form" onSubmit={(event) => event.preventDefault()}>
-              <label>
-                <span>Severity</span>
-                <select
-                  name="observability_severity"
-                  value={observabilityFilter.severity}
-                  onChange={(event) =>
-                    setObservabilityFilter((previous) => ({ ...previous, severity: event.target.value }))
-                  }
-                >
-                  <option value="">all</option>
-                  <option value="ok">ok</option>
-                  <option value="info">info</option>
-                  <option value="warn">warn</option>
-                  <option value="error">error</option>
-                </select>
-              </label>
-              <label>
-                <span>Kind contains</span>
-                <input
-                  name="observability_kind"
-                  placeholder="build_queued"
-                  value={observabilityFilter.kind}
-                  onChange={(event) =>
-                    setObservabilityFilter((previous) => ({ ...previous, kind: event.target.value }))
-                  }
-                />
-              </label>
-              <label>
-                <span>Resource id contains</span>
-                <input
-                  name="observability_resource"
-                  placeholder="job/build/worker id"
-                  value={observabilityFilter.resource_id}
-                  onChange={(event) =>
-                    setObservabilityFilter((previous) => ({ ...previous, resource_id: event.target.value }))
-                  }
-                />
-              </label>
-              <label>
-                <span>Window (minutes)</span>
-                <select
-                  name="observability_window"
-                  value={observabilityFilter.window_minutes}
-                  onChange={(event) =>
-                    setObservabilityFilter((previous) => ({ ...previous, window_minutes: event.target.value }))
-                  }
-                >
-                  <option value="5">5</option>
-                  <option value="15">15</option>
-                  <option value="60">60</option>
-                  <option value="1440">1440</option>
-                </select>
-              </label>
-              <div className="actions">
-                <button type="button" className="btn btn-secondary" onClick={exportObservabilityJson}>
-                  Export JSON
-                </button>
-                <button type="button" className="btn btn-primary" onClick={exportObservabilityCsv}>
-                  Export CSV
-                </button>
+              <div className="list-item">
+                <div>
+                  <p className="item-title">Running</p>
+                  <p className="item-subtitle">In-progress builds from GET /builds</p>
+                </div>
+                <div className="actions">
+                  <span className="status pending">{buildStatusSummary.running}</span>
+                </div>
               </div>
-            </form>
-            <p className="hint">Freshness: {observabilityFreshness}</p>
-            <p className="hint">{observabilityMessage}</p>
-            <div className="list events-list">
-              {filteredObservabilityEvents.length === 0 ? (
-                <p className="hint">Aucun evenement recu.</p>
-              ) : (
-                filteredObservabilityEvents.map((evt, index) => (
-                  <div className="list-item event-item" key={`${evt.kind ?? "event"}-${evt.at ?? "now"}-${index}`}>
-                    <div>
-                      <p className="item-title">{evt.kind ?? "event"}</p>
-                      <p className="item-subtitle">
-                        {formatTime(evt.at)} | {evt.message ?? ""}
-                      </p>
-                      <p className="item-subtitle">
-                        job={evt.job_id ?? "-"} | build={evt.build_id ?? "-"} | worker={evt.worker_id ?? "-"}
-                      </p>
-                    </div>
-                    <div className="actions">
-                      <span className={`status ${severityToStatusClass(evt.severity)}`}>{evt.severity ?? "info"}</span>
-                    </div>
-                  </div>
-                ))
-              )}
+              <div className="list-item">
+                <div>
+                  <p className="item-title">Pending</p>
+                  <p className="item-subtitle">Queued builds awaiting execution</p>
+                </div>
+                <div className="actions">
+                  <span className="status pending">{buildStatusSummary.pending}</span>
+                </div>
+              </div>
+              <div className="list-item">
+                <div>
+                  <p className="item-title">Success</p>
+                  <p className="item-subtitle">Completed successful executions</p>
+                </div>
+                <div className="actions">
+                  <span className="status success">{buildStatusSummary.success}</span>
+                </div>
+              </div>
+              <div className="list-item">
+                <div>
+                  <p className="item-title">Failed / Canceled</p>
+                  <p className="item-subtitle">Final non-success states</p>
+                </div>
+                <div className="actions">
+                  <span className="status failed">{buildStatusSummary.failed + buildStatusSummary.canceled}</span>
+                </div>
+              </div>
             </div>
                 </article>
               )}
 
               {activePage === "overview" && (
-                <article className="panel reveal" style={{ ["--delay" as string]: "0.318s" }}>
+                <article className="panel reveal" style={{ ["--delay" as string]: "0.315s" }}>
             <div className="panel-head">
-              <h2>Admin Activity</h2>
-              <span className="pill">{adminActivity.length}</span>
+              <h2>API-backed Overview Scope</h2>
+              <span className="pill">strict</span>
             </div>
             <div className="list">
-              {adminActivity.length === 0 ? (
-                <p className="hint">Aucune action admin enregistree.</p>
-              ) : (
-                adminActivity.map((entry, index) => (
-                  <div className="list-item" key={`${entry.at}-${entry.action}-${index}`}>
-                    <div>
-                      <p className="item-title">{entry.action}</p>
-                      <p className="item-subtitle">
-                        role={entry.actor_role} | target={entry.target}
-                      </p>
-                      <p className="item-subtitle">{formatDateTime(entry.at)}</p>
-                    </div>
-                  </div>
-                ))
-              )}
+              <div className="list-item">
+                <div>
+                  <p className="item-title">Data sources in use</p>
+                  <p className="item-subtitle">GET /health, GET /jobs, GET /builds</p>
+                </div>
+              </div>
+              <div className="list-item">
+                <div>
+                  <p className="item-title">Roadmap-only metrics excluded</p>
+                  <p className="item-subtitle">No reliance on /metrics, /events, /dead-letter-builds for this page.</p>
+                </div>
+              </div>
+              <div className="list-item">
+                <div>
+                  <p className="item-title">Freshness</p>
+                  <p className="item-subtitle">Last UI refresh: {formatDateTime(new Date().toISOString())}</p>
+                </div>
+              </div>
             </div>
                 </article>
               )}
