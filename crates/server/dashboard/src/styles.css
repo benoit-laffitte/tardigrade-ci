@@ -129,6 +129,34 @@ body {
   margin-bottom: 1.4rem;
 }
 
+.page-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.9rem;
+}
+
+.page-tab {
+  border: 1px solid rgba(255, 177, 96, 0.42);
+  border-radius: 999px;
+  background: rgba(33, 20, 36, 0.75);
+  color: var(--text-main);
+  padding: 0.35rem 0.72rem;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+}
+
+.page-tab.active {
+  border-color: rgba(255, 205, 145, 0.68);
+  background: rgba(122, 46, 26, 0.65);
+}
+
+.api-coverage-panel {
+  margin-bottom: 1rem;
+}
+
 .hero-copy-wrap {
   display: flex;
   align-items: center;

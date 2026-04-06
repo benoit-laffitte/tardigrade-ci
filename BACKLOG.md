@@ -19,12 +19,14 @@ This file is the delivery backlog derived from the current roadmap.
 5. Reliability follow-ups (`REL-*`) as hardening milestones.
 6. Epic 0 (`INDUS-*`) hardening follow-ups.
 7. Epic 5 (`CLOUD-*`) cloud/container delivery track (deferred).
+8. Epic 8 (`UXREAL-*`) mockup-to-real-dashboard rollout.
 
 Context update:
 
 - Epic 1 (`DSL-*`) is complete.
 - Epic 1b (`TECH-*`) is complete.
 - Docker/cloud scope has been deferred and tracked under Epic 5 (`CLOUD-*`).
+- Multi-page UX mockup is available and tracked in `UX.md`; implementation is now phased under Epic 8 (`UXREAL-*`).
 
 Release note (2026-04-02):
 
@@ -361,6 +363,37 @@ Definition of done:
 
 ### Epic 4: Redis-first production scheduler mode
 
+### Epic 8: Mockup-to-real dashboard rollout
+
+Goal: transform the validated multi-page mockup into the real dashboard with phased delivery aligned to currently exposed API functions.
+
+Refinement decisions:
+
+- Phase 1 strictly targets current API surface: `GET /health`, `POST /jobs`, `GET /jobs`, `POST /jobs/{id}/run`, `POST /builds/{id}/cancel`, `GET /builds`.
+- Non-covered pages/actions stay visible as roadmap but non-blocking and explicitly tagged.
+- UX decision traceability remains in `UX.md` and delivery tracking remains in this backlog.
+- React implementation should keep existing role/event/snapshot conventions when possible.
+
+- [x] `UXREAL-01` Add real-app multi-page shell (Pipelines, Overview, Workers, SCM Security, Plugins & Policy, Observability, Administration).
+- [x] `UXREAL-02` Add explicit API coverage indicator by page (`full`, `partial`, `roadmap`) in real dashboard.
+- [x] `UXREAL-03` Deliver Pipelines page on real API functions (`POST /jobs`, `GET /jobs`, `POST /jobs/{id}/run`, `GET /builds`, `POST /builds/{id}/cancel`).
+- [-] `UXREAL-04` Deliver Overview page with metrics strictly derivable from `GET /health`, `GET /jobs`, `GET /builds`.
+- [ ] `UXREAL-05` Implement Workers page once worker runtime endpoints are finalized in public API surface.
+- [ ] `UXREAL-06` Implement SCM Security page once webhook-security admin endpoints are finalized.
+- [ ] `UXREAL-07` Implement Plugins & Policy page once plugin registry/policy endpoints are finalized.
+- [ ] `UXREAL-08` Implement Observability page once durable observability query contracts are finalized.
+- [ ] `UXREAL-09` Implement Administration page once role/audit APIs are finalized.
+- [ ] `UXREAL-10` Add frontend integration tests for page navigation, API coverage gating, and Pipelines/Overview flows.
+
+Definition of done:
+
+- Real dashboard navigation matches validated 7-page IA from `UX.md`.
+- Pages backed by current API are fully actionable and tested.
+- Roadmap pages are clearly identified and do not expose misleading active controls.
+- Backlog and UX logs remain synchronized for each delivered page iteration.
+
+### Epic 4: Redis-first production scheduler mode
+
 Goal: make Redis the default production scheduler path and reduce file-backed usage to local/dev only.
 
 - [x] `SCHED-01` Add explicit runtime mode selection (`dev`, `prod`).
@@ -464,3 +497,4 @@ Definition of done:
 5. Reliability follow-ups (`REL-*`) as hardening milestones.
 6. Epic 0 (`INDUS-*`) hardening follow-ups.
 7. Epic 5 (`CLOUD-*`) cloud/container delivery track (deferred).
+8. Epic 8 (`UXREAL-*`) mockup-to-real-dashboard rollout.

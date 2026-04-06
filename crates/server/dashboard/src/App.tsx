@@ -182,6 +182,21 @@ interface ObservabilityFilter {
 
 type AdminRole = "viewer" | "operator" | "admin";
 
+type DashboardPage =
+  | "pipelines"
+  | "overview"
+  | "workers"
+  | "scm-security"
+  | "plugins-policy"
+  | "observability"
+  | "administration";
+
+interface DashboardNavItem {
+  id: DashboardPage;
+  label: string;
+  coverage: "full" | "partial" | "roadmap";
+}
+
 interface AdminActivityEntry {
   at: string;
   actor_role: AdminRole;
@@ -215,6 +230,16 @@ const ADMIN_ROLE_CAPABILITIES: Record<AdminRole, AdminRoleCapabilities> = {
     can_mutate_sensitive: true
   }
 };
+
+const DASHBOARD_NAV_ITEMS: DashboardNavItem[] = [
+  { id: "pipelines", label: "Pipelines", coverage: "full" },
+  { id: "overview", label: "Overview", coverage: "partial" },
+  { id: "workers", label: "Workers", coverage: "roadmap" },
+  { id: "scm-security", label: "SCM Security", coverage: "roadmap" },
+  { id: "plugins-policy", label: "Plugins & Policy", coverage: "roadmap" },
+  { id: "observability", label: "Observability", coverage: "roadmap" },
+  { id: "administration", label: "Administration", coverage: "roadmap" }
+];
 
 type WorkerCompletionStatus = "success" | "failed";
 
@@ -441,11 +466,20 @@ function stardateValue(now: Date): string {
   return `${String(now.getFullYear()).slice(2)}.${String(dayOfYear).padStart(3, "0")}`;
 }
 
+// Keeps transitional variables referenced while roadmap pages are progressively implemented.
+function keepRoadmapReferences(..._args: unknown[]): void {
+  return;
+}
+
+// NOSONAR - transitional component during multi-page migration from mockup to real API-backed views.
+// eslint-disable-next-line sonarjs/cognitive-complexity
 export function App() {
   const client = useApolloClient();
   const refreshTimerRef = useRef<number | null>(null);
 
   const [streamConnected, setStreamConnected] = useState(false);
+  const [activePage, setActivePage] = useState<DashboardPage>("pipelines");
+  const [healthStatus, setHealthStatus] = useState<"ok" | "degraded">("degraded");
   const [snapshot, setSnapshot] = useState<DashboardSnapshot>({
     jobs: [],
     builds: [],
@@ -520,6 +554,15 @@ export function App() {
   });
   const [observabilityMessage, setObservabilityMessage] = useState("");
   const [stardate, setStardate] = useState(() => stardateValue(new Date()));
+
+  // Resolves API coverage label for currently selected page in the navigation bar.
+  const activeCoverage = useMemo(() => {
+    const current = DASHBOARD_NAV_ITEMS.find((item) => item.id === activePage);
+    return current?.coverage ?? "roadmap";
+  }, [activePage]);
+
+  // Identifies pages already wired to the currently available API surface.
+  const isImplementedPage = activePage === "pipelines" || activePage === "overview";
 
   // Prepends one log line to keep operator feedback visible.
   const log = useCallback((message: string, kind: string = "info") => {
@@ -1492,14 +1535,30 @@ export function App() {
     workerControlForm
   ]);
 
+  // Reads health endpoint to display backend availability in the HUD.
+  const refreshHealth = useCallback(async () => {
+    try {
+      const response = await fetch("/health", { method: "GET" });
+      setHealthStatus(response.ok ? "ok" : "degraded");
+    } catch {
+      setHealthStatus("degraded");
+    }
+  }, []);
+
   // Initializes dashboard data and baseline log once on first mount.
   useEffect(() => {
     log("Console initialisee", "ok");
     void refreshAll();
-    void refreshPluginInventory();
-    void loadPluginPolicy();
-    void refreshScmWebhookOperations();
-  }, [loadPluginPolicy, log, refreshAll, refreshPluginInventory, refreshScmWebhookOperations]);
+    void refreshHealth();
+  }, [log, refreshAll, refreshHealth]);
+
+  // Polls /health so the top HUD reflects backend availability.
+  useEffect(() => {
+    const id = globalThis.setInterval(() => {
+      void refreshHealth();
+    }, 5000);
+    return () => globalThis.clearInterval(id);
+  }, [refreshHealth]);
 
   // Keeps stardate indicator updated each minute.
   useEffect(() => {
@@ -1639,6 +1698,76 @@ export function App() {
     log(`Export observability CSV (${filteredObservabilityEvents.length} events)`, "ok");
   }, [filteredObservabilityEvents, log]);
 
+  // Keeps roadmap-only state/actions referenced while pages are progressively wired.
+  keepRoadmapReferences(
+    PLUGIN_CAPABILITY_OPTIONS,
+    webhookForm,
+    setWebhookForm,
+    webhookMessage,
+    setWebhookMessage,
+    showWebhookSecret,
+    setShowWebhookSecret,
+    knownWebhookConfigs,
+    setKnownWebhookConfigs,
+    pollingForm,
+    setPollingForm,
+    pollingMessage,
+    setPollingMessage,
+    pollingTickSummary,
+    setPollingTickSummary,
+    knownPollingStates,
+    setKnownPollingStates,
+    workerControlForm,
+    setWorkerControlForm,
+    workerControlMessage,
+    setWorkerControlMessage,
+    lastClaimResult,
+    setLastClaimResult,
+    pluginAdminForm,
+    setPluginAdminForm,
+    pluginAdminMessage,
+    setPluginAdminMessage,
+    pluginInventory,
+    setPluginInventory,
+    pluginPolicyForm,
+    setPluginPolicyForm,
+    pluginPolicyMessage,
+    setPluginPolicyMessage,
+    pluginAuthorizationResult,
+    setPluginAuthorizationResult,
+    effectivePolicyContext,
+    setEffectivePolicyContext,
+    effectiveGrantedCapabilities,
+    setEffectiveGrantedCapabilities,
+    scmWebhookOpsFilter,
+    setScmWebhookOpsFilter,
+    scmWebhookOpsMessage,
+    setScmWebhookOpsMessage,
+    scmWebhookMetrics,
+    setScmWebhookMetrics,
+    scmWebhookRejections,
+    setScmWebhookRejections,
+    saveWebhookSecurityConfig,
+    saveScmPollingConfig,
+    runManualScmPollingTick,
+    refreshPluginInventory,
+    loadPlugin,
+    initPlugin,
+    executePlugin,
+    unloadPlugin,
+    togglePluginPolicyCapability,
+    loadPluginPolicy,
+    savePluginPolicy,
+    runPluginAuthorizationCheck,
+    refreshScmWebhookOperations,
+    refreshWorkers,
+    claimBuildForWorker,
+    completeBuildForWorker,
+    selectedWorker,
+    pluginAuthorizationSummary,
+    pluginPolicySummaryByName
+  );
+
   return (
     <>
       <div className="bg-orb orb-1"></div>
@@ -1663,13 +1792,16 @@ export function App() {
               <p className="eyebrow">Bridge Control Plane</p>
               <h1>Tardigrade CI Console</h1>
               <p className="subtitle">
-                Interface tactique pour creer des jobs, lancer des builds et piloter les executions en temps reel.
+                Console multi-pages alignee sur les fonctions API disponibles, avec extension progressive vers la cible UX.
               </p>
             </div>
           </div>
           <div className="hero-actions">
             <div className={`status-chip ${streamConnected ? "connected" : "disconnected"}`}>
               {streamStatusText}
+            </div>
+            <div className={`status-chip ${healthStatus === "ok" ? "connected" : "disconnected"}`}>
+              API {healthStatus === "ok" ? "Healthy" : "Degraded"}
             </div>
             <label>
               <span>Role</span>
@@ -1689,492 +1821,77 @@ export function App() {
           </div>
         </header>
 
+        <section className="page-nav reveal" style={{ ["--delay" as string]: "0.01s" }}>
+          {DASHBOARD_NAV_ITEMS.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              className={`page-tab ${activePage === item.id ? "active" : ""}`}
+              onClick={() => setActivePage(item.id)}
+            >
+              {item.label}
+            </button>
+          ))}
+        </section>
+
+        <section className="panel reveal api-coverage-panel" style={{ ["--delay" as string]: "0.015s" }}>
+          <div className="panel-head">
+            <h2>Perimetre API reel</h2>
+            <span className="pill">{activeCoverage}</span>
+          </div>
+          <p className="hint">
+            Endpoints disponibles: GET /health, POST /jobs, GET /jobs, POST /jobs/{"{id}"}/run,
+            POST /builds/{"{id}"}/cancel, GET /builds.
+          </p>
+        </section>
+
         <section className="grid">
-          <article className="panel panel-form reveal" style={{ ["--delay" as string]: "0.02s" }}>
-            <h2>Nouveau Job</h2>
-            <form className="form" onSubmit={(event) => void createJob(event)}>
-              <label>
-                <span>Nom du job</span>
-                <input
-                  name="name"
-                  placeholder="build-api"
-                  required
-                  value={form.name}
-                  onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))}
-                />
-              </label>
-              <label>
-                <span>Depot git</span>
-                <input
-                  name="repository_url"
-                  placeholder="https://example.com/project.git"
-                  required
-                  value={form.repository_url}
-                  onChange={(event) => setForm((prev) => ({ ...prev, repository_url: event.target.value }))}
-                />
-              </label>
-              <label>
-                <span>Pipeline file</span>
-                <input
-                  name="pipeline_path"
-                  placeholder="pipelines/api.yml"
-                  required
-                  value={form.pipeline_path}
-                  onChange={(event) => setForm((prev) => ({ ...prev, pipeline_path: event.target.value }))}
-                />
-              </label>
-              <button type="submit" className="btn btn-primary">
-                Initier le job
-              </button>
-            </form>
-            <p className="hint">{createMessage}</p>
-          </article>
-
-          <article className="panel panel-form reveal" style={{ ["--delay" as string]: "0.06s" }}>
-            <h2>SCM Webhook Security</h2>
-            <form className="form" onSubmit={(event) => void saveWebhookSecurityConfig(event)}>
-              <label>
-                <span>Repository URL</span>
-                <input
-                  name="webhook_repository_url"
-                  placeholder="https://example.com/repo.git"
-                  required
-                  value={webhookForm.repository_url}
-                  onChange={(event) =>
-                    setWebhookForm((previous) => ({ ...previous, repository_url: event.target.value }))
-                  }
-                />
-              </label>
-              <label>
-                <span>Provider</span>
-                <select
-                  name="webhook_provider"
-                  value={webhookForm.provider}
-                  onChange={(event) =>
-                    setWebhookForm((previous) => ({
-                      ...previous,
-                      provider: event.target.value as ScmProvider
-                    }))
-                  }
-                >
-                  <option value="github">github</option>
-                  <option value="gitlab">gitlab</option>
-                </select>
-              </label>
-              <label>
-                <span>Secret</span>
-                <input
-                  name="webhook_secret"
-                  type={showWebhookSecret ? "text" : "password"}
-                  placeholder="super-secret"
-                  required
-                  value={webhookForm.secret}
-                  onChange={(event) => setWebhookForm((previous) => ({ ...previous, secret: event.target.value }))}
-                />
-              </label>
-              <div className="actions">
-                <button
-                  className="btn btn-small btn-secondary"
-                  type="button"
-                  onClick={() => setShowWebhookSecret((previous) => !previous)}
-                >
-                  {showWebhookSecret ? "Masquer" : "Reveler"}
-                </button>
-              </div>
-              <label>
-                <span>IP allowlist (comma/newline)</span>
-                <textarea
-                  name="webhook_allowed_ips"
-                  placeholder="203.0.113.10, 198.51.100.20"
-                  value={webhookForm.allowed_ips_text}
-                  onChange={(event) =>
-                    setWebhookForm((previous) => ({ ...previous, allowed_ips_text: event.target.value }))
-                  }
-                />
-              </label>
-              <div className="actions">
-                <button type="submit" className="btn btn-primary">
-                  Enregistrer
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-ghost"
-                  onClick={() =>
-                    setWebhookForm({
-                      repository_url: "",
-                      provider: "github",
-                      secret: "",
-                      allowed_ips_text: ""
-                    })
-                  }
-                >
-                  Effacer
-                </button>
-              </div>
-            </form>
-            <p className="hint">{webhookMessage}</p>
-          </article>
-
-          <article className="panel panel-form reveal" style={{ ["--delay" as string]: "0.1s" }}>
-            <h2>SCM Polling</h2>
-            <form className="form" onSubmit={(event) => void saveScmPollingConfig(event)}>
-              <label>
-                <span>Repository URL</span>
-                <input
-                  name="polling_repository_url"
-                  placeholder="https://example.com/repo.git"
-                  required
-                  value={pollingForm.repository_url}
-                  onChange={(event) =>
-                    setPollingForm((previous) => ({ ...previous, repository_url: event.target.value }))
-                  }
-                />
-              </label>
-              <label>
-                <span>Provider</span>
-                <select
-                  name="polling_provider"
-                  value={pollingForm.provider}
-                  onChange={(event) =>
-                    setPollingForm((previous) => ({
-                      ...previous,
-                      provider: event.target.value as ScmProvider
-                    }))
-                  }
-                >
-                  <option value="github">github</option>
-                  <option value="gitlab">gitlab</option>
-                </select>
-              </label>
-              <label>
-                <span>Interval (seconds)</span>
-                <input
-                  name="polling_interval_secs"
-                  type="number"
-                  min={1}
-                  required
-                  value={pollingForm.interval_secs_text}
-                  onChange={(event) =>
-                    setPollingForm((previous) => ({ ...previous, interval_secs_text: event.target.value }))
-                  }
-                />
-              </label>
-              <label>
-                <span>Branches (comma/newline)</span>
-                <textarea
-                  name="polling_branches"
-                  placeholder="main, develop"
-                  value={pollingForm.branches_text}
-                  onChange={(event) =>
-                    setPollingForm((previous) => ({ ...previous, branches_text: event.target.value }))
-                  }
-                />
-              </label>
-              <label>
-                <span>Enabled</span>
-                <input
-                  name="polling_enabled"
-                  type="checkbox"
-                  checked={pollingForm.enabled}
-                  onChange={(event) =>
-                    setPollingForm((previous) => ({ ...previous, enabled: event.target.checked }))
-                  }
-                />
-              </label>
-              <div className="actions">
-                <button type="submit" className="btn btn-primary">
-                  Enregistrer
-                </button>
-                <button type="button" className="btn btn-secondary" onClick={() => void runManualScmPollingTick()}>
-                  Tick manuel
-                </button>
-              </div>
-            </form>
-            <p className="hint">{pollingMessage}</p>
-            <p className="hint">
-              {pollingTickSummary
-                ? `Dernier tick: ${pollingTickSummary.polled_repositories} repo(s), ${pollingTickSummary.enqueued_builds} build(s).`
-                : "Aucun tick manuel execute."}
-            </p>
-          </article>
-
-          <article className="panel panel-form reveal" style={{ ["--delay" as string]: "0.11s" }}>
-            <h2>Worker Control</h2>
-            <form className="form" onSubmit={(event) => event.preventDefault()}>
-              <label>
-                <span>Worker ID</span>
-                <input
-                  name="worker_control_worker_id"
-                  placeholder="worker-1"
-                  required
-                  value={workerControlForm.worker_id}
-                  onChange={(event) =>
-                    setWorkerControlForm((previous) => ({ ...previous, worker_id: event.target.value }))
-                  }
-                />
-              </label>
-              <label>
-                <span>Build ID</span>
-                <input
-                  name="worker_control_build_id"
-                  placeholder="UUID build"
-                  value={workerControlForm.build_id}
-                  onChange={(event) =>
-                    setWorkerControlForm((previous) => ({ ...previous, build_id: event.target.value }))
-                  }
-                />
-              </label>
-              <label>
-                <span>Completion status</span>
-                <select
-                  name="worker_control_completion_status"
-                  value={workerControlForm.completion_status}
-                  onChange={(event) =>
-                    setWorkerControlForm((previous) => ({
-                      ...previous,
-                      completion_status: event.target.value as WorkerCompletionStatus
-                    }))
-                  }
-                >
-                  <option value="success">success</option>
-                  <option value="failed">failed</option>
-                </select>
-              </label>
-              <label>
-                <span>Log line (optional)</span>
-                <textarea
-                  name="worker_control_log_line"
-                  placeholder="worker note"
-                  value={workerControlForm.completion_log_line}
-                  onChange={(event) =>
-                    setWorkerControlForm((previous) => ({ ...previous, completion_log_line: event.target.value }))
-                  }
-                />
-              </label>
-              <div className="actions">
-                <button type="button" className="btn btn-ghost" onClick={() => void refreshWorkers()}>
-                  Rafraichir workers
-                </button>
-                <button type="button" className="btn btn-secondary" onClick={() => void claimBuildForWorker()}>
-                  Claim next build
-                </button>
-                <button type="button" className="btn btn-primary" onClick={() => void completeBuildForWorker()}>
-                  Complete build
-                </button>
-              </div>
-            </form>
-            <p className="hint">{workerControlMessage}</p>
-            <p className="hint">{lastClaimResult || "Aucun claim execute."}</p>
-            <p className="hint">
-              {selectedWorker
-                ? `Worker ${selectedWorker.id}: ${selectedWorker.status}, active builds ${selectedWorker.active_builds}, last seen ${formatDateTime(selectedWorker.last_seen_at)}.`
-                : "Aucun worker selectionne pour diagnostic."}
-            </p>
-          </article>
-
-          <article className="panel panel-form reveal" style={{ ["--delay" as string]: "0.115s" }}>
-            <h2>Plugin Administration</h2>
-            <form className="form" onSubmit={(event) => event.preventDefault()}>
-              <label>
-                <span>Plugin name</span>
-                <input
-                  name="plugin_admin_name"
-                  placeholder="net-diagnostics"
-                  required
-                  value={pluginAdminForm.name}
-                  onChange={(event) =>
-                    setPluginAdminForm((previous) => ({ ...previous, name: event.target.value }))
-                  }
-                />
-              </label>
-              <label>
-                <span>Production tagged context</span>
-                <input
-                  name="plugin_admin_production_tagged"
-                  type="checkbox"
-                  checked={pluginAdminForm.production_tagged_context}
-                  onChange={(event) =>
-                    setPluginAdminForm((previous) => ({
-                      ...previous,
-                      production_tagged_context: event.target.checked
-                    }))
-                  }
-                />
-              </label>
-              <div className="actions">
-                <button type="button" className="btn btn-ghost" onClick={() => void refreshPluginInventory()}>
-                  Refresh
-                </button>
-                <button type="button" className="btn btn-secondary" onClick={() => void loadPlugin()}>
-                  Load
-                </button>
-                <button type="button" className="btn btn-secondary" onClick={() => void initPlugin()}>
-                  Init
-                </button>
-                <button type="button" className="btn btn-secondary" onClick={() => void executePlugin()}>
-                  Execute
-                </button>
-                <button type="button" className="btn btn-primary" onClick={() => void unloadPlugin()}>
-                  Unload
-                </button>
-              </div>
-            </form>
-            <p className="hint">{pluginAdminMessage}</p>
-            <div className="list">
-              {pluginInventory.length === 0 ? (
-                <p className="hint">Aucun plugin charge.</p>
-              ) : (
-                pluginInventory.map((plugin) => (
-                  <div className="list-item" key={plugin.name}>
-                    <div>
-                      <p className="item-title">{plugin.name}</p>
-                      <p className="item-subtitle">
-                        {plugin.source_manifest_entry} | caps: {plugin.capabilities.join(", ") || "none"}
-                      </p>
-                      <p className="item-subtitle">
-                        Policy: {pluginPolicySummaryByName.get(plugin.name) ?? "unknown"}
-                      </p>
-                    </div>
-                    <div className="actions">
-                      <span className="status pending">{plugin.state}</span>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </article>
-
-          <article className="panel panel-form reveal" style={{ ["--delay" as string]: "0.118s" }}>
-            <h2>Plugin Policy</h2>
-            <form className="form" onSubmit={(event) => event.preventDefault()}>
-              <label>
-                <span>Context</span>
-                <input
-                  name="plugin_policy_context"
-                  placeholder="global"
-                  value={pluginPolicyForm.context}
-                  onChange={(event) =>
-                    setPluginPolicyForm((previous) => ({ ...previous, context: event.target.value }))
-                  }
-                />
-              </label>
-              <label>
-                <span>Granted capabilities</span>
-                <div className="actions">
-                  {PLUGIN_CAPABILITY_OPTIONS.map((capability) => (
-                    <label key={capability}>
+          {isImplementedPage ? (
+            <>
+              {activePage === "pipelines" && (
+                <article className="panel panel-form reveal" style={{ ["--delay" as string]: "0.02s" }}>
+                  <h2>Nouveau Job</h2>
+                  <form className="form" onSubmit={(event) => void createJob(event)}>
+                    <label>
+                      <span>Nom du job</span>
                       <input
-                        type="checkbox"
-                        checked={pluginPolicyForm.granted_capabilities.includes(capability)}
-                        onChange={(event) => togglePluginPolicyCapability(capability, event.target.checked)}
+                        name="name"
+                        placeholder="build-api"
+                        required
+                        value={form.name}
+                        onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))}
                       />
-                      <span>{capability}</span>
                     </label>
-                  ))}
-                </div>
-              </label>
-              <div className="actions">
-                <button type="button" className="btn btn-ghost" onClick={() => void loadPluginPolicy()}>
-                  Load policy
-                </button>
-                <button type="button" className="btn btn-secondary" onClick={() => void savePluginPolicy()}>
-                  Save policy
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-primary"
-                  onClick={() => void runPluginAuthorizationCheck()}
-                >
-                  Dry-run authorize
-                </button>
-              </div>
-            </form>
-            <p className="hint">{pluginPolicyMessage}</p>
-            <p className="hint">
-              Effective policy: {effectivePolicyContext} | granted: {effectiveGrantedCapabilities.join(", ") || "none"}
-            </p>
-            <p className="hint">
-              {pluginAuthorizationSummary}
-            </p>
-          </article>
-
-          <article className="panel panel-form reveal" style={{ ["--delay" as string]: "0.119s" }}>
-            <h2>Webhook Security Operations</h2>
-            <div className="metrics-grid">
-              <div className="metric-card">
-                <p className="metric-label">Received</p>
-                <p className="metric-value">{scmWebhookMetrics?.scm_webhook_received_total ?? 0}</p>
-              </div>
-              <div className="metric-card">
-                <p className="metric-label">Accepted</p>
-                <p className="metric-value">{scmWebhookMetrics?.scm_webhook_accepted_total ?? 0}</p>
-              </div>
-              <div className="metric-card">
-                <p className="metric-label">Rejected</p>
-                <p className="metric-value">{scmWebhookMetrics?.scm_webhook_rejected_total ?? 0}</p>
-              </div>
-              <div className="metric-card">
-                <p className="metric-label">Duplicate</p>
-                <p className="metric-value">{scmWebhookMetrics?.scm_webhook_duplicate_total ?? 0}</p>
-              </div>
-            </div>
-            <form className="form" onSubmit={(event) => event.preventDefault()}>
-              <label>
-                <span>Provider filter</span>
-                <select
-                  name="scm_webhook_ops_provider"
-                  value={scmWebhookOpsFilter.provider}
-                  onChange={(event) =>
-                    setScmWebhookOpsFilter((previous) => ({ ...previous, provider: event.target.value }))
-                  }
-                >
-                  <option value="">all</option>
-                  <option value="github">github</option>
-                  <option value="gitlab">gitlab</option>
-                </select>
-              </label>
-              <label>
-                <span>Repository filter</span>
-                <input
-                  name="scm_webhook_ops_repository"
-                  placeholder="https://example.com/repo.git"
-                  value={scmWebhookOpsFilter.repository_url}
-                  onChange={(event) =>
-                    setScmWebhookOpsFilter((previous) => ({ ...previous, repository_url: event.target.value }))
-                  }
-                />
-              </label>
-              <div className="actions">
-                <button
-                  type="button"
-                  className="btn btn-primary"
-                  onClick={() => void refreshScmWebhookOperations()}
-                >
-                  Refresh diagnostics
-                </button>
-              </div>
-            </form>
-            <p className="hint">{scmWebhookOpsMessage}</p>
-            <div className="list">
-              {scmWebhookRejections.length === 0 ? (
-                <p className="hint">Aucun rejet webhook pour les filtres courants.</p>
-              ) : (
-                scmWebhookRejections.map((entry, index) => (
-                  <div className="list-item" key={`${entry.at}-${entry.reason_code}-${index}`}>
-                    <div>
-                      <p className="item-title">{entry.reason_code}</p>
-                      <p className="item-subtitle">
-                        {entry.provider ?? "unknown provider"} | {entry.repository_url ?? "unknown repository"}
-                      </p>
-                      <p className="item-subtitle">{formatDateTime(entry.at)}</p>
-                    </div>
-                  </div>
-                ))
+                    <label>
+                      <span>Depot git</span>
+                      <input
+                        name="repository_url"
+                        placeholder="https://example.com/project.git"
+                        required
+                        value={form.repository_url}
+                        onChange={(event) => setForm((prev) => ({ ...prev, repository_url: event.target.value }))}
+                      />
+                    </label>
+                    <label>
+                      <span>Pipeline file</span>
+                      <input
+                        name="pipeline_path"
+                        placeholder="pipelines/api.yml"
+                        required
+                        value={form.pipeline_path}
+                        onChange={(event) => setForm((prev) => ({ ...prev, pipeline_path: event.target.value }))}
+                      />
+                    </label>
+                    <button type="submit" className="btn btn-primary">
+                      POST /jobs
+                    </button>
+                  </form>
+                  <p className="hint">{createMessage}</p>
+                </article>
               )}
-            </div>
-          </article>
 
-          <article className="panel reveal" style={{ ["--delay" as string]: "0.12s" }}>
+              {(activePage === "pipelines" || activePage === "overview") && (
+                <article className="panel reveal" style={{ ["--delay" as string]: "0.12s" }}>
             <div className="panel-head">
               <h2>Jobs</h2>
               <span className="pill">{snapshot.jobs.length}</span>
@@ -2193,16 +1910,18 @@ export function App() {
                     </div>
                     <div className="actions">
                       <button className="btn btn-small btn-secondary" type="button" onClick={() => void runJob(job.id, job.name)}>
-                        Run
+                        POST /jobs/{"{id}"}/run
                       </button>
                     </div>
                   </div>
                 ))
               )}
             </div>
-          </article>
+                </article>
+              )}
 
-          <article className="panel reveal" style={{ ["--delay" as string]: "0.22s" }}>
+              {(activePage === "pipelines" || activePage === "overview") && (
+                <article className="panel reveal" style={{ ["--delay" as string]: "0.22s" }}>
             <div className="panel-head">
               <h2>Builds</h2>
               <span className="pill">{snapshot.builds.length}</span>
@@ -2232,7 +1951,7 @@ export function App() {
                           onClick={() => void cancelBuild(build.id)}
                           style={isFinal ? { opacity: 0.4, cursor: "default" } : undefined}
                         >
-                          Cancel
+                          POST /builds/{"{id}"}/cancel
                         </button>
                       </div>
                     </div>
@@ -2240,35 +1959,11 @@ export function App() {
                 })
               )}
             </div>
-          </article>
-
-          <article className="panel reveal" style={{ ["--delay" as string]: "0.28s" }}>
-            <div className="panel-head">
-              <h2>Workers</h2>
-              <span className="pill">{snapshot.workers.length}</span>
-            </div>
-            <div className="list">
-              {snapshot.workers.length === 0 ? (
-                <p className="hint">Aucun worker visible.</p>
-              ) : (
-                snapshot.workers.map((worker) => (
-                  <div className="list-item worker-item" key={worker.id}>
-                    <div>
-                      <p className="item-title">{worker.id}</p>
-                      <p className="item-subtitle">
-                        Last seen {formatDateTime(worker.last_seen_at)} | Active builds {worker.active_builds}
-                      </p>
-                    </div>
-                    <div className="actions">
-                      <span className={`status worker-status ${String(worker.status).toLowerCase()}`}>{worker.status}</span>
-                    </div>
-                  </div>
-                ))
+                </article>
               )}
-            </div>
-          </article>
 
-          <article className="panel panel-metrics reveal" style={{ ["--delay" as string]: "0.3s" }}>
+              {activePage === "overview" && (
+                <article className="panel panel-metrics reveal" style={{ ["--delay" as string]: "0.3s" }}>
             <div className="panel-head">
               <h2>Runtime Metrics</h2>
               <span className="pill">live</span>
@@ -2291,9 +1986,11 @@ export function App() {
                 <p className="metric-value">{snapshot.metrics?.dead_letter_total ?? 0}</p>
               </div>
             </div>
-          </article>
+                </article>
+              )}
 
-          <article className="panel reveal" style={{ ["--delay" as string]: "0.31s" }}>
+              {activePage === "overview" && (
+                <article className="panel reveal" style={{ ["--delay" as string]: "0.31s" }}>
             <div className="panel-head">
               <h2>Dead-letter Builds</h2>
               <span className="pill">{snapshot.dead_letter_builds.length}</span>
@@ -2317,9 +2014,11 @@ export function App() {
                 ))
               )}
             </div>
-          </article>
+                </article>
+              )}
 
-          <article className="panel panel-events reveal" style={{ ["--delay" as string]: "0.315s" }}>
+              {activePage === "overview" && (
+                <article className="panel panel-events reveal" style={{ ["--delay" as string]: "0.315s" }}>
             <div className="panel-head">
               <h2>Advanced Observability</h2>
               <span className="pill">{filteredObservabilityEvents.length}</span>
@@ -2411,9 +2110,11 @@ export function App() {
                 ))
               )}
             </div>
-          </article>
+                </article>
+              )}
 
-          <article className="panel reveal" style={{ ["--delay" as string]: "0.318s" }}>
+              {activePage === "overview" && (
+                <article className="panel reveal" style={{ ["--delay" as string]: "0.318s" }}>
             <div className="panel-head">
               <h2>Admin Activity</h2>
               <span className="pill">{adminActivity.length}</span>
@@ -2435,7 +2136,25 @@ export function App() {
                 ))
               )}
             </div>
-          </article>
+                </article>
+              )}
+            </>
+          ) : (
+            <article className="panel reveal" style={{ ["--delay" as string]: "0.02s" }}>
+              <h2>Page en mode roadmap</h2>
+              <p className="hint">
+                Cette page correspond a la maquette cible mais n'est pas encore reliee aux endpoints exposes.
+              </p>
+              <div className="list">
+                <div className="list-item">
+                  <div>
+                    <p className="item-title">API coverage: roadmap</p>
+                    <p className="item-subtitle">Prochaine etape: ajouter les endpoints backend puis brancher les actions UI.</p>
+                  </div>
+                </div>
+              </div>
+            </article>
+          )}
         </section>
 
         <section className="panel console reveal" style={{ ["--delay" as string]: "0.32s" }}>

@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Tardigrade CI - UX Mockups</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="bg-layer" aria-hidden="true"></div>
+    <div class="layout">
+      <aside class="sidenav">
+        <div class="brand">
+          <p class="eyebrow">Tardigrade CI</p>
+          <h1>UX Prototype</h1>
+          <p class="muted">Structure IHM cible par vision metier</p>
+        </div>
+
+        <nav aria-label="Pages metier">
+          <button class="nav-item" data-page="pipelines">1. Pipelines</button>
+          <button class="nav-item" data-page="overview">2. Overview</button>
+          <button class="nav-item" data-page="workers">3. Workers</button>
+          <button class="nav-item" data-page="scm-security">4. SCM Security</button>
+          <button class="nav-item" data-page="plugins-policy">5. Plugins & Policy</button>
+          <button class="nav-item" data-page="observability">6. Observability</button>
+          <button class="nav-item" data-page="administration">7. Administration</button>
+        </nav>
+
+        <div class="sidenav-foot">
+          <p><strong>Landing:</strong> Pipelines</p>
+          <p><strong>Role actif:</strong> operator</p>
+          <p><strong>Stream:</strong> connected</p>
+        </div>
+      </aside>
+
+      <main class="content">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow" id="page-kicker">Delivery</p>
+            <h2 id="page-title">Pipelines</h2>
+          </div>
+          <div class="top-actions">
+            <span class="chip good">Live stream: connected</span>
+            <span class="chip warn">2 incidents ouverts</span>
+            <button class="ghost" type="button">Sync all</button>
+          </div>
+        </header>
+
+        <section id="page-grid" class="grid"></section>
+      </main>
+    </div>
+
+    <template id="panel-template">
+      <article class="panel">
+        <div class="panel-head">
+          <h3 class="panel-title"></h3>
+          <span class="panel-badge"></span>
+        </div>
+        <p class="panel-desc"></p>
+        <ul class="panel-list"></ul>
+        <div class="panel-actions"></div>
+      </article>
+    </template>
+
+    <script src="./app.js"></script>
+  </body>
+</html>
