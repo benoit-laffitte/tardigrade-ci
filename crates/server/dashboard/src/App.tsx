@@ -1746,6 +1746,20 @@ export function App() {
     return snapshot.builds.slice(0, 5);
   }, [snapshot.builds]);
 
+  // Provides one SCM security proxy summary from currently available API-backed data.
+  const scmSecurityReadOnlySummary = useMemo(() => {
+    const failedBuilds = snapshot.builds.filter((build) => String(build.status).toLowerCase() === "failed").length;
+    const canceledBuilds = snapshot.builds.filter((build) => String(build.status).toLowerCase() === "canceled").length;
+    const recentJobs = snapshot.jobs.slice(0, 5);
+
+    return {
+      failedBuilds,
+      canceledBuilds,
+      recentJobs,
+      apiHealth: healthStatus
+    };
+  }, [healthStatus, snapshot.builds, snapshot.jobs]);
+
   // Exports currently filtered observability events as JSON.
   const exportObservabilityJson = useCallback(() => {
     const filename = `observability-events-${new Date().toISOString().replaceAll(":", "-")}.json`;
@@ -2212,6 +2226,76 @@ export function App() {
                   </article>
                 </>
               ) : (
+                <>
+                  {activePage === "scm-security" && (
+                    <>
+                      <article className="panel reveal" style={{ ["--delay" as string]: "0.02s" }}>
+                        <h2>Page en mode roadmap</h2>
+                        <p className="hint">
+                          Vue SCM Security partiellement activee en read-only a partir de GET /health, GET /jobs, GET /builds.
+                        </p>
+                        <div className="list">
+                          <div className="list-item">
+                            <div>
+                              <p className="item-title">API coverage: roadmap</p>
+                              <p className="item-subtitle">
+                                Configuration webhook/polling et diagnostics SCM en attente d'endpoints publics dedies.
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      </article>
+
+                      <article className="panel panel-metrics reveal" style={{ ["--delay" as string]: "0.06s" }}>
+                        <div className="panel-head">
+                          <h2>SCM Risk Proxy (read-only)</h2>
+                          <span className="pill">derived</span>
+                        </div>
+                        <div className="metrics-grid">
+                          <div className="metric-card">
+                            <p className="metric-label">API Health</p>
+                            <p className="metric-value">{scmSecurityReadOnlySummary.apiHealth === "ok" ? "OK" : "DEGRADED"}</p>
+                          </div>
+                          <div className="metric-card">
+                            <p className="metric-label">Failed builds</p>
+                            <p className="metric-value">{scmSecurityReadOnlySummary.failedBuilds}</p>
+                          </div>
+                          <div className="metric-card">
+                            <p className="metric-label">Canceled builds</p>
+                            <p className="metric-value">{scmSecurityReadOnlySummary.canceledBuilds}</p>
+                          </div>
+                          <div className="metric-card">
+                            <p className="metric-label">Recent jobs</p>
+                            <p className="metric-value">{scmSecurityReadOnlySummary.recentJobs.length}</p>
+                          </div>
+                        </div>
+                      </article>
+
+                      <article className="panel reveal" style={{ ["--delay" as string]: "0.1s" }}>
+                        <div className="panel-head">
+                          <h2>Recent SCM Sources (from jobs)</h2>
+                          <span className="pill">{scmSecurityReadOnlySummary.recentJobs.length}</span>
+                        </div>
+                        <div className="list">
+                          {scmSecurityReadOnlySummary.recentJobs.length === 0 ? (
+                            <p className="hint">Aucun job disponible pour le moment.</p>
+                          ) : (
+                            scmSecurityReadOnlySummary.recentJobs.map((job) => (
+                              <div className="list-item" key={`scm-source-${job.id}`}>
+                                <div>
+                                  <p className="item-title">{job.name}</p>
+                                  <p className="item-subtitle">{job.repository_url}</p>
+                                  <p className="item-subtitle">Pipeline: {job.pipeline_path}</p>
+                                </div>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      </article>
+                    </>
+                  )}
+
+                  {activePage !== "scm-security" && (
                 <article className="panel reveal" style={{ ["--delay" as string]: "0.02s" }}>
                   <h2>Page en mode roadmap</h2>
                   <p className="hint">
@@ -2226,6 +2310,8 @@ export function App() {
                     </div>
                   </div>
                 </article>
+                  )}
+                </>
               )}
             </>
           )}
