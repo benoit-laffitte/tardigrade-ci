@@ -1724,6 +1724,28 @@ export function App() {
     return `${Math.round((successCount / finalBuilds.length) * 100)}%`;
   }, [snapshot.builds]);
 
+  // Builds one read-only execution summary for Workers page using jobs/builds only.
+  const workersReadOnlySummary = useMemo(() => {
+    const running = snapshot.builds.filter((build) => String(build.status).toLowerCase() === "running").length;
+    const pending = snapshot.builds.filter((build) => String(build.status).toLowerCase() === "pending").length;
+    const blockedRisk = snapshot.builds.filter((build) => {
+      const status = String(build.status).toLowerCase();
+      return status === "failed" || status === "canceled";
+    }).length;
+
+    return {
+      running,
+      pending,
+      blockedRisk,
+      pressure: pending + running > 0 ? `${Math.round((pending / (pending + running)) * 100)}% pending` : "no load"
+    };
+  }, [snapshot.builds]);
+
+  // Selects a short build sample for execution triage in Workers read-only mode.
+  const recentExecutionBuilds = useMemo(() => {
+    return snapshot.builds.slice(0, 5);
+  }, [snapshot.builds]);
+
   // Exports currently filtered observability events as JSON.
   const exportObservabilityJson = useCallback(() => {
     const filename = `observability-events-${new Date().toISOString().replaceAll(":", "-")}.json`;
@@ -2120,20 +2142,92 @@ export function App() {
               )}
             </>
           ) : (
-            <article className="panel reveal" style={{ ["--delay" as string]: "0.02s" }}>
-              <h2>Page en mode roadmap</h2>
-              <p className="hint">
-                Cette page correspond a la maquette cible mais n'est pas encore reliee aux endpoints exposes.
-              </p>
-              <div className="list">
-                <div className="list-item">
-                  <div>
-                    <p className="item-title">API coverage: roadmap</p>
-                    <p className="item-subtitle">Prochaine etape: ajouter les endpoints backend puis brancher les actions UI.</p>
+            <>
+              {activePage === "workers" ? (
+                <>
+                  <article className="panel reveal" style={{ ["--delay" as string]: "0.02s" }}>
+                    <h2>Page en mode roadmap</h2>
+                    <p className="hint">
+                      Vue Workers partiellement activee en read-only a partir de GET /jobs et GET /builds.
+                    </p>
+                    <div className="list">
+                      <div className="list-item">
+                        <div>
+                          <p className="item-title">API coverage: roadmap</p>
+                          <p className="item-subtitle">
+                            Controle worker (claim/complete/fleet health) en attente d'endpoints publics dedies.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </article>
+
+                  <article className="panel panel-metrics reveal" style={{ ["--delay" as string]: "0.06s" }}>
+                    <div className="panel-head">
+                      <h2>Execution Pressure (read-only)</h2>
+                      <span className="pill">derived</span>
+                    </div>
+                    <div className="metrics-grid">
+                      <div className="metric-card">
+                        <p className="metric-label">Running builds</p>
+                        <p className="metric-value">{workersReadOnlySummary.running}</p>
+                      </div>
+                      <div className="metric-card">
+                        <p className="metric-label">Pending builds</p>
+                        <p className="metric-value">{workersReadOnlySummary.pending}</p>
+                      </div>
+                      <div className="metric-card">
+                        <p className="metric-label">Failure risk</p>
+                        <p className="metric-value">{workersReadOnlySummary.blockedRisk}</p>
+                      </div>
+                      <div className="metric-card">
+                        <p className="metric-label">Queue pressure</p>
+                        <p className="metric-value">{workersReadOnlySummary.pressure}</p>
+                      </div>
+                    </div>
+                  </article>
+
+                  <article className="panel reveal" style={{ ["--delay" as string]: "0.1s" }}>
+                    <div className="panel-head">
+                      <h2>Recent Execution Sample</h2>
+                      <span className="pill">{recentExecutionBuilds.length}</span>
+                    </div>
+                    <div className="list">
+                      {recentExecutionBuilds.length === 0 ? (
+                        <p className="hint">Aucun build disponible pour le moment.</p>
+                      ) : (
+                        recentExecutionBuilds.map((build) => (
+                          <div className="list-item" key={`workers-sample-${build.id}`}>
+                            <div>
+                              <p className="item-title">Build {build.id.slice(0, 8)}</p>
+                              <p className="item-subtitle">Job {build.job_id.slice(0, 8)} | {formatDateTime(build.queued_at)}</p>
+                            </div>
+                            <div className="actions">
+                              <span className={`status ${String(build.status).toLowerCase()}`}>{build.status}</span>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </article>
+                </>
+              ) : (
+                <article className="panel reveal" style={{ ["--delay" as string]: "0.02s" }}>
+                  <h2>Page en mode roadmap</h2>
+                  <p className="hint">
+                    Cette page correspond a la maquette cible mais n'est pas encore reliee aux endpoints exposes.
+                  </p>
+                  <div className="list">
+                    <div className="list-item">
+                      <div>
+                        <p className="item-title">API coverage: roadmap</p>
+                        <p className="item-subtitle">Prochaine etape: ajouter les endpoints backend puis brancher les actions UI.</p>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </div>
-            </article>
+                </article>
+              )}
+            </>
           )}
         </section>
 

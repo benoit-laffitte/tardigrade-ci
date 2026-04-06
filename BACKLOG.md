@@ -378,7 +378,7 @@ Refinement decisions:
 - [x] `UXREAL-02` Add explicit API coverage indicator by page (`full`, `partial`, `roadmap`) in real dashboard.
 - [x] `UXREAL-03` Deliver Pipelines page on real API functions (`POST /jobs`, `GET /jobs`, `POST /jobs/{id}/run`, `GET /builds`, `POST /builds/{id}/cancel`).
 - [x] `UXREAL-04` Deliver Overview page with metrics strictly derivable from `GET /health`, `GET /jobs`, `GET /builds`.
-- [ ] `UXREAL-05` Implement Workers page once worker runtime endpoints are finalized in public API surface.
+- [-] `UXREAL-05` Implement Workers page once worker runtime endpoints are finalized in public API surface.
 - [ ] `UXREAL-06` Implement SCM Security page once webhook-security admin endpoints are finalized.
 - [ ] `UXREAL-07` Implement Plugins & Policy page once plugin registry/policy endpoints are finalized.
 - [ ] `UXREAL-08` Implement Observability page once durable observability query contracts are finalized.
