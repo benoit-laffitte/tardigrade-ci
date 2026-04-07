@@ -14,7 +14,7 @@ mod dashboard;
 mod runtime;
 
 use config::{RuntimeMode, load_runtime_mode_from_config};
-use dashboard::{app_js, index, styles_css, tardigrade_logo_png};
+use dashboard::{WEB_ROOT_ENV_VAR, app_js, index, resolve_web_root, styles_css, tardigrade_logo_png};
 use runtime::{FILE_BACKED_PROD_DEPRECATION_TARGET, shutdown_signal};
 
 /// Boots API server, selects configured backends, and serves HTTP routes.
@@ -50,8 +50,14 @@ async fn main() -> Result<()> {
     let database_url = std::env::var("TARDIGRADE_DATABASE_URL").ok();
     let redis_url = std::env::var("TARDIGRADE_REDIS_URL").ok();
     let queue_file = std::env::var("TARDIGRADE_QUEUE_FILE").ok();
+    let web_root = resolve_web_root();
 
     info!(config_file = %config_file, runtime_mode = ?runtime_mode, "runtime mode loaded");
+    info!(
+        web_root = %web_root.display(),
+        web_root_env_var = WEB_ROOT_ENV_VAR,
+        "dashboard web asset root resolved"
+    );
 
     if let Some(path) = queue_file.as_deref() {
         if runtime_mode != RuntimeMode::Dev {

@@ -384,6 +384,7 @@ Refinement decisions:
 - [ ] `UXREAL-08` Implement Observability page once durable observability query contracts are finalized.
 - [ ] `UXREAL-09` Implement Administration page once role/audit APIs are finalized.
 - [x] `UXREAL-10` Add frontend integration tests for page navigation, API coverage gating, and Pipelines/Overview flows.
+- [x] `UXREAL-11` Serve dashboard static assets dynamically from filesystem (`TARDIGRADE_WEB_ROOT`) to allow runtime web updates without rebuilding the Rust binary.
 
 Definition of done:
 

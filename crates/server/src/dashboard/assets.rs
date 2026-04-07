@@ -1,8 +1,16 @@
-/// Embedded dashboard main html payload.
-pub const INDEX_HTML: &str = include_str!("../../static/index.html");
-/// Embedded dashboard javascript payload.
-pub const APP_JS: &str = include_str!("../../static/app.js");
-/// Embedded dashboard stylesheet payload.
-pub const STYLES_CSS: &str = include_str!("../../static/styles.css");
-/// Embedded dashboard logo payload.
-pub const TARDIGRADE_LOGO_PNG: &[u8] = include_bytes!("../../static/tardigrade-logo.png");
+use std::path::PathBuf;
+
+/// Environment variable used to override the dashboard asset root.
+pub const WEB_ROOT_ENV_VAR: &str = "TARDIGRADE_WEB_ROOT";
+
+/// Resolves the dashboard asset root from env or defaults to the repository static folder.
+pub fn resolve_web_root() -> PathBuf {
+    std::env::var(WEB_ROOT_ENV_VAR)
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("static"))
+}
+
+/// Resolves one dashboard asset path under the configured dashboard root.
+pub fn resolve_asset_path(file_name: &str) -> PathBuf {
+    resolve_web_root().join(file_name)
+}
