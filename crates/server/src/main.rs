@@ -14,7 +14,9 @@ mod dashboard;
 mod runtime;
 
 use config::{RuntimeMode, load_runtime_mode_from_config};
-use dashboard::{WEB_ROOT_ENV_VAR, app_js, index, resolve_web_root, styles_css, tardigrade_logo_png};
+use dashboard::{
+    WEB_ROOT_ENV_VAR, app_js, index, resolve_web_root, styles_css, tardigrade_logo_png,
+};
 use runtime::{FILE_BACKED_PROD_DEPRECATION_TARGET, shutdown_signal};
 
 /// Boots API server, selects configured backends, and serves HTTP routes.
