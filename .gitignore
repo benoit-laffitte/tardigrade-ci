@@ -10,3 +10,4 @@ dashboard/.vite/
 scripts/docker-env-bootstrap.sh
 **/test-results
 dist
+tmp
