@@ -463,6 +463,7 @@ Refinement outcome for `REFAC-01` (2026-03-31):
 - [x] `REFAC-05` Refactor `crates/api` and `crates/server` into one-object-per-file module structure.
 - [x] `REFAC-06` Refactor `crates/worker`, `crates/auth`, and `crates/xtask` into one-object-per-file module structure (historical; `xtask` removed later in `INDUS-215`).
 - [x] `REFAC-07` Validate workspace stability (`cargo test --workspace`) and update docs/contribution guidelines.
+- [x] `REFAC-08` Replace file-specific dashboard handlers with one directory-backed web asset service rooted at `TARDIGRADE_WEB_ROOT` / `target/public`.
 
 Definition of done:
 

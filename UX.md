@@ -316,7 +316,7 @@ Le dashboard etait historiquement reference via des chemins internes lies aux cr
 Standardiser l'acces dashboard dans chaque zip:
 
 1. Ajouter un dossier racine `dashboard/` dans l'archive.
-2. Y copier les assets statiques depuis `crates/server/static` au moment du packaging.
+2. Y copier les assets statiques depuis `target/public` au moment du packaging.
 3. Fournir des launchers `bin/start-server.*` qui fixent automatiquement `TARDIGRADE_WEB_ROOT` vers `./dashboard`.
 
 ### Impact attendu
@@ -331,6 +331,43 @@ Standardiser l'acces dashboard dans chaque zip:
 ### Evidence (code)
 
 - Packaging dashboard + launchers: [scripts/package-platform-zips.sh](scripts/package-platform-zips.sh)
+
+---
+
+## UX-008 - Dashboard web resources served as one directory-backed runtime surface
+
+- Date: 2026-04-10
+- Statut: implemented
+- Owner: Engineering
+- Type: runtime delivery
+
+### Contexte
+
+Le serveur exposait encore plusieurs handlers nommes par fichier web (`index.html`, `app.js`, `styles.css`, `tardigrade-logo.png`). Cette structure recouplait la couche Rust avec des noms d'assets frontend et augmentait le cout de maintenance a chaque evolution du build dashboard.
+
+### Decision
+
+Servir le dashboard comme une seule surface de ressources montee sur un dossier racine:
+
+1. Le runtime serveur ne connait plus que le dossier dashboard resolu par `TARDIGRADE_WEB_ROOT` ou `target/public`.
+2. Le montage HTTP utilise un service de dossier statique avec resolution automatique de l'index de repertoire.
+3. Les assets dashboard sont donc remplaces ou ajoutes sans modifier le code Rust tant que le dossier build reste coherent.
+
+### Impact attendu
+
+- Decouplage net entre noms de fichiers frontend et code serveur.
+- Maintenance plus simple lors des evolutions Vite/dashboard.
+- Surface runtime plus proche d'un comportement de serveur web standard.
+
+### Risques
+
+- Les ressources manquantes passent par un `404` standard au lieu d'erreurs handlers specifiques.
+- Toute logique speciale par fichier devra desormais etre explicite ailleurs si un besoin apparait.
+
+### Evidence (code)
+
+- Resolution racine dashboard: [crates/server/src/dashboard/assets.rs](crates/server/src/dashboard/assets.rs)
+- Montage service dashboard: [crates/server/src/dashboard/service.rs](crates/server/src/dashboard/service.rs)
 
 ---
 

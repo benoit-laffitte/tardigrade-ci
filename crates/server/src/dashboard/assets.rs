@@ -19,8 +19,3 @@ pub fn resolve_web_root() -> PathBuf {
     // target/public is the canonical output of dashboard/vite.config.ts.
     workspace_root.join("target").join("public")
 }
-
-/// Resolves one dashboard asset path under the configured dashboard root.
-pub fn resolve_asset_path(file_name: &str) -> PathBuf {
-    resolve_web_root().join(file_name)
-}

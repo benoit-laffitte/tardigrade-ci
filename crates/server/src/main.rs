@@ -1,5 +1,4 @@
 use anyhow::{Result, anyhow};
-use axum::routing::get;
 use std::sync::Arc;
 use std::time::Duration;
 use tardigrade_api::{ApiState, build_router};
@@ -14,9 +13,7 @@ mod dashboard;
 mod runtime;
 
 use config::{RuntimeMode, load_runtime_mode_from_config};
-use dashboard::{
-    WEB_ROOT_ENV_VAR, app_js, index, resolve_web_root, styles_css, tardigrade_logo_png,
-};
+use dashboard::{WEB_ROOT_ENV_VAR, mount_dashboard_assets, resolve_web_root};
 use runtime::{FILE_BACKED_PROD_DEPRECATION_TARGET, shutdown_signal};
 
 /// Boots API server, selects configured backends, and serves HTTP routes.
@@ -120,11 +117,7 @@ async fn main() -> Result<()> {
         info!(scm_polling_check_secs, "SCM polling loop enabled");
     }
 
-    let router = build_router(state)
-        .route("/", get(index))
-        .route("/app.js", get(app_js))
-        .route("/styles.css", get(styles_css))
-        .route("/tardigrade-logo.png", get(tardigrade_logo_png));
+    let router = mount_dashboard_assets(build_router(state));
 
     let listener = TcpListener::bind(&bind_addr).await?;
     info!(bind_addr = %bind_addr, run_embedded_worker, "server listening");

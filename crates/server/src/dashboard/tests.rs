@@ -1,9 +1,13 @@
-use axum::{body::to_bytes, response::IntoResponse};
+use axum::{
+    body::{Body, to_bytes},
+    http::{Request, StatusCode},
+};
 use std::fs;
 use std::path::PathBuf;
 use std::sync::Once;
+use tower::ServiceExt;
 
-use super::{app_js, index, styles_css, tardigrade_logo_png};
+use super::mount_dashboard_assets;
 
 /// Ensures canonical target/public assets exist for handler tests.
 fn ensure_dashboard_test_assets() {
@@ -44,11 +48,24 @@ fn ensure_dashboard_test_assets() {
     });
 }
 
-/// Verifies dashboard index handler returns an HTML payload.
+/// Builds a router exposing dashboard assets through the mounted directory service.
+fn dashboard_test_router() -> axum::Router {
+    mount_dashboard_assets(axum::Router::new())
+}
+
+/// Verifies dashboard root path returns an HTML payload.
 #[tokio::test]
-async fn index_handler_returns_html_payload() {
+async fn dashboard_root_returns_html_payload() {
     ensure_dashboard_test_assets();
-    let response = index().await.into_response();
+    let response = dashboard_test_router()
+        .oneshot(
+            Request::builder()
+                .uri("/")
+                .body(Body::empty())
+                .expect("build request"),
+        )
+        .await
+        .expect("serve root request");
     let body = to_bytes(response.into_body(), usize::MAX)
         .await
         .expect("read body");
@@ -56,37 +73,61 @@ async fn index_handler_returns_html_payload() {
     assert!(html.contains("<html"));
 }
 
-/// Verifies javascript asset handler sets expected content type.
+/// Verifies javascript asset path sets expected content type.
 #[tokio::test]
-async fn app_js_handler_sets_javascript_content_type() {
+async fn javascript_asset_sets_javascript_content_type() {
     ensure_dashboard_test_assets();
-    let response = app_js().await.into_response();
+    let response = dashboard_test_router()
+        .oneshot(
+            Request::builder()
+                .uri("/app.js")
+                .body(Body::empty())
+                .expect("build request"),
+        )
+        .await
+        .expect("serve javascript request");
     let content_type = response
         .headers()
         .get("content-type")
         .and_then(|v| v.to_str().ok())
         .unwrap_or_default();
-    assert_eq!(content_type, "application/javascript; charset=utf-8");
+    assert_eq!(content_type, "text/javascript");
 }
 
-/// Verifies stylesheet asset handler sets expected content type.
+/// Verifies stylesheet asset path sets expected content type.
 #[tokio::test]
-async fn styles_handler_sets_css_content_type() {
+async fn stylesheet_asset_sets_css_content_type() {
     ensure_dashboard_test_assets();
-    let response = styles_css().await.into_response();
+    let response = dashboard_test_router()
+        .oneshot(
+            Request::builder()
+                .uri("/styles.css")
+                .body(Body::empty())
+                .expect("build request"),
+        )
+        .await
+        .expect("serve stylesheet request");
     let content_type = response
         .headers()
         .get("content-type")
         .and_then(|v| v.to_str().ok())
         .unwrap_or_default();
-    assert_eq!(content_type, "text/css; charset=utf-8");
+    assert_eq!(content_type, "text/css");
 }
 
-/// Verifies logo asset handler sets png content type and returns bytes.
+/// Verifies logo asset path sets png content type and returns bytes.
 #[tokio::test]
-async fn logo_handler_sets_png_content_type() {
+async fn logo_asset_sets_png_content_type() {
     ensure_dashboard_test_assets();
-    let response = tardigrade_logo_png().await.into_response();
+    let response = dashboard_test_router()
+        .oneshot(
+            Request::builder()
+                .uri("/tardigrade-logo.png")
+                .body(Body::empty())
+                .expect("build request"),
+        )
+        .await
+        .expect("serve logo request");
     let content_type = response
         .headers()
         .get("content-type")
@@ -98,4 +139,21 @@ async fn logo_handler_sets_png_content_type() {
         .await
         .expect("read logo body");
     assert!(!body.is_empty());
+}
+
+/// Verifies unknown dashboard asset paths return not found.
+#[tokio::test]
+async fn unknown_dashboard_asset_returns_not_found() {
+    ensure_dashboard_test_assets();
+    let response = dashboard_test_router()
+        .oneshot(
+            Request::builder()
+                .uri("/missing-resource.js")
+                .body(Body::empty())
+                .expect("build request"),
+        )
+        .await
+        .expect("serve missing asset request");
+
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
 }

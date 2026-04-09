@@ -1,8 +1,8 @@
 mod assets;
-mod handlers;
+mod service;
 
 pub use assets::{WEB_ROOT_ENV_VAR, resolve_web_root};
-pub use handlers::{app_js, index, styles_css, tardigrade_logo_png};
+pub use service::mount_dashboard_assets;
 
 #[cfg(test)]
 mod tests;
