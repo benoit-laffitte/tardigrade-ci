@@ -57,7 +57,7 @@ Open http://127.0.0.1:8080/
 
 Frontend dashboard subproject (React + TypeScript + Vite + Apollo + Oxlint):
 
-- cd crates/server/dashboard
+- cd dashboard
 - env -u https_proxy -u http_proxy -u PXY_FAB_FONC npm install
 - env -u https_proxy -u http_proxy -u PXY_FAB_FONC npm run dev
 
@@ -72,7 +72,7 @@ The Cargo aliases call `crates/xtask`, which runs npm with public registry (`htt
 
 Build dashboard assets served by Rust server:
 
-- cd crates/server/dashboard
+- cd dashboard
 - env -u https_proxy -u http_proxy -u PXY_FAB_FONC npm run build
 
 The Vite build outputs to `crates/server/static` (`index.html`, `app.js`, `styles.css`) and the Axum server embeds these files at compile time.
@@ -146,10 +146,16 @@ Unified automation entrypoints from repository root:
 - `make dashboard-install` (frontend dependencies via `xtask`)
 - `make dashboard-lint` (frontend lint via `xtask`)
 - `make dashboard-build` (frontend build via `xtask`)
-- `cd crates/server/dashboard && npm run e2e` (Playwright admin E2E suite)
+- `cd dashboard && npm run e2e` (Playwright admin E2E suite)
 - `make build` (Rust + dashboard build)
 - `make package-platform-zips` (create release zip per platform: mac/windows/linux)
 - `make ci` (local CI-equivalent aggregate)
+
+Platform zip packaging details:
+
+- Each archive includes `bin/`, `config/`, `docs/`, `dashboard/`, `README.md`, and `LICENSE.txt`.
+- Dashboard assets are exported from `crates/server/static` to a top-level `dashboard/` folder in each zip.
+- Launchers in `bin/` (`start-server.sh`, `start-server.ps1`, `start-server.cmd`) set `TARDIGRADE_WEB_ROOT` automatically.
 
 Current note:
 

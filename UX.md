@@ -55,10 +55,10 @@ Objectif: etablir une baseline partagee avant toute refonte UX.
 
 ### Evidence (code existant)
 
-- Ecran unique et grille principale: [crates/server/dashboard/src/App.tsx](crates/server/dashboard/src/App.tsx#L1692)
-- Selecteur de role dans le header: [crates/server/dashboard/src/App.tsx](crates/server/dashboard/src/App.tsx#L1673)
-- Concentration des panels metier (jobs/builds/workers/ops/plugins/observabilite): [crates/server/dashboard/src/App.tsx](crates/server/dashboard/src/App.tsx#L1693)
-- Journal global: [crates/server/dashboard/src/App.tsx](crates/server/dashboard/src/App.tsx#L2442)
+- Ecran unique et grille principale: [dashboard/src/App.tsx](dashboard/src/App.tsx#L1692)
+- Selecteur de role dans le header: [dashboard/src/App.tsx](dashboard/src/App.tsx#L1673)
+- Concentration des panels metier (jobs/builds/workers/ops/plugins/observabilite): [dashboard/src/App.tsx](dashboard/src/App.tsx#L1693)
+- Journal global: [dashboard/src/App.tsx](dashboard/src/App.tsx#L2442)
 
 ### Decision
 
@@ -163,7 +163,7 @@ Page d'entree prioritaire: Pipelines (Delivery).
 
 - Produire une matrice Action -> Page (source de verite IA).
 - Definir le menu de navigation (ordre, labels, badges d'alerte) avec Delivery en premier.
-- Lancer un premier decoupage technique du monolithe [crates/server/dashboard/src/App.tsx](crates/server/dashboard/src/App.tsx).
+- Lancer un premier decoupage technique du monolithe [dashboard/src/App.tsx](dashboard/src/App.tsx).
 
 ---
 
@@ -297,6 +297,76 @@ Automatisation ajoutee via `make package-platform-zips`.
 
 - Script de packaging: [scripts/package-platform-zips.sh](scripts/package-platform-zips.sh)
 - Entree make: [mk/rust.mk](mk/rust.mk#L1)
+
+---
+
+## UX-006 - Dashboard access decoupled from crate paths in release zips
+
+- Date: 2026-04-09
+- Statut: implemented
+- Owner: Engineering
+- Type: delivery operations
+
+### Contexte
+
+Le dashboard etait historiquement reference via des chemins internes lies aux crates cote developpement. Pour les livrables ops, l'acces dashboard doit etre direct et stable dans le package.
+
+### Decision
+
+Standardiser l'acces dashboard dans chaque zip:
+
+1. Ajouter un dossier racine `dashboard/` dans l'archive.
+2. Y copier les assets statiques depuis `crates/server/static` au moment du packaging.
+3. Fournir des launchers `bin/start-server.*` qui fixent automatiquement `TARDIGRADE_WEB_ROOT` vers `./dashboard`.
+
+### Impact attendu
+
+- Acces dashboard immediat sans connaitre la structure interne des crates.
+- Reduction des erreurs de configuration au demarrage en environnement ops.
+
+### Risques
+
+- Necessite de conserver la synchronisation entre assets dashboard buildes et packaging release.
+
+### Evidence (code)
+
+- Packaging dashboard + launchers: [scripts/package-platform-zips.sh](scripts/package-platform-zips.sh)
+
+---
+
+## UX-007 - Dashboard source tree relocated to repository root
+
+- Date: 2026-04-09
+- Statut: implemented
+- Owner: Engineering
+- Type: information architecture
+
+### Contexte
+
+Le code source dashboard etait situe sous `crates/server/dashboard`, ce qui melangeait la couche frontend avec la structure crate Rust et compliquait les workflows frontend/CI.
+
+### Decision
+
+Relocaliser les sources dashboard vers `dashboard/` a la racine, puis aligner tous les points d'entree:
+
+1. `xtask` cible `dashboard/`.
+2. CI Node cache `dashboard/package-lock.json`.
+3. Documentation et commandes mises a jour vers `cd dashboard`.
+4. Build Vite conserve l'output vers `crates/server/static` pour la livraison server.
+
+### Impact attendu
+
+- Separation plus claire frontend vs crates Rust.
+- Onboarding frontend simplifie avec un chemin racine explicite.
+
+### Risques
+
+- Risque de references obsoletes si certains scripts externes pointent encore vers l'ancien chemin.
+
+### Evidence (code)
+
+- Resolution xtask: [crates/xtask/src/task_context.rs](crates/xtask/src/task_context.rs)
+- Build output Vite: [dashboard/vite.config.ts](dashboard/vite.config.ts)
 - Blocs secondaires limites a un objectif chacun.
 - Feedback local + piste d'audit transversale.
 
@@ -315,7 +385,7 @@ Automatisation ajoutee via `make package-platform-zips`.
 ### Impact attendu
 
 - Validation rapide du decoupage fonctionnel avant implementation React multi-pages.
-- Reduction du risque de refactor inutile sur [crates/server/dashboard/src/App.tsx](crates/server/dashboard/src/App.tsx).
+- Reduction du risque de refactor inutile sur [dashboard/src/App.tsx](dashboard/src/App.tsx).
 
 ### Next
 

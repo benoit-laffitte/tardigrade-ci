@@ -65,6 +65,8 @@ Refinement decisions:
 - [x] `INDUS-210` Wire CI pipeline to call Make targets as canonical entrypoints.
 - [x] `INDUS-211` Remove CI redundancy by replacing full `make ci` control rerun with a lightweight pipeline-summary gate.
 - [x] `INDUS-212` Add multi-platform release packaging (`make package-platform-zips`) generating mac/windows/linux zip distributions with bin/config/docs/README/LICENSE layout.
+- [x] `INDUS-213` Consolidate dashboard delivery in platform zips by exporting assets to top-level `dashboard/` and adding launcher scripts that set `TARDIGRADE_WEB_ROOT`.
+- [x] `INDUS-214` Move dashboard frontend sources to repository root (`dashboard/`) and update xtask/CI/docs paths accordingly.
 
 Definition of done:
 

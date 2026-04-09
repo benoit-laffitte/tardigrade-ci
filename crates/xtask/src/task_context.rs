@@ -16,7 +16,7 @@ pub(crate) fn resolve_context() -> Result<TaskContext> {
         .ok_or_else(|| anyhow!("cannot resolve workspace root"))?
         .to_path_buf();
 
-    let dashboard_dir = workspace_root.join("crates/server/dashboard");
+    let dashboard_dir = workspace_root.join("dashboard");
     if !dashboard_dir.exists() {
         return Err(anyhow!(
             "dashboard directory does not exist: {}",

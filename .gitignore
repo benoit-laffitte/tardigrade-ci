@@ -5,8 +5,8 @@ Cargo.lock
 certs
 .DS_Store
 .tmp*
-crates/server/dashboard/node_modules/
-crates/server/dashboard/.vite/
+dashboard/node_modules/
+dashboard/.vite/
 scripts/docker-env-bootstrap.sh
 **/test-results
 dist

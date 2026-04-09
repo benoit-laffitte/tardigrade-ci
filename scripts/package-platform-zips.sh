@@ -11,6 +11,7 @@ Create one zip archive per platform (mac, windows, linux) with this structure:
   - bin/      : server binaries
   - config/   : runtime configuration files
   - docs/     : product documentation
+	- dashboard/: dashboard static assets served by server
   - README.md : install and usage instructions
   - LICENSE.txt
 
@@ -66,20 +67,74 @@ write_package_readme() {
 
 1. Unzip this archive.
 2. Configure runtime values in files inside the config/ directory.
-3. Run the server binary from the bin/ directory.
+3. Start the server using the launcher script from bin/.
 
 ## Usage
 
 - Start server (Linux/macOS):
-  ./bin/tardigrade-server
+  ./bin/start-server.sh
 
 - Start server (Windows PowerShell):
-  .\\bin\\tardigrade-server.exe
+  .\\bin\\start-server.ps1
+
+The launcher scripts set TARDIGRADE_WEB_ROOT to ./dashboard, so dashboard assets are served
+from the package root (outside internal source crate paths).
+
+Dashboard URL after startup:
+
+- http://127.0.0.1:8080/
 
 Optional worker binary is included in the same bin/ directory.
 
 For detailed product documentation, see docs/.
 EOF
+}
+
+# This function writes launcher scripts that normalize dashboard access from package root.
+write_launchers() {
+	local package_dir="$1"
+	cat >"$package_dir/bin/start-server.sh" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Resolve package root from script location and force dashboard assets outside crate paths.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PACKAGE_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+export TARDIGRADE_WEB_ROOT="$PACKAGE_ROOT/dashboard"
+exec "$SCRIPT_DIR/tardigrade-server" "$@"
+EOF
+	chmod +x "$package_dir/bin/start-server.sh"
+
+	cat >"$package_dir/bin/start-server.ps1" <<'EOF'
+$ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$PackageRoot = Split-Path -Parent $ScriptDir
+
+$env:TARDIGRADE_WEB_ROOT = Join-Path $PackageRoot "dashboard"
+& (Join-Path $ScriptDir "tardigrade-server.exe") @args
+EOF
+
+	cat >"$package_dir/bin/start-server.cmd" <<'EOF'
+@echo off
+set SCRIPT_DIR=%~dp0
+set PACKAGE_ROOT=%SCRIPT_DIR%..
+set TARDIGRADE_WEB_ROOT=%PACKAGE_ROOT%\dashboard
+"%SCRIPT_DIR%tardigrade-server.exe" %*
+EOF
+}
+
+# This function copies dashboard static files into a top-level package directory.
+copy_dashboard_assets() {
+	local root_dir="$1"
+	local destination_dir="$2"
+	local dashboard_source="$root_dir/crates/server/static"
+
+	if [[ ! -d "$dashboard_source" ]]; then
+		echo "Missing dashboard assets directory: $dashboard_source" >&2
+		exit 1
+	fi
+
+	cp -R "$dashboard_source/." "$destination_dir/"
 }
 
 # This function copies expected binaries for one platform into bin/.
@@ -226,11 +281,13 @@ main() {
 		package_dir="$work_dir/$package_name"
 
 		log "Preparing package for $platform ($target)"
-		mkdir -p "$package_dir/bin" "$package_dir/config" "$package_dir/docs"
+		mkdir -p "$package_dir/bin" "$package_dir/config" "$package_dir/docs" "$package_dir/dashboard"
 
 		copy_platform_binaries "$root_dir" "$platform" "$target" "$package_dir/bin"
 		cp -R "$root_dir/config/." "$package_dir/config/"
 		cp -R "$root_dir/docs/." "$package_dir/docs/"
+		copy_dashboard_assets "$root_dir" "$package_dir/dashboard"
+		write_launchers "$package_dir"
 		cp "$root_dir/LICENSE" "$package_dir/LICENSE.txt"
 		write_package_readme "$package_dir" "$platform"
 
