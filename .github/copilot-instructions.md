@@ -43,3 +43,4 @@
 - Work through tasks systematically and report progress concisely.
 - Follow Rust and Axum best practices for error handling, async code, and type safety.
 - Keep this instructions file updated over time with major project directions and any development rules the team formally adopts.
+- track all actions on BACKLOG.md and UX.md 
