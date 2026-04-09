@@ -15,22 +15,32 @@ fn ensure_dashboard_test_assets() {
             .and_then(|path| path.parent())
             .map(|path| path.to_path_buf())
             .unwrap_or_else(|| crate_root.clone());
-        let source_root = crate_root.join("static");
         let target_root = workspace_root.join("target").join("public");
 
         fs::create_dir_all(&target_root).expect("create target/public for dashboard tests");
-        for file_name in ["index.html", "app.js", "styles.css", "tardigrade-logo.png"] {
-            let source = source_root.join(file_name);
-            let target = target_root.join(file_name);
-            fs::copy(&source, &target).unwrap_or_else(|error| {
-                panic!(
-                    "copy dashboard test asset {} -> {} failed: {}",
-                    source.display(),
-                    target.display(),
-                    error
-                )
-            });
-        }
+
+        // Keep test assets tiny and deterministic to avoid coupling tests to frontend build outputs.
+        fs::write(
+            target_root.join("index.html"),
+            "<!doctype html><html><head></head><body>test dashboard</body></html>",
+        )
+        .expect("write dashboard index fixture");
+        fs::write(
+            target_root.join("app.js"),
+            "console.log('tardigrade dashboard test');",
+        )
+        .expect("write dashboard js fixture");
+        fs::write(
+            target_root.join("styles.css"),
+            "body { background: #fff; color: #111; }",
+        )
+        .expect("write dashboard css fixture");
+        fs::write(
+            target_root.join("tardigrade-logo.png"),
+            // Minimal PNG signature + one byte payload is enough for byte-oriented handler checks.
+            [0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A, 0x00],
+        )
+        .expect("write dashboard logo fixture");
     });
 }
 
