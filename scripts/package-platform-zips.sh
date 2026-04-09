@@ -113,6 +113,7 @@ build_targets() {
 	shift
 	local targets=("$@")
 	local target=""
+	local linux_linker=""
 	local -a no_proxy_env=(
 		env
 		-u https_proxy
@@ -126,9 +127,18 @@ build_targets() {
 
 	for target in "${targets[@]}"; do
 		log "Building release binaries for target: $target"
+		linux_linker=""
+		if [[ "$target" == "x86_64-unknown-linux-gnu" ]] && command -v x86_64-unknown-linux-gnu-gcc >/dev/null 2>&1; then
+			# On macOS cross-builds, use GNU Linux linker when available to avoid host clang linker flags mismatch.
+			linux_linker="x86_64-unknown-linux-gnu-gcc"
+		fi
 		(
 			cd "$root_dir"
-			"${no_proxy_env[@]}" cargo build --release --target "$target" -p tardigrade-server -p tardigrade-worker
+			if [[ -n "$linux_linker" ]]; then
+				"${no_proxy_env[@]}" CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER="$linux_linker" cargo build --release --target "$target" -p tardigrade-server -p tardigrade-worker
+			else
+				"${no_proxy_env[@]}" cargo build --release --target "$target" -p tardigrade-server -p tardigrade-worker
+			fi
 		)
 	done
 }
@@ -207,7 +217,7 @@ main() {
 
 	mkdir -p "$out_dir"
 	work_dir="$(mktemp -d)"
-	trap 'rm -rf "$work_dir"' EXIT
+	trap 'rm -rf "${work_dir:-}"' EXIT
 
 	for platform in "${platform_list[@]}"; do
 		platform="$(echo "$platform" | xargs)"

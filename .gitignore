@@ -9,3 +9,4 @@ crates/server/dashboard/node_modules/
 crates/server/dashboard/.vite/
 scripts/docker-env-bootstrap.sh
 **/test-results
+dist
