@@ -148,6 +148,7 @@ Unified automation entrypoints from repository root:
 - `make dashboard-build` (frontend build via `xtask`)
 - `cd crates/server/dashboard && npm run e2e` (Playwright admin E2E suite)
 - `make build` (Rust + dashboard build)
+- `make package-platform-zips` (create release zip per platform: mac/windows/linux)
 - `make ci` (local CI-equivalent aggregate)
 
 Current note:

@@ -1,6 +1,6 @@
 # Rust-centric targets.
 
-.PHONY: bootstrap fmt-check clippy lint test-fast test-all test build-rust build-rust-release-images
+.PHONY: bootstrap fmt-check clippy lint test-fast test-all test build-rust build-rust-release-images package-platform-zips
 
 bootstrap: ## Prefetch Rust dependencies for local development
 	$(NO_PROXY_ENV) $(CARGO) fetch
@@ -26,3 +26,6 @@ build-rust: ## Build Rust workspace artifacts
 
 build-rust-release-images: ## Build release binaries used by runtime-only Docker images
 	$(NO_PROXY_ENV) $(CARGO) build --release -p tardigrade-server -p tardigrade-worker
+
+package-platform-zips: ## Build and package zip archives for mac/windows/linux
+	./scripts/package-platform-zips.sh

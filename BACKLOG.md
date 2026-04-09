@@ -64,6 +64,7 @@ Refinement decisions:
 - [-] `INDUS-209` Add discoverability target and docs (`make help` + README command matrix).
 - [x] `INDUS-210` Wire CI pipeline to call Make targets as canonical entrypoints.
 - [x] `INDUS-211` Remove CI redundancy by replacing full `make ci` control rerun with a lightweight pipeline-summary gate.
+- [x] `INDUS-212` Add multi-platform release packaging (`make package-platform-zips`) generating mac/windows/linux zip distributions with bin/config/docs/README/LICENSE layout.
 
 Definition of done:
 

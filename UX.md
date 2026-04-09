@@ -258,6 +258,45 @@ Chaque page doit respecter la meme structure d'ecran:
 
 - Header global persistant (etat stream, incidents, action sync).
 - Bloc action principale visible sans scroll.
+
+---
+
+## UX-005 - Distribution package structure for operators
+
+- Date: 2026-04-09
+- Statut: implemented
+- Owner: Engineering
+- Type: delivery operations
+
+### Contexte
+
+Les utilisateurs operationnels ont besoin d'un livrable simple a deployer par plateforme sans reconstruire localement la structure de runtime.
+
+### Decision
+
+Standardiser la distribution zip par plateforme (mac, windows, linux) avec une structure unique:
+
+1. bin/ pour les binaires serveurs.
+2. config/ pour les fichiers de configuration.
+3. docs/ pour la documentation produit.
+4. README.md pour les instructions d'installation et d'utilisation.
+5. LICENSE.txt pour les termes de licence.
+
+Automatisation ajoutee via `make package-platform-zips`.
+
+### Impact attendu
+
+- Reduction des erreurs de mise en service dues a des artefacts incomplets.
+- Onboarding ops plus rapide avec un package autoportant par OS cible.
+
+### Risques
+
+- La cross-compilation depend des toolchains Rust cibles disponibles sur la machine de build.
+
+### Evidence (code)
+
+- Script de packaging: [scripts/package-platform-zips.sh](scripts/package-platform-zips.sh)
+- Entree make: [mk/rust.mk](mk/rust.mk#L1)
 - Blocs secondaires limites a un objectif chacun.
 - Feedback local + piste d'audit transversale.
 
