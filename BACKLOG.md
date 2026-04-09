@@ -58,7 +58,7 @@ Refinement decisions:
 - [x] `INDUS-203` Add Rust-only bootstrap target (`make bootstrap`).
 - [x] `INDUS-204` Add quality targets (`make lint`, `make fmt-check`, `make clippy`).
 - [x] `INDUS-205` Add test matrix targets: `make test-fast` (unit only) and `make test-all` (unit + integration).
-- [x] `INDUS-206` Add Node/dashboard targets via `xtask` (`make dashboard-lint`, `make dashboard-build`).
+- [x] `INDUS-206` Add Node/dashboard targets (`make dashboard-lint`, `make dashboard-build`) through canonical root automation.
 - [ ] `INDUS-207` Add Docker targets for server/worker build + security scan.
 - [-] `INDUS-208` Add `make ci` as canonical local/CI aggregate target.
 - [-] `INDUS-209` Add discoverability target and docs (`make help` + README command matrix).
@@ -67,6 +67,8 @@ Refinement decisions:
 - [x] `INDUS-212` Add multi-platform release packaging (`make package-platform-zips`) generating mac/windows/linux zip distributions with bin/config/docs/README/LICENSE layout.
 - [x] `INDUS-213` Consolidate dashboard delivery in platform zips by exporting assets to top-level `dashboard/` and adding launcher scripts that set `TARDIGRADE_WEB_ROOT`.
 - [x] `INDUS-214` Move dashboard frontend sources to repository root (`dashboard/`) and update xtask/CI/docs paths accordingly.
+- [x] `INDUS-215` Remove `crates/xtask` and switch dashboard automation to direct Make+npm workflow.
+- [x] `INDUS-216` Switch dashboard build output to `target/public` and enforce strict runtime + packaging consumption without legacy fallback.
 
 Definition of done:
 
@@ -437,13 +439,13 @@ Goal: improve maintainability by enforcing one primary Rust object per `.rs` sou
 
 Refinement outcome for `REFAC-01` (2026-03-31):
 
-- Scope target: all workspace Rust crates (`api`, `auth`, `core`, `executor`, `plugins`, `scheduler`, `server`, `storage`, `worker`, `xtask`).
+- Scope target (at refinement date): all workspace Rust crates (`api`, `auth`, `core`, `executor`, `plugins`, `scheduler`, `server`, `storage`, `worker`, `xtask`).
 - Object granularity: one primary object per file (`struct`, `enum`, `trait`, or type-focused module API surface).
 - `impl` policy: keep `impl` blocks in the same file as their primary object.
 - Module layout: split large `lib.rs`/`main.rs` internals into dedicated module files while keeping crate public APIs stable.
 - API compatibility policy: strict backward compatibility for public APIs during the refactor.
 - Migration strategy: incremental by crate, with compile + tests passing at each step.
-- Execution order: `core` -> `storage` -> `scheduler` -> `plugins` -> `executor` -> `api` -> `server` -> `worker` -> `auth` -> `xtask`.
+- Execution order (at refinement date): `core` -> `storage` -> `scheduler` -> `plugins` -> `executor` -> `api` -> `server` -> `worker` -> `auth` -> `xtask`.
 - Safety constraint: no behavior changes in this epic, only structure and readability improvements.
 - Validation gate: run `cargo test --workspace` on every `REFAC-*` ticket.
 - Naming convention: file names use `snake_case` and match their primary object (example: `definition.rs` for `PipelineDefinition` inside `pipeline/`).
@@ -459,7 +461,7 @@ Refinement outcome for `REFAC-01` (2026-03-31):
 - [x] `REFAC-03` Refactor `crates/storage` and `crates/scheduler` into one-object-per-file module structure.
 - [x] `REFAC-04` Refactor `crates/plugins` and `crates/executor` into one-object-per-file module structure.
 - [x] `REFAC-05` Refactor `crates/api` and `crates/server` into one-object-per-file module structure.
-- [x] `REFAC-06` Refactor `crates/worker`, `crates/auth`, and `crates/xtask` into one-object-per-file module structure.
+- [x] `REFAC-06` Refactor `crates/worker`, `crates/auth`, and `crates/xtask` into one-object-per-file module structure (historical; `xtask` removed later in `INDUS-215`).
 - [x] `REFAC-07` Validate workspace stability (`cargo test --workspace`) and update docs/contribution guidelines.
 
 Definition of done:

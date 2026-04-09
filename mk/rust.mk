@@ -27,5 +27,5 @@ build-rust: ## Build Rust workspace artifacts
 build-rust-release-images: ## Build release binaries used by runtime-only Docker images
 	$(NO_PROXY_ENV) $(CARGO) build --release -p tardigrade-server -p tardigrade-worker
 
-package-platform-zips: ## Build and package zip archives for mac/windows/linux
+package-platform-zips: dashboard-build ## Build and package zip archives for mac/windows/linux
 	./scripts/package-platform-zips.sh

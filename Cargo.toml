@@ -9,7 +9,6 @@ members = [
     "crates/plugins",
     "crates/auth",
     "crates/worker",
-    "crates/xtask",
 ]
 resolver = "2"
 

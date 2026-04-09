@@ -61,21 +61,22 @@ Frontend dashboard subproject (React + TypeScript + Vite + Apollo + Oxlint):
 - env -u https_proxy -u http_proxy -u PXY_FAB_FONC npm install
 - env -u https_proxy -u http_proxy -u PXY_FAB_FONC npm run dev
 
-Centralized workflow with Cargo (Node + Rust via one tool):
+Centralized workflow with Make (Node + Rust via one command surface):
 
-- env -u https_proxy -u http_proxy -u PXY_FAB_FONC cargo dashboard-install
-- env -u https_proxy -u http_proxy -u PXY_FAB_FONC cargo dashboard-lint
-- env -u https_proxy -u http_proxy -u PXY_FAB_FONC cargo dashboard-build
-- env -u https_proxy -u http_proxy -u PXY_FAB_FONC cargo dashboard-dev
+- make dashboard-install
+- make dashboard-lint
+- make dashboard-build
+- make dashboard-dev
 
-The Cargo aliases call `crates/xtask`, which runs npm with public registry (`https://registry.npmjs.org/`) and bypasses user proxy settings.
+Dashboard Make targets run npm from `dashboard/` with public registry (`https://registry.npmjs.org/`) and bypass user proxy settings.
 
 Build dashboard assets served by Rust server:
 
 - cd dashboard
 - env -u https_proxy -u http_proxy -u PXY_FAB_FONC npm run build
 
-The Vite build outputs to `crates/server/static` (`index.html`, `app.js`, `styles.css`) and the Axum server embeds these files at compile time.
+The Vite build outputs to `target/public` (`index.html`, `app.js`, `styles.css`) and the Axum server serves them dynamically at runtime.
+If `target/public` is missing, dashboard routes return runtime errors until `make dashboard-build` is executed.
 
 Run server in dev mode from config file (Redis optional, in-memory fallback):
 
@@ -143,9 +144,9 @@ Unified automation entrypoints from repository root:
 - `make lint` (Rust fmt + clippy)
 - `make test-fast` (Rust unit tests only)
 - `make test-all` (full Rust workspace tests)
-- `make dashboard-install` (frontend dependencies via `xtask`)
-- `make dashboard-lint` (frontend lint via `xtask`)
-- `make dashboard-build` (frontend build via `xtask`)
+- `make dashboard-install` (frontend dependencies via npm)
+- `make dashboard-lint` (frontend lint via npm)
+- `make dashboard-build` (frontend build via npm)
 - `cd dashboard && npm run e2e` (Playwright admin E2E suite)
 - `make build` (Rust + dashboard build)
 - `make package-platform-zips` (create release zip per platform: mac/windows/linux)
@@ -154,7 +155,7 @@ Unified automation entrypoints from repository root:
 Platform zip packaging details:
 
 - Each archive includes `bin/`, `config/`, `docs/`, `dashboard/`, `README.md`, and `LICENSE.txt`.
-- Dashboard assets are exported from `crates/server/static` to a top-level `dashboard/` folder in each zip.
+- Dashboard assets are exported from `target/public` to a top-level `dashboard/` folder in each zip.
 - Launchers in `bin/` (`start-server.sh`, `start-server.ps1`, `start-server.cmd`) set `TARDIGRADE_WEB_ROOT` automatically.
 
 Current note:

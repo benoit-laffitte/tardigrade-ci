@@ -127,10 +127,11 @@ EOF
 copy_dashboard_assets() {
 	local root_dir="$1"
 	local destination_dir="$2"
-	local dashboard_source="$root_dir/crates/server/static"
+	local dashboard_source="$root_dir/target/public"
 
 	if [[ ! -d "$dashboard_source" ]]; then
 		echo "Missing dashboard assets directory: $dashboard_source" >&2
+		echo "Hint: run make dashboard-build before packaging" >&2
 		exit 1
 	fi
 

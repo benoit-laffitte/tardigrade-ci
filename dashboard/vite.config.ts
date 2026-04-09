@@ -1,11 +1,11 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
-// Builds the dashboard into the Rust static directory with stable filenames.
+// Builds dashboard assets into target/public with stable filenames for runtime and packaging.
 export default defineConfig({
   plugins: [react()],
   build: {
-    outDir: "../crates/server/static",
+    outDir: "../target/public",
     emptyOutDir: true,
     cssCodeSplit: false,
     rollupOptions: {
@@ -13,7 +13,8 @@ export default defineConfig({
         entryFileNames: "app.js",
         chunkFileNames: "app.js",
         assetFileNames: (assetInfo) => {
-          if (assetInfo.name?.endsWith(".css")) {
+          const assetNames = [...(assetInfo.names ?? []), ...(assetInfo.originalFileNames ?? [])];
+          if (assetNames.some((name) => name.endsWith(".css"))) {
             return "styles.css";
           }
           return "assets/[name][extname]";

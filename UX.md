@@ -349,10 +349,11 @@ Le code source dashboard etait situe sous `crates/server/dashboard`, ce qui mela
 
 Relocaliser les sources dashboard vers `dashboard/` a la racine, puis aligner tous les points d'entree:
 
-1. `xtask` cible `dashboard/`.
+1. Le workflow dashboard est pilote depuis Make avec npm direct dans `dashboard/`.
 2. CI Node cache `dashboard/package-lock.json`.
 3. Documentation et commandes mises a jour vers `cd dashboard`.
-4. Build Vite conserve l'output vers `crates/server/static` pour la livraison server.
+4. Build Vite publie les assets vers `target/public`, consommes au runtime serveur et au packaging.
+5. Le runtime serveur et le packaging utilisent strictement `target/public` (pas de fallback legacy).
 
 ### Impact attendu
 
@@ -365,8 +366,10 @@ Relocaliser les sources dashboard vers `dashboard/` a la racine, puis aligner to
 
 ### Evidence (code)
 
-- Resolution xtask: [crates/xtask/src/task_context.rs](crates/xtask/src/task_context.rs)
+- Orchestration dashboard: [mk/dashboard.mk](mk/dashboard.mk)
 - Build output Vite: [dashboard/vite.config.ts](dashboard/vite.config.ts)
+- Resolution runtime dashboard: [crates/server/src/dashboard/assets.rs](crates/server/src/dashboard/assets.rs)
+- Packaging dashboard source: [scripts/package-platform-zips.sh](scripts/package-platform-zips.sh)
 - Blocs secondaires limites a un objectif chacun.
 - Feedback local + piste d'audit transversale.
 
