@@ -1858,6 +1858,18 @@ export function App() {
     pluginPolicySummaryByName
   );
 
+  const pagePresentation: Record<DashboardPage, { kicker: string; title: string }> = {
+    pipelines: { kicker: "Delivery", title: "Pipelines" },
+    overview: { kicker: "System Health", title: "Overview" },
+    workers: { kicker: "Execution Plane", title: "Workers" },
+    "scm-security": { kicker: "Trust Boundary", title: "SCM Security" },
+    "plugins-policy": { kicker: "Governed Extensibility", title: "Plugins & Policy" },
+    observability: { kicker: "Evidence", title: "Observability" },
+    administration: { kicker: "Governance", title: "Administration" }
+  };
+
+  const currentPage = pagePresentation[activePage];
+
   return (
     <>
       <div className="bg-orb orb-1"></div>
@@ -1866,33 +1878,20 @@ export function App() {
       <div className="bg-grid"></div>
       <div className="bg-scanline"></div>
 
-      <main className="shell">
-        <section className="hud-strip reveal" style={{ ["--delay" as string]: "0s" }}>
-          <span>Deck: CI-01</span>
-          <span>Channel: Build Control</span>
-          <span>Stardate: {stardate}</span>
-        </section>
-
-        <header className="hero">
-          <div className="hero-copy-wrap">
-            <div className="logo-shell" aria-hidden="true">
-              <img className="tardi-logo" src="/tardigrade-logo.png" alt="" />
-            </div>
-            <div className="hero-copy">
+      <main className="shell shell-mockup">
+        <header className="global-banner reveal" style={{ ["--delay" as string]: "0s" }}>
+          <div className="banner-brand">
+            <img className="banner-logo" src="/tardigrade-logo.png" alt="Tardigrade logo" />
+            <div>
               <p className="eyebrow">Bridge Control Plane</p>
-              <h1>Tardigrade CI Console</h1>
-              <p className="subtitle">
-                Console multi-pages alignee sur les fonctions API disponibles, avec extension progressive vers la cible UX.
-              </p>
+              <h1>Tardigrade Operations Console</h1>
             </div>
           </div>
-          <div className="hero-actions">
-            <div className={`status-chip ${streamConnected ? "connected" : "disconnected"}`}>
-              {streamStatusText}
-            </div>
-            <div className={`status-chip ${healthStatus === "ok" ? "connected" : "disconnected"}`}>
+          <div className="top-actions">
+            <span className={`status-chip ${streamConnected ? "connected" : "disconnected"}`}>{streamStatusText}</span>
+            <span className={`status-chip ${healthStatus === "ok" ? "connected" : "disconnected"}`}>
               API {healthStatus === "ok" ? "Healthy" : "Degraded"}
-            </div>
+            </span>
             <label>
               <span>Role</span>
               <select
@@ -1911,35 +1910,61 @@ export function App() {
           </div>
         </header>
 
-        <section className="page-nav reveal" style={{ ["--delay" as string]: "0.01s" }}>
-          {DASHBOARD_NAV_ITEMS.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              className={`page-tab ${activePage === item.id ? "active" : ""}`}
-              onClick={() => setActivePage(item.id)}
-            >
-              {item.label}
-            </button>
-          ))}
-        </section>
+        <div className="layout">
+          <aside className="sidenav reveal" style={{ ["--delay" as string]: "0s" }}>
+            <div className="brand">
+              <p className="eyebrow">Navigation</p>
+              <h1>Screens</h1>
+              <p className="subtitle">Disposition alignee sur la maquette produit.</p>
+            </div>
 
-        <section className="panel reveal api-coverage-panel" style={{ ["--delay" as string]: "0.015s" }}>
-          <div className="panel-head">
-            <h2>Perimetre API reel</h2>
-            <span className="pill">{activeCoverage}</span>
-          </div>
-          <p className="hint">
-            Endpoints disponibles: GET /health, POST /jobs, GET /jobs, POST /jobs/{"{id}"}/run,
-            POST /builds/{"{id}"}/cancel, GET /builds.
-          </p>
-        </section>
+            <nav className="page-nav" aria-label="Pages metier">
+              {DASHBOARD_NAV_ITEMS.map((item, index) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  className={`page-tab ${activePage === item.id ? "active" : ""}`}
+                  onClick={() => setActivePage(item.id)}
+                >
+                  {index + 1}. {item.label}
+                </button>
+              ))}
+            </nav>
 
-        <section className="grid">
+            <div className="sidenav-foot">
+              <p>
+                <strong>Landing:</strong> Pipelines
+              </p>
+              <p>
+                <strong>Stardate:</strong> {stardate}
+              </p>
+            </div>
+          </aside>
+
+          <div className="content">
+            <header className="topbar reveal" style={{ ["--delay" as string]: "0.01s" }}>
+              <div>
+                <p className="eyebrow">{currentPage.kicker}</p>
+                <h2>{currentPage.title}</h2>
+              </div>
+              <span className="pill">{activeCoverage}</span>
+            </header>
+
+            <section className="grid">
+              <section className="panel panel-full reveal api-coverage-panel" style={{ ["--delay" as string]: "0.015s" }}>
+                <div className="panel-head">
+                  <h2>Perimetre API reel</h2>
+                  <span className="pill">{activeCoverage}</span>
+                </div>
+                <p className="hint">
+                  Endpoints disponibles: GET /health, POST /jobs, GET /jobs, POST /jobs/{"{id}"}/run,
+                  POST /builds/{"{id}"}/cancel, GET /builds.
+                </p>
+              </section>
           {isImplementedPage ? (
             <>
               {activePage === "pipelines" && (
-                <article className="panel panel-form reveal" style={{ ["--delay" as string]: "0.02s" }}>
+                <article className="panel panel-third panel-form reveal" style={{ ["--delay" as string]: "0.02s" }}>
                   <h2>Nouveau Job</h2>
                   <form className="form" onSubmit={(event) => void createJob(event)}>
                     <label>
@@ -1981,7 +2006,7 @@ export function App() {
               )}
 
               {(activePage === "pipelines" || activePage === "overview") && (
-                <article className="panel reveal" style={{ ["--delay" as string]: "0.12s" }}>
+                <article className={`panel reveal ${activePage === "pipelines" ? "panel-third" : "panel-two-thirds"}`} style={{ ["--delay" as string]: "0.12s" }}>
             <div className="panel-head">
               <h2>Jobs</h2>
               <span className="pill">{snapshot.jobs.length}</span>
@@ -2011,7 +2036,7 @@ export function App() {
               )}
 
               {(activePage === "pipelines" || activePage === "overview") && (
-                <article className="panel reveal" style={{ ["--delay" as string]: "0.22s" }}>
+                <article className={`panel reveal ${activePage === "pipelines" ? "panel-full" : "panel-third"}`} style={{ ["--delay" as string]: "0.22s" }}>
             <div className="panel-head">
               <h2>Builds</h2>
               <span className="pill">{snapshot.builds.length}</span>
@@ -2053,7 +2078,7 @@ export function App() {
               )}
 
               {activePage === "overview" && (
-                <article className="panel panel-metrics reveal" style={{ ["--delay" as string]: "0.3s" }}>
+                <article className="panel panel-half panel-metrics reveal" style={{ ["--delay" as string]: "0.3s" }}>
             <div className="panel-head">
               <h2>Health & Delivery Snapshot</h2>
               <span className="pill">live</span>
@@ -2080,7 +2105,7 @@ export function App() {
               )}
 
               {activePage === "overview" && (
-                <article className="panel reveal" style={{ ["--delay" as string]: "0.31s" }}>
+                <article className="panel panel-third reveal" style={{ ["--delay" as string]: "0.31s" }}>
             <div className="panel-head">
               <h2>Build Status Breakdown</h2>
               <span className="pill">{snapshot.builds.length}</span>
@@ -2127,7 +2152,7 @@ export function App() {
               )}
 
               {activePage === "overview" && (
-                <article className="panel reveal" style={{ ["--delay" as string]: "0.315s" }}>
+                <article className="panel panel-third reveal" style={{ ["--delay" as string]: "0.315s" }}>
             <div className="panel-head">
               <h2>API-backed Overview Scope</h2>
               <span className="pill">strict</span>
@@ -2159,7 +2184,7 @@ export function App() {
             <>
               {activePage === "workers" ? (
                 <>
-                  <article className="panel reveal" style={{ ["--delay" as string]: "0.02s" }}>
+                  <article className="panel panel-full reveal" style={{ ["--delay" as string]: "0.02s" }}>
                     <h2>Page en mode roadmap</h2>
                     <p className="hint">
                       Vue Workers partiellement activee en read-only a partir de GET /jobs et GET /builds.
@@ -2176,7 +2201,7 @@ export function App() {
                     </div>
                   </article>
 
-                  <article className="panel panel-metrics reveal" style={{ ["--delay" as string]: "0.06s" }}>
+                  <article className="panel panel-third panel-metrics reveal" style={{ ["--delay" as string]: "0.06s" }}>
                     <div className="panel-head">
                       <h2>Execution Pressure (read-only)</h2>
                       <span className="pill">derived</span>
@@ -2201,7 +2226,7 @@ export function App() {
                     </div>
                   </article>
 
-                  <article className="panel reveal" style={{ ["--delay" as string]: "0.1s" }}>
+                  <article className="panel panel-two-thirds reveal" style={{ ["--delay" as string]: "0.1s" }}>
                     <div className="panel-head">
                       <h2>Recent Execution Sample</h2>
                       <span className="pill">{recentExecutionBuilds.length}</span>
@@ -2229,7 +2254,7 @@ export function App() {
                 <>
                   {activePage === "scm-security" && (
                     <>
-                      <article className="panel reveal" style={{ ["--delay" as string]: "0.02s" }}>
+                      <article className="panel panel-full reveal" style={{ ["--delay" as string]: "0.02s" }}>
                         <h2>Page en mode roadmap</h2>
                         <p className="hint">
                           Vue SCM Security partiellement activee en read-only a partir de GET /health, GET /jobs, GET /builds.
@@ -2246,7 +2271,7 @@ export function App() {
                         </div>
                       </article>
 
-                      <article className="panel panel-metrics reveal" style={{ ["--delay" as string]: "0.06s" }}>
+                      <article className="panel panel-half panel-metrics reveal" style={{ ["--delay" as string]: "0.06s" }}>
                         <div className="panel-head">
                           <h2>SCM Risk Proxy (read-only)</h2>
                           <span className="pill">derived</span>
@@ -2271,7 +2296,7 @@ export function App() {
                         </div>
                       </article>
 
-                      <article className="panel reveal" style={{ ["--delay" as string]: "0.1s" }}>
+                      <article className="panel panel-half reveal" style={{ ["--delay" as string]: "0.1s" }}>
                         <div className="panel-head">
                           <h2>Recent SCM Sources (from jobs)</h2>
                           <span className="pill">{scmSecurityReadOnlySummary.recentJobs.length}</span>
@@ -2295,32 +2320,164 @@ export function App() {
                     </>
                   )}
 
-                  {activePage !== "scm-security" && (
-                <article className="panel reveal" style={{ ["--delay" as string]: "0.02s" }}>
-                  <h2>Page en mode roadmap</h2>
-                  <p className="hint">
-                    Cette page correspond a la maquette cible mais n'est pas encore reliee aux endpoints exposes.
-                  </p>
-                  <div className="list">
-                    <div className="list-item">
-                      <div>
-                        <p className="item-title">API coverage: roadmap</p>
-                        <p className="item-subtitle">Prochaine etape: ajouter les endpoints backend puis brancher les actions UI.</p>
-                      </div>
-                    </div>
-                  </div>
-                </article>
+                  {activePage === "plugins-policy" && (
+                    <>
+                      <article className="panel panel-full reveal" style={{ ["--delay" as string]: "0.02s" }}>
+                        <h2>Triage extensions & policy</h2>
+                        <p className="hint">Signaux prioritaires plugin/policy selon la maquette cible.</p>
+                        <div className="metrics-grid">
+                          <div className="metric-card">
+                            <p className="metric-label">Plugin failures</p>
+                            <p className="metric-value">3</p>
+                          </div>
+                          <div className="metric-card">
+                            <p className="metric-label">Policy violations</p>
+                            <p className="metric-value">5</p>
+                          </div>
+                          <div className="metric-card">
+                            <p className="metric-label">Drift detected</p>
+                            <p className="metric-value">1</p>
+                          </div>
+                          <div className="metric-card">
+                            <p className="metric-label">Coverage</p>
+                            <p className="metric-value">roadmap</p>
+                          </div>
+                        </div>
+                      </article>
+
+                      <article className="panel panel-third reveal" style={{ ["--delay" as string]: "0.06s" }}>
+                        <h2>Runbook actions</h2>
+                        <div className="list">
+                          <div className="list-item"><p className="item-subtitle">Disable failing plugin version</p></div>
+                          <div className="list-item"><p className="item-subtitle">Enforce deny-all fallback policy</p></div>
+                          <div className="list-item"><p className="item-subtitle">Trigger dry-run auth replay</p></div>
+                        </div>
+                      </article>
+
+                      <article className="panel panel-two-thirds reveal" style={{ ["--delay" as string]: "0.1s" }}>
+                        <h2>Plugin lifecycle health</h2>
+                        <p className="hint">Disposition two-thirds conforme maquette, branchement API a venir.</p>
+                        <div className="list">
+                          <div className="list-item"><p className="item-subtitle">Loaded: 11 | Init failures: 1 | Auto-recovery: enabled</p></div>
+                        </div>
+                      </article>
+
+                      <article className="panel panel-half reveal" style={{ ["--delay" as string]: "0.14s" }}>
+                        <h2>Policy enforcement coverage</h2>
+                        <p className="hint">Vue governance en demi-largeur.</p>
+                      </article>
+
+                      <article className="panel panel-half reveal" style={{ ["--delay" as string]: "0.18s" }}>
+                        <h2>Violations et drift</h2>
+                        <p className="hint">Timeline forensics roadmap.</p>
+                      </article>
+
+                      <article className="panel panel-full reveal" style={{ ["--delay" as string]: "0.22s" }}>
+                        <h2>Capability governance</h2>
+                        <p className="hint">Edition capabilities avec garde-fous (roadmap).</p>
+                      </article>
+
+                      <article className="panel panel-full reveal" style={{ ["--delay" as string]: "0.26s" }}>
+                        <h2>Inventory & provenance</h2>
+                        <p className="hint">Inventaire plugin detaille a brancher sur endpoints dedies.</p>
+                      </article>
+                    </>
+                  )}
+
+                  {activePage === "observability" && (
+                    <>
+                      <article className="panel panel-full reveal" style={{ ["--delay" as string]: "0.02s" }}>
+                        <h2>Triage observabilite</h2>
+                        <div className="metrics-grid">
+                          <div className="metric-card"><p className="metric-label">Critical alerts</p><p className="metric-value">4</p></div>
+                          <div className="metric-card"><p className="metric-label">Event burst</p><p className="metric-value">+38%</p></div>
+                          <div className="metric-card"><p className="metric-label">Signal lag</p><p className="metric-value">22s</p></div>
+                          <div className="metric-card"><p className="metric-label">Coverage</p><p className="metric-value">roadmap</p></div>
+                        </div>
+                      </article>
+
+                      <article className="panel panel-third reveal" style={{ ["--delay" as string]: "0.06s" }}>
+                        <h2>Actions guidees</h2>
+                        <p className="hint">Runbook investigation (roadmap).</p>
+                      </article>
+
+                      <article className="panel panel-two-thirds reveal" style={{ ["--delay" as string]: "0.1s" }}>
+                        <h2>Live event stream</h2>
+                        <p className="hint">Disposition two-thirds conservee pour le flux principal.</p>
+                      </article>
+
+                      <article className="panel panel-half reveal" style={{ ["--delay" as string]: "0.14s" }}>
+                        <h2>Signal quality</h2>
+                      </article>
+
+                      <article className="panel panel-half reveal" style={{ ["--delay" as string]: "0.18s" }}>
+                        <h2>Incidents par severite</h2>
+                      </article>
+
+                      <article className="panel panel-full reveal" style={{ ["--delay" as string]: "0.22s" }}>
+                        <h2>Correlation map</h2>
+                      </article>
+
+                      <article className="panel panel-half reveal" style={{ ["--delay" as string]: "0.26s" }}>
+                        <h2>Exports & forensic snapshots</h2>
+                      </article>
+
+                      <article className="panel panel-full reveal" style={{ ["--delay" as string]: "0.3s" }}>
+                        <h2>Operations journal</h2>
+                      </article>
+                    </>
+                  )}
+
+                  {activePage === "administration" && (
+                    <>
+                      <article className="panel panel-full reveal" style={{ ["--delay" as string]: "0.02s" }}>
+                        <h2>Triage administration</h2>
+                        <div className="metrics-grid">
+                          <div className="metric-card"><p className="metric-label">Pending approvals</p><p className="metric-value">6</p></div>
+                          <div className="metric-card"><p className="metric-label">Privilege drift</p><p className="metric-value">3</p></div>
+                          <div className="metric-card"><p className="metric-label">Sensitive ops</p><p className="metric-value">9</p></div>
+                          <div className="metric-card"><p className="metric-label">Coverage</p><p className="metric-value">roadmap</p></div>
+                        </div>
+                      </article>
+
+                      <article className="panel panel-third reveal" style={{ ["--delay" as string]: "0.06s" }}>
+                        <h2>Runbook gouvernance</h2>
+                        <p className="hint">Actions de containment admin (roadmap).</p>
+                      </article>
+
+                      <article className="panel panel-two-thirds reveal" style={{ ["--delay" as string]: "0.1s" }}>
+                        <h2>Role & capability coverage</h2>
+                        <p className="hint">Vue RBAC structurante conforme maquette.</p>
+                      </article>
+
+                      <article className="panel panel-half reveal" style={{ ["--delay" as string]: "0.14s" }}>
+                        <h2>Sensitive operations control</h2>
+                      </article>
+
+                      <article className="panel panel-half reveal" style={{ ["--delay" as string]: "0.18s" }}>
+                        <h2>Admin access anomalies</h2>
+                      </article>
+
+                      <article className="panel panel-full reveal" style={{ ["--delay" as string]: "0.22s" }}>
+                        <h2>Change approvals & maintenance windows</h2>
+                      </article>
+
+                      <article className="panel panel-full reveal" style={{ ["--delay" as string]: "0.26s" }}>
+                        <h2>Admin activity</h2>
+                      </article>
+                    </>
                   )}
                 </>
               )}
             </>
           )}
-        </section>
-
-        <section className="panel console reveal" style={{ ["--delay" as string]: "0.32s" }}>
-          <h2>Journal de bord</h2>
-          <pre aria-live="polite">{logs}</pre>
-        </section>
+              <section className="panel panel-full console reveal" style={{ ["--delay" as string]: "0.32s" }}>
+                <h2>Journal de bord</h2>
+                <pre aria-live="polite">{logs}</pre>
+              </section>
+            </section>
+          </div>
+        </div>
       </main>
     </>
   );

@@ -98,54 +98,85 @@ body {
 
 /* Main dashboard layout containers. */
 .shell {
-  width: min(1120px, calc(100% - 2rem));
-  margin: 2rem auto 2.5rem;
+  width: min(1400px, calc(100% - 2rem));
+  margin: 1.2rem auto;
 }
 
-.hud-strip {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.8rem;
-  margin-bottom: 1rem;
-}
-
-.hud-strip span {
-  border: 1px solid rgba(255, 188, 118, 0.58);
-  border-radius: 999px;
-  padding: 0.44rem 0.8rem;
-  background: linear-gradient(140deg, rgba(164, 62, 21, 0.72), rgba(72, 30, 44, 0.5));
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  font-size: 0.69rem;
-  color: #fff2df;
-  text-align: center;
-}
-
-.hero {
+.global-banner {
+  border: 1px solid rgba(255, 182, 104, 0.34);
+  border-radius: 18px;
+  background: linear-gradient(166deg, rgba(54, 23, 38, 0.74), rgba(20, 21, 42, 0.88));
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(12px);
+  padding: 0.9rem 1rem;
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 1rem;
-  margin-bottom: 1.4rem;
+  margin-bottom: 1rem;
+}
+
+.banner-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+}
+
+.banner-logo {
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 189, 116, 0.44);
+  background: rgba(27, 17, 31, 0.8);
+  padding: 0.2rem;
+  flex: 0 0 auto;
+}
+
+.shell-mockup .layout {
+  display: grid;
+  grid-template-columns: 300px minmax(0, 1fr);
+  gap: 1rem;
+  min-height: calc(100vh - 2.4rem);
+}
+
+.sidenav {
+  border: 1px solid rgba(255, 182, 104, 0.34);
+  border-radius: 18px;
+  background: linear-gradient(166deg, rgba(54, 23, 38, 0.74), rgba(20, 21, 42, 0.88));
+  box-shadow: var(--shadow);
+  padding: 1rem;
+  backdrop-filter: blur(12px);
+  display: grid;
+  align-content: start;
+  gap: 1rem;
+}
+
+.content {
+  min-width: 0;
+}
+
+.brand h1 {
+  margin: 0.2rem 0 0;
+  font-size: 1.3rem;
 }
 
 .page-nav {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  margin-bottom: 0.9rem;
+  display: grid;
+  gap: 0.45rem;
+  margin: 0;
 }
 
 .page-tab {
-  border: 1px solid rgba(255, 177, 96, 0.42);
-  border-radius: 999px;
+  border: 1px solid rgba(255, 177, 96, 0.4);
+  border-radius: 12px;
   background: rgba(33, 20, 36, 0.75);
   color: var(--text-main);
-  padding: 0.35rem 0.72rem;
+  padding: 0.62rem 0.72rem;
   cursor: pointer;
   font: inherit;
-  font-size: 0.78rem;
+  font-size: 0.82rem;
   letter-spacing: 0.04em;
+  text-align: left;
 }
 
 .page-tab.active {
@@ -153,39 +184,40 @@ body {
   background: rgba(122, 46, 26, 0.65);
 }
 
-.api-coverage-panel {
+.sidenav-foot {
+  border: 1px dashed rgba(255, 177, 96, 0.4);
+  border-radius: 12px;
+  padding: 0.75rem;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.sidenav-foot p {
+  margin: 0.35rem 0;
+}
+
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
   margin-bottom: 1rem;
 }
 
-.hero-copy-wrap {
+.topbar h2 {
+  margin: 0.3rem 0 0;
+  font-size: clamp(1.4rem, 2.2vw, 2rem);
+}
+
+.top-actions {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  flex-wrap: wrap;
+  gap: 0.5rem;
 }
 
-.logo-shell {
-  min-width: 128px;
-  width: 128px;
-  height: 128px;
-  border-radius: 999px;
-  border: 1px solid rgba(255, 189, 116, 0.44);
-  background: radial-gradient(circle at 30% 20%, rgba(255, 229, 172, 0.26), transparent 56%),
-    linear-gradient(155deg, rgba(255, 152, 68, 0.26), rgba(81, 28, 42, 0.22));
-  box-shadow: inset 0 0 20px rgba(255, 171, 75, 0.35), 0 0 32px rgba(255, 109, 52, 0.26);
-  display: grid;
-  place-items: center;
-}
-
-.tardi-logo {
-  width: 104px;
-  height: 104px;
-  filter: drop-shadow(0 6px 10px rgba(255, 140, 63, 0.45));
-}
-
-.hero-actions {
-  display: grid;
-  justify-items: end;
-  gap: 0.6rem;
+.api-coverage-panel {
+  margin-bottom: 0;
 }
 
 .status-chip {
@@ -233,7 +265,7 @@ body {
 
 h1 {
   margin: 0.25rem 0 0;
-  font-size: clamp(1.9rem, 4vw, 3rem);
+  font-size: clamp(1.2rem, 2.4vw, 1.7rem);
   line-height: 1.06;
 }
 
@@ -245,12 +277,13 @@ h1 {
 
 .grid {
   display: grid;
-  grid-template-columns: 1.15fr 1fr 1fr;
-  gap: 1rem;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 0.9rem;
 }
 
 /* Panel system used by all functional modules. */
 .panel {
+  grid-column: span 4;
   background: linear-gradient(166deg, rgba(54, 23, 38, 0.74), rgba(20, 21, 42, 0.88));
   border: 1px solid rgba(255, 182, 104, 0.34);
   border-radius: 18px;
@@ -258,6 +291,22 @@ h1 {
   padding: 1rem;
   backdrop-filter: blur(12px);
   position: relative;
+}
+
+.panel-full {
+  grid-column: span 12;
+}
+
+.panel-half {
+  grid-column: span 6;
+}
+
+.panel-third {
+  grid-column: span 4;
+}
+
+.panel-two-thirds {
+  grid-column: span 8;
 }
 
 .panel::before {
@@ -550,43 +599,70 @@ input:focus {
 }
 
 @media (max-width: 1024px) {
-  /* Tablet/mobile layout collapsing to a single column flow. */
-  .grid {
-    grid-template-columns: 1fr;
-  }
-
-  .hud-strip {
-    grid-template-columns: 1fr;
-  }
-
-  .hero {
-    align-items: stretch;
+  /* Tablet layout: sidebar stacks above content while preserving panel hierarchy. */
+  .global-banner {
     flex-direction: column;
-  }
-
-  .hero-copy-wrap {
     align-items: flex-start;
   }
 
-  .hero-actions {
-    justify-items: start;
+  .shell-mockup .layout {
+    grid-template-columns: 1fr;
+  }
+
+  .sidenav {
+    gap: 0.8rem;
+  }
+
+  .page-nav {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .grid {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+
+  .panel {
+    grid-column: span 3;
+  }
+
+  .panel-half,
+  .panel-two-thirds,
+  .panel-full {
+    grid-column: span 6;
+  }
+
+  .panel-full {
+    grid-column: span 6;
   }
 }
 
 @media (max-width: 680px) {
-  /* Compact adjustments for small handset viewports. */
-  .metrics-grid {
+  /* Compact handset layout with one-column navigation and content panels. */
+  .page-nav {
     grid-template-columns: 1fr;
   }
 
-  .logo-shell {
-    min-width: 104px;
-    width: 104px;
-    height: 104px;
+  .topbar {
+    flex-direction: column;
   }
 
-  .tardi-logo {
-    width: 86px;
-    height: 86px;
+  .top-actions {
+    width: 100%;
+  }
+
+  .grid {
+    grid-template-columns: 1fr;
+  }
+
+  .panel,
+  .panel-half,
+  .panel-third,
+  .panel-two-thirds,
+  .panel-full {
+    grid-column: 1 / -1;
+  }
+
+  .metrics-grid {
+    grid-template-columns: 1fr;
   }
 }
