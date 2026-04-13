@@ -105,6 +105,56 @@ impl AppConfig {
     }
 }
 
+/// Builds the storage backend selected by runtime mode.
+async fn build_storage(
+    runtime_mode: RuntimeMode,
+    database_url: Option<&str>,
+) -> Result<Arc<dyn Storage + Send + Sync>> {
+    let storage: Arc<dyn Storage + Send + Sync> = match runtime_mode {
+        RuntimeMode::Prod => {
+            let database_url = database_url
+                .ok_or_else(|| anyhow!("prod mode requires TARDIGRADE_DATABASE_URL"))?;
+            info!("using postgres-backed storage (prod mode)");
+            Arc::new(PostgresStorage::connect(database_url).await?)
+        }
+        RuntimeMode::Dev => match database_url {
+            // Dev mode keeps optional postgres for parity testing, defaulting to in-memory.
+            Some(database_url) => {
+                info!("using postgres-backed storage (dev mode)");
+                Arc::new(PostgresStorage::connect(database_url).await?)
+            }
+            None => Arc::new(InMemoryStorage::default()),
+        },
+    };
+
+    Ok(storage)
+}
+
+/// Builds the scheduler backend selected by runtime mode.
+fn build_scheduler(
+    runtime_mode: RuntimeMode,
+    redis_url: Option<&str>,
+    redis_prefix: &str,
+) -> Result<Arc<dyn tardigrade_scheduler::Scheduler + Send + Sync>> {
+    let scheduler: Arc<dyn tardigrade_scheduler::Scheduler + Send + Sync> = match runtime_mode {
+        RuntimeMode::Prod => {
+            let redis_url = redis_url.ok_or_else(|| anyhow!("prod mode requires TARDIGRADE_REDIS_URL"))?;
+            info!(redis_prefix = %redis_prefix, "using redis-backed scheduler (prod mode)");
+            Arc::new(RedisScheduler::open(redis_url, redis_prefix)?)
+        }
+        RuntimeMode::Dev => match redis_url {
+            // Dev mode fallback chain is intentionally Redis -> in-memory.
+            Some(redis_url) => {
+                info!(redis_prefix = %redis_prefix, "using redis-backed scheduler (dev mode)");
+                Arc::new(RedisScheduler::open(redis_url, redis_prefix)?)
+            }
+            None => Arc::new(tardigrade_scheduler::InMemoryScheduler::default()),
+        },
+    };
+
+    Ok(scheduler)
+}
+
 
 
 /// Boots API server, selects configured backends, and serves HTTP routes.
@@ -152,43 +202,12 @@ async fn main() -> Result<()> {
     }
 
     // Share one storage backend across request handlers through an Arc trait object.
-    let storage: Arc<dyn Storage + Send + Sync> = match runtime_mode {
-        RuntimeMode::Prod => {
-            let database_url = database_url
-                .as_deref()
-                .ok_or_else(|| anyhow!("prod mode requires TARDIGRADE_DATABASE_URL"))?;
-            info!("using postgres-backed storage (prod mode)");
-            Arc::new(PostgresStorage::connect(database_url).await?)
-        }
-        RuntimeMode::Dev => match database_url.as_deref() {
-            // Dev mode keeps optional postgres for parity testing, defaulting to in-memory.
-            Some(database_url) => {
-                info!("using postgres-backed storage (dev mode)");
-                Arc::new(PostgresStorage::connect(database_url).await?)
-            }
-            None => Arc::new(InMemoryStorage::default()),
-        },
-    };
+    let storage = build_storage(runtime_mode, database_url.as_deref()).await?;
 
     // Same pattern for the scheduler: runtime decides concrete impl, API keeps trait abstraction.
     let redis_prefix = queue.redis_prefix.as_str();
     let redis_url = queue.redis_url.as_deref();
-    let scheduler: Arc<dyn tardigrade_scheduler::Scheduler + Send + Sync> = match runtime_mode {
-        RuntimeMode::Prod => {
-            let redis_url = redis_url
-                .ok_or_else(|| anyhow!("prod mode requires TARDIGRADE_REDIS_URL"))?;
-            info!(redis_prefix = %redis_prefix, "using redis-backed scheduler (prod mode)");
-            Arc::new(RedisScheduler::open(redis_url, &redis_prefix)?)
-        }
-        RuntimeMode::Dev => match redis_url {
-            // Dev mode fallback chain is intentionally Redis -> in-memory.
-            Some(redis_url) => {
-                info!(redis_prefix = %redis_prefix, "using redis-backed scheduler (dev mode)");
-                Arc::new(RedisScheduler::open(redis_url, &redis_prefix)?)
-            }
-            None => Arc::new(tardigrade_scheduler::InMemoryScheduler::default()),
-        },
-    };
+    let scheduler = build_scheduler(runtime_mode, redis_url, redis_prefix)?;
     let run_embedded_worker = has_embedded_worker;
     let state = ApiState::with_components_and_mode(
         service_name.clone(),
