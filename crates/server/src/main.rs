@@ -16,6 +16,33 @@ use config::{RuntimeMode, load_runtime_mode_from_config};
 use dashboard::{WEB_ROOT_ENV_VAR, mount_dashboard_assets, resolve_web_root};
 use runtime::{FILE_BACKED_PROD_DEPRECATION_TARGET, shutdown_signal};
 
+/// Parses an environment variable as bool and warns when the value is invalid.
+fn parse_env_bool(var_name: &str, default: bool, true_values: &[&str], false_values: &[&str]) -> bool {
+    match std::env::var(var_name) {
+        Ok(raw) if true_values.contains(&raw.as_str()) => true,
+        Ok(raw) if false_values.contains(&raw.as_str()) => false,
+        Ok(raw) => {
+            warn!(env_var = var_name, value = %raw, default, "invalid boolean env value; using default");
+            default
+        }
+        Err(_) => default,
+    }
+}
+
+/// Parses an environment variable as u64 and warns when parsing fails.
+fn parse_env_u64(var_name: &str, default: u64) -> u64 {
+    match std::env::var(var_name) {
+        Ok(raw) => match raw.parse::<u64>() {
+            Ok(value) => value,
+            Err(_) => {
+                warn!(env_var = var_name, value = %raw, default, "invalid u64 env value; using default");
+                default
+            }
+        },
+        Err(_) => default,
+    }
+}
+
 struct ScmConfig {
     is_polling_enabled: bool, // true or false
     polling_check_interval: u64, // in seconds
@@ -23,15 +50,14 @@ struct ScmConfig {
 
 impl ScmConfig {
     fn load() -> Self {
-        let is_polling_enabled = std::env::var("TARDIGRADE_SCM_POLLING_ENABLED")
-            .ok()
-            .map(|v| matches!(v.as_str(), "1" | "true" | "TRUE" | "True"))
-            .unwrap_or(false);
-        
-        let polling_check_interval = std::env::var("TARDIGRADE_SCM_POLLING_CHECK_SECS")
-            .ok()
-            .and_then(|v| v.parse::<u64>().ok())
-            .unwrap_or(5);
+        let is_polling_enabled = parse_env_bool(
+            "TARDIGRADE_SCM_POLLING_ENABLED",
+            false,
+            &["1", "true", "TRUE", "True"],
+            &["0", "false", "FALSE", "False"],
+        );
+
+        let polling_check_interval = parse_env_u64("TARDIGRADE_SCM_POLLING_CHECK_SECS", 5);
 
         Self {
             is_polling_enabled,
@@ -83,10 +109,12 @@ impl AppConfig {
         let bind_address = std::env::var("TARDIGRADE_BIND_ADDR")
             .unwrap_or_else(|_| "0.0.0.0:8080".to_string());
         
-        let has_embedded_worker = std::env::var("TARDIGRADE_EMBEDDED_WORKER")
-            .ok()
-            .map(|v| !matches!(v.as_str(), "0" | "false" | "FALSE" | "False"))
-            .unwrap_or(true);
+        let has_embedded_worker = parse_env_bool(
+            "TARDIGRADE_EMBEDDED_WORKER",
+            true,
+            &["1", "true", "TRUE", "True"],
+            &["0", "false", "FALSE", "False"],
+        );
         
         let database_url = std::env::var("TARDIGRADE_DATABASE_URL").ok();
  
