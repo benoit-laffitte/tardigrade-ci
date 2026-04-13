@@ -183,6 +183,32 @@ fn build_scheduler(
     Ok(scheduler)
 }
 
+/// Logs queue file deprecation notices with mode-specific messaging.
+fn log_queue_file_deprecation(queue_file: Option<&str>, runtime_mode: RuntimeMode) {
+    if let Some(path) = queue_file {
+        if runtime_mode != RuntimeMode::Dev {
+            warn!(
+                queue_file = %path,
+                sunset_target = FILE_BACKED_PROD_DEPRECATION_TARGET,
+                "TARDIGRADE_QUEUE_FILE is deprecated outside dev mode and ignored",
+            );
+        } else {
+            warn!(queue_file = %path, "TARDIGRADE_QUEUE_FILE is deprecated and ignored in dev mode");
+        }
+    }
+}
+
+/// Starts SCM polling only when enabled in runtime configuration.
+fn start_scm_polling_if_enabled(state: &ApiState, scm: &ScmConfig) {
+    if scm.is_polling_enabled {
+        state.start_scm_polling_loop(Duration::from_secs(scm.polling_check_interval));
+        info!(
+            scm_polling_check_secs = scm.polling_check_interval,
+            "SCM polling loop enabled"
+        );
+    }
+}
+
 
 
 /// Boots API server, selects configured backends, and serves HTTP routes.
@@ -216,18 +242,7 @@ async fn main() -> Result<()> {
         web_root_env_var = WEB_ROOT_ENV_VAR,
         "dashboard web asset root resolved"
     );
-    let queue_file = queue.queue_file.as_deref();
-    if let Some(path) = queue_file {
-        if runtime_mode != RuntimeMode::Dev {
-            warn!(
-                queue_file = %path,
-                sunset_target = FILE_BACKED_PROD_DEPRECATION_TARGET,
-                "TARDIGRADE_QUEUE_FILE is deprecated outside dev mode and ignored",
-            );
-        } else {
-            warn!(queue_file = %path, "TARDIGRADE_QUEUE_FILE is deprecated and ignored in dev mode");
-        }
-    }
+    log_queue_file_deprecation(queue.queue_file.as_deref(), runtime_mode);
 
     // Share one storage backend across request handlers through an Arc trait object.
     let storage = build_storage(runtime_mode, database_url.as_deref()).await?;
@@ -243,12 +258,7 @@ async fn main() -> Result<()> {
         scheduler,
         run_embedded_worker,
     );
-    let scm_polling_enabled = scm.is_polling_enabled;
-    let scm_polling_check_secs = scm.polling_check_interval;
-    if scm_polling_enabled {
-        state.start_scm_polling_loop(Duration::from_secs(scm_polling_check_secs));
-        info!(scm_polling_check_secs, "SCM polling loop enabled");
-    }
+    start_scm_polling_if_enabled(&state, &scm);
 
     let router = mount_dashboard_assets(build_router(state));
 
