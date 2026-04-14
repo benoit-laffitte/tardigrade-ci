@@ -17,7 +17,12 @@ use dashboard::{WEB_ROOT_ENV_VAR, mount_dashboard_assets, resolve_web_root};
 use runtime::{FILE_BACKED_PROD_DEPRECATION_TARGET, shutdown_signal};
 
 /// Parses an environment variable as bool and warns when the value is invalid.
-fn parse_env_bool(var_name: &str, default: bool, true_values: &[&str], false_values: &[&str]) -> bool {
+fn parse_env_bool(
+    var_name: &str,
+    default: bool,
+    true_values: &[&str],
+    false_values: &[&str],
+) -> bool {
     match std::env::var(var_name) {
         Ok(raw) if true_values.contains(&raw.as_str()) => true,
         Ok(raw) if false_values.contains(&raw.as_str()) => false,
@@ -44,7 +49,7 @@ fn parse_env_u64(var_name: &str, default: u64) -> u64 {
 }
 
 struct ScmConfig {
-    is_polling_enabled: bool, // true or false
+    is_polling_enabled: bool,    // true or false
     polling_check_interval: u64, // in seconds
 }
 
@@ -74,11 +79,11 @@ struct QueueConfig {
 
 impl QueueConfig {
     fn load() -> Self {
-        let redis_prefix = std::env::var("TARDIGRADE_REDIS_PREFIX")
-                          .unwrap_or_else(|_| "tardigrade".to_string());
+        let redis_prefix =
+            std::env::var("TARDIGRADE_REDIS_PREFIX").unwrap_or_else(|_| "tardigrade".to_string());
         let redis_url = std::env::var("TARDIGRADE_REDIS_URL").ok();
         let queue_file = std::env::var("TARDIGRADE_QUEUE_FILE").ok();
-        
+
         Self {
             redis_url,
             redis_prefix,
@@ -99,25 +104,24 @@ struct AppConfig {
 
 impl AppConfig {
     fn load() -> Result<Self> {
-
         let service_name = std::env::var("TARDIGRADE_SERVICE_NAME")
             .unwrap_or_else(|_| "tardigrade-ci".to_string());
-        
+
         let config_file = std::env::var("TARDIGRADE_CONFIG_FILE")
             .unwrap_or_else(|_| "config/example.toml".to_string());
-    
-        let bind_address = std::env::var("TARDIGRADE_BIND_ADDR")
-            .unwrap_or_else(|_| "0.0.0.0:8080".to_string());
-        
+
+        let bind_address =
+            std::env::var("TARDIGRADE_BIND_ADDR").unwrap_or_else(|_| "0.0.0.0:8080".to_string());
+
         let has_embedded_worker = parse_env_bool(
             "TARDIGRADE_EMBEDDED_WORKER",
             true,
             &["1", "true", "TRUE", "True"],
             &["0", "false", "FALSE", "False"],
         );
-        
+
         let database_url = std::env::var("TARDIGRADE_DATABASE_URL").ok();
- 
+
         let scm = ScmConfig::load();
         let queue = QueueConfig::load();
 
@@ -166,7 +170,8 @@ fn build_scheduler(
 ) -> Result<Arc<dyn tardigrade_scheduler::Scheduler + Send + Sync>> {
     let scheduler: Arc<dyn tardigrade_scheduler::Scheduler + Send + Sync> = match runtime_mode {
         RuntimeMode::Prod => {
-            let redis_url = redis_url.ok_or_else(|| anyhow!("prod mode requires TARDIGRADE_REDIS_URL"))?;
+            let redis_url =
+                redis_url.ok_or_else(|| anyhow!("prod mode requires TARDIGRADE_REDIS_URL"))?;
             info!(redis_prefix = %redis_prefix, "using redis-backed scheduler (prod mode)");
             Arc::new(RedisScheduler::open(redis_url, redis_prefix)?)
         }
@@ -208,8 +213,6 @@ fn start_scm_polling_if_enabled(state: &ApiState, scm: &ScmConfig) {
         );
     }
 }
-
-
 
 /// Boots API server, selects configured backends, and serves HTTP routes.
 #[tokio::main]
