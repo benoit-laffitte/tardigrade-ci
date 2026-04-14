@@ -48,12 +48,14 @@ fn parse_env_u64(var_name: &str, default: u64) -> u64 {
     }
 }
 
+/// Holds SCM polling-related configuration derived from environment variables.
 struct ScmConfig {
     is_polling_enabled: bool,    // true or false
     polling_check_interval: u64, // in seconds
 }
 
 impl ScmConfig {
+    /// Loads SCM polling settings with defaults suitable for local runs.
     fn load() -> Self {
         let is_polling_enabled = parse_env_bool(
             "TARDIGRADE_SCM_POLLING_ENABLED",
@@ -71,6 +73,7 @@ impl ScmConfig {
     }
 }
 
+/// Holds queue and scheduler-related configuration derived from environment variables.
 struct QueueConfig {
     redis_url: Option<String>,
     redis_prefix: String,
@@ -78,6 +81,7 @@ struct QueueConfig {
 }
 
 impl QueueConfig {
+    /// Loads queue settings while keeping optional Redis/file-backed inputs explicit.
     fn load() -> Self {
         let redis_prefix =
             std::env::var("TARDIGRADE_REDIS_PREFIX").unwrap_or_else(|_| "tardigrade".to_string());
@@ -92,6 +96,7 @@ impl QueueConfig {
     }
 }
 
+/// Aggregates all runtime configuration needed to boot the server process.
 struct AppConfig {
     config_file: String,
     service_name: String,
@@ -103,6 +108,7 @@ struct AppConfig {
 }
 
 impl AppConfig {
+    /// Loads the full server configuration from environment variables and defaults.
     fn load() -> Result<Self> {
         let service_name = std::env::var("TARDIGRADE_SERVICE_NAME")
             .unwrap_or_else(|_| "tardigrade-ci".to_string());
