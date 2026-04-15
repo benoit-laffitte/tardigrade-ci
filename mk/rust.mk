@@ -1,6 +1,6 @@
 # Rust-centric targets.
 
-.PHONY: bootstrap fmt-check clippy lint test-fast test-all test build-rust build-rust-release-images package-platform-zips
+.PHONY: bootstrap fmt-check clippy lint test-fast test-all test build-rust build-rust-release-images package-platform-zips worker-transport-bench
 
 bootstrap: ## Prefetch Rust dependencies for local development
 	$(NO_PROXY_ENV) $(CARGO) fetch
@@ -29,3 +29,6 @@ build-rust-release-images: ## Build release binaries used by runtime-only Docker
 
 package-platform-zips: dashboard-build ## Build and package zip archives for mac/windows/linux
 	./scripts/package-platform-zips.sh
+
+worker-transport-bench: ## Run local worker transport benchmark (HTTP/1 vs HTTP/2)
+	$(NO_PROXY_ENV) $(CARGO) run -p tardigrade-worker --bin transport_bench -- --iterations 200

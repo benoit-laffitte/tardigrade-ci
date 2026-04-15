@@ -1,12 +1,14 @@
 use anyhow::{Result, anyhow};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use reqwest::Client;
+use reqwest::{Client, ClientBuilder};
 use serde::Deserialize;
 use serde_json::json;
 use tardigrade_api::CompleteBuildRequest;
 use tardigrade_core::{BuildRecord, JobStatus};
 use uuid::Uuid;
+
+use crate::worker_config::WorkerConfig;
 
 /// Abstraction over worker claim/complete HTTP interactions.
 #[async_trait]
@@ -35,6 +37,39 @@ impl HttpWorkerApi {
     pub(crate) fn new(client: Client) -> Self {
         Self { client }
     }
+
+    /// Builds HTTP transport from worker config with connection-pool and HTTP/2 tuning.
+    pub(crate) fn from_config(config: &WorkerConfig) -> Result<Self> {
+        let client = build_worker_http_client(config)?;
+        Ok(Self::new(client))
+    }
+}
+
+/// Builds one shared reqwest client tuned for worker claim/complete loops.
+fn build_worker_http_client(config: &WorkerConfig) -> Result<Client> {
+    let mut builder = ClientBuilder::new()
+        .pool_idle_timeout(std::time::Duration::from_secs(
+            config.pool_idle_timeout_secs,
+        ))
+        .pool_max_idle_per_host(config.pool_max_idle_per_host)
+        .timeout(std::time::Duration::from_secs(config.request_timeout_secs))
+        .tcp_keepalive(std::time::Duration::from_secs(config.http2_keep_alive_secs))
+        .tcp_nodelay(true);
+
+    if config.http2_enabled {
+        builder = builder
+            .http2_adaptive_window(true)
+            .http2_keep_alive_interval(std::time::Duration::from_secs(config.http2_keep_alive_secs))
+            .http2_keep_alive_while_idle(true);
+
+        if config.http2_prior_knowledge {
+            builder = builder.http2_prior_knowledge();
+        }
+    } else {
+        builder = builder.http1_only();
+    }
+
+    builder.build().map_err(Into::into)
 }
 
 #[async_trait]

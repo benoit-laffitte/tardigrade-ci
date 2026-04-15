@@ -127,6 +127,12 @@ Cloud-friendly runtime env vars:
 - TARDIGRADE_SERVER_URL (worker -> controller URL)
 - TARDIGRADE_WORKER_ID (worker identity)
 - TARDIGRADE_WORKER_POLL_MS (worker polling interval)
+- TARDIGRADE_WORKER_HTTP2_ENABLED (default: true)
+- TARDIGRADE_WORKER_HTTP2_PRIOR_KNOWLEDGE (default: false, enables h2c prior knowledge)
+- TARDIGRADE_WORKER_REQUEST_TIMEOUT_SECS (default: 30)
+- TARDIGRADE_WORKER_POOL_IDLE_TIMEOUT_SECS (default: 90)
+- TARDIGRADE_WORKER_POOL_MAX_IDLE_PER_HOST (default: 32)
+- TARDIGRADE_WORKER_HTTP2_KEEP_ALIVE_SECS (default: 30)
 
 Runtime mode is read from config file under `[runtime]`:
 
@@ -162,6 +168,7 @@ Unified automation entrypoints from repository root:
 - `make dashboard-build` (frontend build via npm)
 - `cd dashboard && npm run e2e` (Playwright admin E2E suite)
 - `make build` (Rust + dashboard build)
+- `make worker-transport-bench` (local HTTP/1 vs HTTP/2 worker transport benchmark)
 - `make package-platform-zips` (create release zip per platform: mac/windows/linux)
 - `make ci` (local CI-equivalent aggregate)
 

@@ -19,6 +19,41 @@ Chaque decision doit etre ajoutee ici avant implementation (ou juste apres en ca
 
 ---
 
+## UX-022 - Strategie transport worker: HTTP/2 d'abord, gRPC en option
+
+- Date: 2026-04-16
+- Statut: accepted
+- Owner: Engineering
+- Type: integration contract
+
+### Contexte
+
+La communication serveur-worker est un point critique de latence et de debit. La decision produit/technique est de prioriser une optimisation incrementale sans rupture du contrat actuel.
+
+### Decision
+
+- Prioriser HTTP/2 sur le canal serveur-worker existant.
+- Conserver le flux GraphQL actuel comme chemin principal.
+- Reporter gRPC a une phase ulterieure et le cadrer comme mode optionnel activable par configuration.
+
+### Impact attendu
+
+- Gains de performance progressifs sans migration contractuelle lourde immediate.
+- Risque de regression reduit en conservant le plan de controle actuel.
+
+### Risques
+
+- Le polling worker reste present tant qu'un modele push/streaming n'est pas introduit.
+- Le mode gRPC optionnel ajoutera une complexite d'exploitation lors de son introduction.
+
+### Mise en oeuvre 2026-04-16
+
+- Le worker construit un client HTTP partage avec tuning explicite: timeout de requete, pool idle, max connexions idle, TCP keepalive et mode HTTP/2.
+- Le mode h2c (HTTP/2 prior knowledge) est activable par variable d'environnement pour les deploiements cleartext internes.
+- Les mutations GraphQL worker existantes sont conservees (pas de rupture de contrat).
+
+---
+
 ## UX-004 - Surface API unifiee en GraphQL uniquement
 
 - Date: 2026-04-15

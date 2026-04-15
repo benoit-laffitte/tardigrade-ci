@@ -511,6 +511,17 @@ Definition of done:
 
 - [ ] `REL-01` Retry policy refinement (configurable caps per job profile).
 - [ ] `REL-02` Metrics persistence/export (Prometheus/OpenTelemetry).
+- [-] `REL-03` Worker transport optimization on HTTP/2 first (connection reuse, multiplexing, and latency/throughput benchmarks for claim/complete flows).
+- [ ] `REL-04` Add optional gRPC worker transport mode behind feature/config flag, while keeping GraphQL/HTTP as default control-plane path.
+
+Refinement outcome for transport strategy (2026-04-16):
+
+- Decision: prioritize HTTP/2 for current worker-server communication.
+- gRPC is postponed and tracked as an optional transport mode, not as a mandatory migration.
+- Compatibility constraint: keep existing GraphQL worker flow operational during and after transport improvements.
+- Implementation update (2026-04-16): worker HTTP client now supports HTTP/2 tuning (pool/timeout/keepalive) with optional h2c prior-knowledge mode via environment configuration.
+- Benchmark update (2026-04-16): add a reproducible local claim/complete benchmark harness comparing HTTP/1 and HTTP/2 worker transport paths.
+- Report update (2026-04-16): the first local sequential loopback benchmark shows HTTP/1 ahead of h2c for tiny GraphQL payloads; keep REL-03 in progress until concurrent and real-server measurements are added.
 
 ## Suggested delivery order
 

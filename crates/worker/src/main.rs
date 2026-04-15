@@ -1,5 +1,4 @@
 use anyhow::Result;
-use reqwest::Client;
 use std::time::Duration;
 use tracing::info;
 
@@ -21,14 +20,21 @@ async fn main() -> Result<()> {
     tracing_subscriber::fmt::init();
 
     let config = load_worker_config();
+    let api = HttpWorkerApi::from_config(&config)?;
     let server_url = config.server_url;
     let worker_id = config.worker_id;
     let poll_ms = config.poll_ms;
 
     let graphql_url = graphql_url(&server_url);
-    let api = HttpWorkerApi::new(Client::new());
 
-    info!(%server_url, %worker_id, poll_ms, "worker started");
+    info!(
+        %server_url,
+        %worker_id,
+        poll_ms,
+        http2_enabled = config.http2_enabled,
+        http2_prior_knowledge = config.http2_prior_knowledge,
+        "worker started"
+    );
 
     // Long-running control loop: claim -> execute -> complete.
     loop {
