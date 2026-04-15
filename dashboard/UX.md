@@ -898,6 +898,157 @@ Regles d'entree pour chaque changement:
 - Donnees attendues:
   - objective_name
   - target_percent
+
+---
+
+## UX-009 - Decoupage de App.tsx en widgets React dedies
+
+- Date: 2026-04-15
+- Statut: implemented
+- Owner: Engineering
+- Type: frontend architecture
+
+### Contexte
+
+Le dashboard etait majoritairement rendu depuis un seul fichier `dashboard/src/App.tsx`, ce qui rendait les evolutions de layout et les revues plus couteuses.
+
+### Decision
+
+Extraire les zones UI stables en widgets dedies, tout en conservant l'orchestration d'etat/handlers dans `App.tsx`:
+
+1. Header global (`DashboardHeader`).
+2. Navigation laterale (`SideNav`).
+3. Panneau perimetre API (`ApiCoveragePanel`).
+4. Pages implementees Pipelines/Overview (`ImplementedPagesWidget`).
+5. Pages roadmap/read-only (`RoadmapPagesWidget`).
+6. Journal operateur (`ConsoleWidget`).
+
+### Impact attendu
+
+- Meilleure maintenabilite front (responsabilites visuelles explicites).
+- Refactor plus sur pour les ecrans individuels.
+- Base plus propre pour poursuivre la migration des pages roadmap vers des composants API-backes.
+
+### Evidence (code)
+
+- Composition principale: [dashboard/src/App.tsx](dashboard/src/App.tsx)
+- Widgets: [dashboard/src/widgets/DashboardHeader.tsx](dashboard/src/widgets/DashboardHeader.tsx)
+- Widgets: [dashboard/src/widgets/SideNav.tsx](dashboard/src/widgets/SideNav.tsx)
+- Widgets: [dashboard/src/widgets/ApiCoveragePanel.tsx](dashboard/src/widgets/ApiCoveragePanel.tsx)
+- Widgets: [dashboard/src/widgets/ImplementedPagesWidget.tsx](dashboard/src/widgets/ImplementedPagesWidget.tsx)
+- Widgets: [dashboard/src/widgets/RoadmapPagesWidget.tsx](dashboard/src/widgets/RoadmapPagesWidget.tsx)
+- Widgets: [dashboard/src/widgets/ConsoleWidget.tsx](dashboard/src/widgets/ConsoleWidget.tsx)
+
+---
+
+## UX-010 - Separation logique metier vs composition UI dans App
+
+- Date: 2026-04-15
+- Statut: implemented
+- Owner: Engineering
+- Type: frontend architecture
+
+### Contexte
+
+Apres le decoupage en widgets, `App.tsx` contenait encore une grande partie de la logique metier (state, effets, appels API, derivees). Cette concentration ralentissait les evolutions de comportement et la testabilite de la couche UI.
+
+### Decision
+
+Introduire un hook de controleur dedie (`useDashboardController`) pour centraliser:
+
+1. Etats reactifs dashboard.
+2. Handlers metier (jobs/builds, polling, plugins, workers, observability).
+3. Effets de lifecycle (health polling, SSE, refresh schedule).
+4. View-models derives consommes par les widgets.
+
+`App.tsx` devient une couche de composition qui assemble les widgets et relie leurs props au controleur.
+
+### Impact attendu
+
+- Lisibilite accrue de `App.tsx` (focus layout/composition).
+- Maintenance plus sure de la logique metier sans toucher au markup.
+- Base plus nette pour tests unitaires de logique et tests d'integration UI.
+
+### Evidence (code)
+
+- Composition UI: [dashboard/src/App.tsx](dashboard/src/App.tsx)
+- Controleur metier: [dashboard/src/hooks/useDashboardController.ts](dashboard/src/hooks/useDashboardController.ts)
+
+---
+
+## UX-011 - Un composant TSX par page du sidenav
+
+- Date: 2026-04-15
+- Statut: implemented
+- Owner: Engineering
+- Type: frontend architecture
+
+### Contexte
+
+Apres le passage a un `App.tsx` plus fin, le rendu des pages restait mutualise dans des widgets aggreges. Cela masquait encore la frontiere entre les 7 ecrans de navigation metier.
+
+### Decision
+
+Creer un composant TSX dedie pour chaque page du sidenav:
+
+1. `PipelinesPage`
+2. `OverviewPage`
+3. `WorkersPage`
+4. `ScmSecurityPage`
+5. `PluginsPolicyPage`
+6. `ObservabilityPage`
+7. `AdministrationPage`
+
+`App.tsx` selectionne desormais explicitement la page active et lui transmet uniquement les props necessaires.
+
+### Impact attendu
+
+- Frontiere claire entre les ecrans metier.
+- Evolutions par page plus simples et moins risquees.
+- Base plus propre pour ajouter tests et contrats API page par page.
+
+### Evidence (code)
+
+- Composition/switch de page: [dashboard/src/App.tsx](dashboard/src/App.tsx)
+- Pages: [dashboard/src/pages/PipelinesPage.tsx](dashboard/src/pages/PipelinesPage.tsx)
+- Pages: [dashboard/src/pages/OverviewPage.tsx](dashboard/src/pages/OverviewPage.tsx)
+- Pages: [dashboard/src/pages/WorkersPage.tsx](dashboard/src/pages/WorkersPage.tsx)
+- Pages: [dashboard/src/pages/ScmSecurityPage.tsx](dashboard/src/pages/ScmSecurityPage.tsx)
+- Pages: [dashboard/src/pages/PluginsPolicyPage.tsx](dashboard/src/pages/PluginsPolicyPage.tsx)
+- Pages: [dashboard/src/pages/ObservabilityPage.tsx](dashboard/src/pages/ObservabilityPage.tsx)
+- Pages: [dashboard/src/pages/AdministrationPage.tsx](dashboard/src/pages/AdministrationPage.tsx)
+
+---
+
+## UX-012 - Nettoyage post-decoupage des pages
+
+- Date: 2026-04-15
+- Statut: implemented
+- Owner: Engineering
+- Type: frontend architecture
+
+### Contexte
+
+Une fois les 7 pages extraites, les widgets agreges historiques etaient devenus redondants et les interfaces de props restaient dispersees dans plusieurs fichiers de page.
+
+### Decision
+
+1. Supprimer les anciens widgets agreges devenus inutiles.
+2. Centraliser les interfaces de props de page dans `dashboard/src/pages/types.ts`.
+
+### Impact attendu
+
+- Arborescence plus nette apres refactor.
+- Moins de duplication des types de props.
+- Maintenance plus simple lors des evolutions page par page.
+
+### Evidence (code)
+
+- Types de page: [dashboard/src/pages/types.ts](dashboard/src/pages/types.ts)
+- Pages actives: [dashboard/src/pages/PipelinesPage.tsx](dashboard/src/pages/PipelinesPage.tsx)
+- Pages actives: [dashboard/src/pages/OverviewPage.tsx](dashboard/src/pages/OverviewPage.tsx)
+- Pages actives: [dashboard/src/pages/WorkersPage.tsx](dashboard/src/pages/WorkersPage.tsx)
+- Pages actives: [dashboard/src/pages/ScmSecurityPage.tsx](dashboard/src/pages/ScmSecurityPage.tsx)
   - observed_percent
   - error_budget_total
   - error_budget_consumed
@@ -926,6 +1077,224 @@ Regles d'entree pour chaque changement:
   - `bar` horizontal pour progression synthétique
 
 #### BT-008 - Resume live evenements
+
+---
+
+## UX-013 - Decoupage interne du controleur dashboard en sous-modules
+
+- Date: 2026-04-15
+- Statut: implemented
+- Owner: Engineering
+- Type: frontend architecture
+
+### Contexte
+
+Apres extraction de `useDashboardController`, le hook restait encore trop dense: types inline, constantes GraphQL, utilitaires, derivees memoisees et effets runtime partageaient le meme fichier.
+
+### Decision
+
+Scinder le controleur en modules de support explicites tout en conservant l'API publique du hook:
+
+1. `dashboardTypes.ts` pour les types et contrats locaux du dashboard.
+2. `dashboardConstants.ts` pour les constantes d'interface et les documents GraphQL.
+3. `dashboardUtils.ts` pour les helpers purs (formatage, filtres, exports, stardate).
+4. `useDashboardDerivedState.ts` pour les view-models memoises.
+5. `useDashboardRuntimeEffects.ts` pour les effets lifecycle/runtime (health, SSE, polling, timers).
+
+`useDashboardController.ts` garde desormais principalement l'orchestration d'etat et les handlers metier.
+
+### Impact attendu
+
+- Meilleure lisibilite du controleur principal.
+- Frontieres plus nettes entre logique pure, logique derivee et effets runtime.
+- Refactor futur plus sur pour tester ou faire evoluer les endpoints page par page.
+
+### Evidence (code)
+
+- Controleur orchestreur: [dashboard/src/hooks/useDashboardController.ts](dashboard/src/hooks/useDashboardController.ts)
+- Types dashboard: [dashboard/src/hooks/dashboardTypes.ts](dashboard/src/hooks/dashboardTypes.ts)
+- Constantes dashboard: [dashboard/src/hooks/dashboardConstants.ts](dashboard/src/hooks/dashboardConstants.ts)
+- Utilitaires dashboard: [dashboard/src/hooks/dashboardUtils.ts](dashboard/src/hooks/dashboardUtils.ts)
+- Etats derives: [dashboard/src/hooks/useDashboardDerivedState.ts](dashboard/src/hooks/useDashboardDerivedState.ts)
+- Effets runtime: [dashboard/src/hooks/useDashboardRuntimeEffects.ts](dashboard/src/hooks/useDashboardRuntimeEffects.ts)
+
+---
+
+## UX-014 - Extraction des actions roadmap dans un sous-hook dedie
+
+- Date: 2026-04-15
+- Statut: implemented
+- Owner: Engineering
+- Type: frontend architecture
+
+### Contexte
+
+Apres `UX-013`, le controleur principal restait encore charge par une longue serie de callbacks roadmap (SCM security/polling, plugins/policy, workers control) qui n'alimentent pas encore directement les pages API fully-wired.
+
+### Decision
+
+Extraire ces callbacks dans un hook dedie `useDashboardRoadmapActions` et garder dans `useDashboardController`:
+
+1. Les etats partages.
+2. Les actions coeur (`refreshAll`, `createJob`, `runJob`, `cancelBuild`).
+3. L'assemblage final des derives/effects + retour public du hook.
+
+Le nouveau sous-hook encapsule la logique actionnelle roadmap tout en conservant les memes contrats et messages operateur.
+
+### Impact attendu
+
+- Reduction du volume de `useDashboardController.ts`.
+- Separation plus claire entre noyau API actuel et fonctions roadmap progressives.
+- Evolutions futures des ecrans roadmap plus localisees et moins risquées.
+
+### Evidence (code)
+
+- Controleur principal: [dashboard/src/hooks/useDashboardController.ts](dashboard/src/hooks/useDashboardController.ts)
+- Sous-hook actions roadmap: [dashboard/src/hooks/useDashboardRoadmapActions.ts](dashboard/src/hooks/useDashboardRoadmapActions.ts)
+
+---
+
+## UX-015 - Decoupage des actions roadmap par domaine fonctionnel
+
+- Date: 2026-04-15
+- Statut: implemented
+- Owner: Engineering
+- Type: frontend architecture
+
+### Contexte
+
+Le hook `useDashboardRoadmapActions` restait volumineux car il melangeait 3 domaines distincts (SCM, Plugins/Policy, Workers), ce qui limitait la lisibilite et la capacite a faire evoluer un domaine sans toucher aux autres.
+
+### Decision
+
+Decouper les callbacks roadmap en 3 hooks de domaine:
+
+1. `useDashboardScmActions` pour webhook-security, polling et diagnostics SCM.
+2. `useDashboardPluginActions` pour lifecycle plugin et policy authorization.
+3. `useDashboardWorkerActions` pour claim/complete/refresh worker control.
+
+### Impact attendu
+
+- Frontiere claire par domaine fonctionnel roadmap.
+- Refactors plus localises (moins de risque de regression croisee).
+- Base plus propre pour introduire tests unitaires par domaine.
+
+### Evidence (code)
+
+- Domaine SCM: [dashboard/src/hooks/useDashboardScmActions.ts](dashboard/src/hooks/useDashboardScmActions.ts)
+- Domaine Plugins: [dashboard/src/hooks/useDashboardPluginActions.ts](dashboard/src/hooks/useDashboardPluginActions.ts)
+- Domaine Workers: [dashboard/src/hooks/useDashboardWorkerActions.ts](dashboard/src/hooks/useDashboardWorkerActions.ts)
+
+---
+
+## UX-016 - Domaines autonomes: etat + actions hors du controleur
+
+- Date: 2026-04-15
+- Statut: implemented
+- Owner: Engineering
+- Type: frontend architecture
+
+### Contexte
+
+Apres le decoupage des callbacks par domaine, `useDashboardController` conservait encore l'etat roadmap (SCM, Plugins, Workers), ce qui limitait l'autonomie effective de chaque domaine.
+
+### Decision
+
+Introduire des hooks de domaine qui possedent leur propre etat et composent leurs actions:
+
+1. `useDashboardScmDomain` (forms/messages/state + actions SCM).
+2. `useDashboardPluginDomain` (forms/messages/inventory/policy state + actions plugin).
+3. `useDashboardWorkerDomain` (worker control state + actions worker).
+
+`useDashboardController` orchestre uniquement les domaines, les derivees globales et les actions coeur API-backed.
+
+### Impact attendu
+
+- Composants/hooks plus autonomes par domaine metier.
+- Couplage reduit entre domains roadmap et controleur global.
+- Base plus nette pour brancher des pages domaine et des tests par domaine.
+
+### Evidence (code)
+
+- Controleur orchestration: [dashboard/src/hooks/useDashboardController.ts](dashboard/src/hooks/useDashboardController.ts)
+- Domaine SCM autonome: [dashboard/src/hooks/useDashboardScmDomain.ts](dashboard/src/hooks/useDashboardScmDomain.ts)
+- Domaine Plugins autonome: [dashboard/src/hooks/useDashboardPluginDomain.ts](dashboard/src/hooks/useDashboardPluginDomain.ts)
+- Domaine Workers autonome: [dashboard/src/hooks/useDashboardWorkerDomain.ts](dashboard/src/hooks/useDashboardWorkerDomain.ts)
+
+---
+
+## UX-017 - Pages roadmap branchees sur les domaines autonomes
+
+- Date: 2026-04-15
+- Statut: implemented
+- Owner: Engineering
+- Type: frontend architecture
+
+### Contexte
+
+Les hooks de domaine etaient autonomes, mais plusieurs pages roadmap restaient principalement statiques et ne consommaient pas encore les signaux/actions de domaine.
+
+### Decision
+
+Brancher les pages roadmap sur les objets domaine exposes par le controleur:
+
+1. `WorkersPage` consomme `workerDomain` (message, dernier claim, refresh workers).
+2. `ScmSecurityPage` consomme `scmDomain` (messages operations, tick summary, refresh diagnostics, tick manuel).
+3. `PluginsPolicyPage` consomme `pluginDomain` (inventory, messages plugin/policy, refresh inventory).
+4. `AdministrationPage` consomme des signaux gouvernance (`adminActivity`, `roleCapabilities`).
+
+### Impact attendu
+
+- Composants UI davantage alignes sur les domaines metier.
+- Moins de placeholders figes sur les pages roadmap.
+- Transition facilitee vers des parcours operationnels complets page par page.
+
+### Evidence (code)
+
+- Wiring principal: [dashboard/src/App.tsx](dashboard/src/App.tsx)
+- Workers page: [dashboard/src/pages/WorkersPage.tsx](dashboard/src/pages/WorkersPage.tsx)
+- SCM Security page: [dashboard/src/pages/ScmSecurityPage.tsx](dashboard/src/pages/ScmSecurityPage.tsx)
+- Plugins page: [dashboard/src/pages/PluginsPolicyPage.tsx](dashboard/src/pages/PluginsPolicyPage.tsx)
+- Administration page: [dashboard/src/pages/AdministrationPage.tsx](dashboard/src/pages/AdministrationPage.tsx)
+
+---
+
+## UX-018 - Pages proprietaires des hooks domaine + arborescence domaine
+
+- Date: 2026-04-15
+- Statut: implemented
+- Owner: Engineering
+- Type: frontend architecture
+
+### Contexte
+
+Le controleur exposait encore des objets domaine aux pages et conservait une logique de reference legacy (`keepRoadmapReferences`). De plus, les hooks n'etaient pas ranges par domaine physique avec un nommage de fichier neutre.
+
+### Decision
+
+1. Les pages roadmap instancient directement leurs hooks domaine (`Workers`, `SCM Security`, `Plugins & Policy`) a partir de dependances coeur.
+2. Suppression de `keepRoadmapReferences` dans le controleur.
+3. Reorganisation des hooks par dossiers de domaine, avec noms de fichiers sans prefixe `useDashboard`:
+  - `hooks/core/controller.ts`, `hooks/core/derivedState.ts`, `hooks/core/runtimeEffects.ts`
+  - `hooks/scm/actions.ts`, `hooks/scm/domain.ts`
+  - `hooks/plugins/actions.ts`, `hooks/plugins/domain.ts`
+  - `hooks/workers/actions.ts`, `hooks/workers/domain.ts`
+
+### Impact attendu
+
+- Autonomie plus forte page <-> domaine.
+- Controleur recentre sur l'orchestration coeur.
+- Arborescence plus lisible et orientee metier.
+
+### Evidence (code)
+
+- Controleur coeur: [dashboard/src/hooks/core/controller.ts](dashboard/src/hooks/core/controller.ts)
+- Domaine Workers: [dashboard/src/hooks/workers/domain.ts](dashboard/src/hooks/workers/domain.ts)
+- Domaine SCM: [dashboard/src/hooks/scm/domain.ts](dashboard/src/hooks/scm/domain.ts)
+- Domaine Plugins: [dashboard/src/hooks/plugins/domain.ts](dashboard/src/hooks/plugins/domain.ts)
+- Pages proprietaires: [dashboard/src/pages/WorkersPage.tsx](dashboard/src/pages/WorkersPage.tsx)
+- Pages proprietaires: [dashboard/src/pages/ScmSecurityPage.tsx](dashboard/src/pages/ScmSecurityPage.tsx)
+- Pages proprietaires: [dashboard/src/pages/PluginsPolicyPage.tsx](dashboard/src/pages/PluginsPolicyPage.tsx)
 
 - Priorite: P1
 - Ecran: Overview, Observability
@@ -1031,3 +1400,78 @@ Regles d'entree pour chaque changement:
 ### Next
 
 - Revue visuelle de l'ecran 2 Overview et ouverture de l'iteration suivante si besoin.
+
+---
+
+## UX-019 - Normalisation finale du nommage des hooks domaine/core
+
+- Date: 2026-04-15
+- Statut: implemented
+- Owner: Engineering
+- Type: frontend architecture
+
+### Contexte
+
+Apres la reorganisation des hooks par dossiers de domaine (`core`, `scm`, `plugins`, `workers`), il restait un legacy de nommage `useDashboard*` sur plusieurs symboles exportes/importes.
+
+### Decision
+
+Finaliser le nommage pour aligner les symboles avec l'architecture cible, sans modifier les comportements:
+
+1. `useDashboardController` -> `useController`
+2. `useDashboardDerivedState` -> `useDerivedState`
+3. `useDashboardRuntimeEffects` -> `useRuntimeEffects`
+4. `useDashboardScmDomain`/`Actions` -> `useScmDomain`/`useScmActions`
+5. `useDashboardPluginDomain`/`Actions` -> `usePluginDomain`/`usePluginActions`
+6. `useDashboardWorkerDomain`/`Actions` -> `useWorkerDomain`/`useWorkerActions`
+
+### Impact attendu
+
+- Nommage coherent avec l'arborescence orientee domaine.
+- Lecture plus rapide des dependances dans les pages et le controleur coeur.
+- Reduction de la dette de migration issue des etapes precedentes.
+
+### Evidence (code)
+
+- Controleur coeur: [dashboard/src/hooks/core/controller.ts](dashboard/src/hooks/core/controller.ts)
+- Etats derives: [dashboard/src/hooks/core/derivedState.ts](dashboard/src/hooks/core/derivedState.ts)
+- Effets runtime: [dashboard/src/hooks/core/runtimeEffects.ts](dashboard/src/hooks/core/runtimeEffects.ts)
+- Domaine SCM: [dashboard/src/hooks/scm/domain.ts](dashboard/src/hooks/scm/domain.ts)
+- Domaine Plugins: [dashboard/src/hooks/plugins/domain.ts](dashboard/src/hooks/plugins/domain.ts)
+- Domaine Workers: [dashboard/src/hooks/workers/domain.ts](dashboard/src/hooks/workers/domain.ts)
+- Composition UI: [dashboard/src/App.tsx](dashboard/src/App.tsx)
+
+---
+
+## UX-020 - Transition vers la premiere verticale Workers API-backed
+
+- Date: 2026-04-15
+- Statut: accepted
+- Owner: Engineering
+- Type: frontend architecture
+
+### Contexte
+
+Le cleanup de nommage et l'architecture orientee domaines sont stabilises. La prochaine valeur produit attendue est de reduire le mode roadmap sur une page metier complete.
+
+### Decision
+
+Prioriser la page Workers comme premiere verticale API-backed post-refactor:
+
+1. Utiliser les endpoints workers existants pour les actions claim/complete/list.
+2. Exposer les retours de succes/erreur/conflit de maniere explicite dans la page.
+3. Garder les conventions de role/audit/log deja en place dans l'architecture domaine.
+4. Faire evoluer la couverture de page Workers de `roadmap` vers `partial` une fois les interactions critiques stabilisees.
+
+### Impact attendu
+
+- Passage d'une page majoritairement statique a une page operable sur flux worker.
+- Validation de l'architecture pages proprietaires des hooks domaine sur un cas concret.
+- Reduction du risque de regressions sur les prochaines verticales (SCM/Plugins).
+
+### Evidence (code)
+
+- Page Workers: [dashboard/src/pages/WorkersPage.tsx](dashboard/src/pages/WorkersPage.tsx)
+- Domaine Workers: [dashboard/src/hooks/workers/domain.ts](dashboard/src/hooks/workers/domain.ts)
+- Actions Workers: [dashboard/src/hooks/workers/actions.ts](dashboard/src/hooks/workers/actions.ts)
+- Orchestration coeur: [dashboard/src/hooks/core/controller.ts](dashboard/src/hooks/core/controller.ts)

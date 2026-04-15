@@ -390,6 +390,18 @@ Refinement decisions:
 - [ ] `UXREAL-09` Implement Administration page once role/audit APIs are finalized.
 - [x] `UXREAL-10` Add frontend integration tests for page navigation, API coverage gating, and Pipelines/Overview flows.
 - [x] `UXREAL-11` Serve dashboard static assets dynamically from filesystem (`TARDIGRADE_WEB_ROOT`) to allow runtime web updates without rebuilding the Rust binary.
+- [x] `UXREAL-12` Decouple dashboard monolith view into reusable widgets (`DashboardHeader`, `SideNav`, implemented-page widgets, roadmap widgets, and console widget).
+- [x] `UXREAL-13` Extract dashboard business logic from `App.tsx` into dedicated controller hook (`useDashboardController`) while keeping widget composition in `App.tsx`.
+- [x] `UXREAL-14` Split dashboard page rendering into one TSX component per sidenav entry (`Pipelines`, `Overview`, `Workers`, `SCM Security`, `Plugins & Policy`, `Observability`, `Administration`).
+- [x] `UXREAL-15` Remove obsolete aggregate page widgets and centralize page prop types under `dashboard/src/pages/types.ts`.
+- [x] `UXREAL-16` Split `useDashboardController` into dedicated hook support modules (`dashboardTypes`, `dashboardConstants`, `dashboardUtils`, derived-state hook, runtime-effects hook) to keep controller orchestration focused.
+- [x] `UXREAL-17` Extract SCM/plugins/workers roadmap callbacks into `useDashboardRoadmapActions` to keep `useDashboardController` focused on core orchestration and API-backed pages.
+- [x] `UXREAL-18` Split roadmap callbacks by domain into `useDashboardScmActions`, `useDashboardPluginActions`, and `useDashboardWorkerActions`, while preserving `useDashboardRoadmapActions` as an aggregator.
+- [x] `UXREAL-19` Make SCM/Plugins/Workers autonomous by moving each domain's state ownership to dedicated domain hooks (`useDashboardScmDomain`, `useDashboardPluginDomain`, `useDashboardWorkerDomain`) and keeping `useDashboardController` as orchestration-only.
+- [x] `UXREAL-20` Wire roadmap pages to domain objects (`workerDomain`, `scmDomain`, `pluginDomain`) so UI components consume autonomous domain signals/actions instead of static placeholders.
+- [x] `UXREAL-21` Move domain-hook ownership into pages (`Workers`, `SCM Security`, `Plugins & Policy`), remove `keepRoadmapReferences`, and reorganize hook files by domain folders (`core`, `scm`, `plugins`, `workers`) with filenames that no longer use the `useDashboard*` pattern.
+- [x] `UXREAL-22` Remove remaining `useDashboard*` symbol names across core/domain hooks and consumers (`useController`, `useDerivedState`, `useRuntimeEffects`, `useScmDomain`, `usePluginDomain`, `useWorkerDomain`) to align naming with the new domain-oriented folder architecture.
+- [ ] `UXREAL-23` Refine and deliver the first API-backed Workers vertical (fleet list, claim, complete, conflict/errors, success feedback) on top of existing `/workers*` endpoints and convert Workers page coverage from `roadmap` to `partial`.
 
 Definition of done:
 
