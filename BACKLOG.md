@@ -172,12 +172,14 @@ Refinement outcome for `SCM-07` (2026-03-31):
 - [x] `SCM-05` Add deduplication/idempotency for repeated webhook events.
 - [x] `SCM-06` Add observability events/metrics for trigger ingestion.
 - [x] `SCM-07` Add integration tests for webhook and polling flows.
+- [x] `SCM-08` Route dashboard SCM polling mutations through GraphQL and keep native webhook ingress on a dedicated server adapter.
 
 Definition of done:
 
 - A push event can enqueue builds via webhook.
 - Polling can detect and trigger builds reliably.
 - Duplicate events do not produce duplicate builds.
+- Dashboard SCM administration no longer depends on REST endpoints for polling controls.
 
 ### Epic 3: Plugin loading and permissions model
 
@@ -477,6 +479,7 @@ Refinement outcome for `REFAC-01` (2026-03-31):
 - [x] `REFAC-06` Refactor `crates/worker`, `crates/auth`, and `crates/xtask` into one-object-per-file module structure (historical; `xtask` removed later in `INDUS-215`).
 - [x] `REFAC-07` Validate workspace stability (`cargo test --workspace`) and update docs/contribution guidelines.
 - [x] `REFAC-08` Replace file-specific dashboard handlers with one directory-backed web asset service rooted at `TARDIGRADE_WEB_ROOT` / `target/public`.
+- [x] `REFAC-09` Remove the Rust REST control-plane surface and consolidate server and worker interactions on GraphQL only.
 
 Definition of done:
 

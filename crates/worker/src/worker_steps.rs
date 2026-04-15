@@ -1,6 +1,7 @@
 use tardigrade_api::CompleteBuildRequest;
 use tardigrade_core::BuildRecord;
 use tracing::error;
+use uuid::Uuid;
 
 use crate::WorkerApi;
 
@@ -14,10 +15,14 @@ pub(crate) enum ClaimStep {
     Build(BuildRecord),
 }
 
-/// Executes one claim attempt and maps transport/result state to loop step.
-pub(crate) async fn claim_step(api: &impl WorkerApi, claim_url: &str) -> ClaimStep {
-    match api.claim(claim_url).await {
-        Ok(payload) => match payload.build {
+/// Executes one GraphQL claim attempt and maps transport or result state to loop step.
+pub(crate) async fn claim_step(
+    api: &impl WorkerApi,
+    graphql_url: &str,
+    worker_id: &str,
+) -> ClaimStep {
+    match api.claim(graphql_url, worker_id).await {
+        Ok(build) => match build {
             Some(build) => ClaimStep::Build(build),
             None => ClaimStep::NoBuild,
         },
@@ -28,13 +33,15 @@ pub(crate) async fn claim_step(api: &impl WorkerApi, claim_url: &str) -> ClaimSt
     }
 }
 
-/// Executes one completion call and reports success/failure to loop controller.
+/// Executes one GraphQL completion call and reports success or failure to loop controller.
 pub(crate) async fn complete_step(
     api: &impl WorkerApi,
-    complete_url: &str,
+    graphql_url: &str,
+    worker_id: &str,
+    build_id: Uuid,
     body: &CompleteBuildRequest,
 ) -> bool {
-    match api.complete(complete_url, body).await {
+    match api.complete(graphql_url, worker_id, build_id, body).await {
         Ok(()) => true,
         Err(err) => {
             error!(error = %err, "complete request failed");

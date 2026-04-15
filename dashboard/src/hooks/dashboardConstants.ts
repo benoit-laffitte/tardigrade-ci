@@ -118,3 +118,45 @@ export const CANCEL_BUILD_MUTATION = gql`
     }
   }
 `;
+
+// Declares the GraphQL mutation used to upsert webhook security configuration.
+export const UPSERT_WEBHOOK_SECURITY_CONFIG_MUTATION = gql`
+  mutation UpsertWebhookSecurityConfig($input: GqlUpsertWebhookSecurityConfigInput!) {
+    upsert_webhook_security_config(input: $input)
+  }
+`;
+
+// Declares the GraphQL mutation used to upsert SCM polling configuration.
+export const UPSERT_SCM_POLLING_CONFIG_MUTATION = gql`
+  mutation UpsertScmPollingConfig($input: GqlUpsertScmPollingConfigInput!) {
+    upsert_scm_polling_config(input: $input)
+  }
+`;
+
+// Declares the GraphQL mutation used to trigger one immediate SCM polling tick.
+export const RUN_SCM_POLLING_TICK_MUTATION = gql`
+  mutation RunScmPollingTick {
+    run_scm_polling_tick {
+      polled_repositories
+      enqueued_builds
+    }
+  }
+`;
+
+// Declares the GraphQL query used to fetch webhook diagnostics counters and rejection timeline.
+export const SCM_WEBHOOK_OPERATIONS_QUERY = gql`
+  query ScmWebhookOperations($provider: String, $repositoryUrl: String, $limit: Int) {
+    metrics {
+      scm_webhook_received_total
+      scm_webhook_accepted_total
+      scm_webhook_rejected_total
+      scm_webhook_duplicate_total
+    }
+    scm_webhook_rejections(provider: $provider, repositoryUrl: $repositoryUrl, limit: $limit) {
+      reason_code
+      provider
+      repository_url
+      at
+    }
+  }
+`;

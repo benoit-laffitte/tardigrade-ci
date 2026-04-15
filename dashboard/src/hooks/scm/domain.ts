@@ -1,8 +1,8 @@
-import { useCallback, useState } from "react";
+import { useApolloClient } from "@apollo/client";
+import { useState } from "react";
 
 import type {
   AdminRole,
-  ApiErrorPayload,
   RuntimeMetricsApiResponse,
   ScmPollingInput,
   ScmPollingTickSummary,
@@ -30,6 +30,7 @@ export function useScmDomain({
   audit,
   refreshAll
 }: Readonly<ScmDomainParams>) {
+  const client = useApolloClient();
   const [webhookForm, setWebhookForm] = useState<WebhookSecurityInput>({
     repository_url: "",
     provider: "github",
@@ -57,17 +58,8 @@ export function useScmDomain({
   const [scmWebhookMetrics, setScmWebhookMetrics] = useState<RuntimeMetricsApiResponse | null>(null);
   const [scmWebhookRejections, setScmWebhookRejections] = useState<ScmWebhookRejectionEntry[]>([]);
 
-  // Reads one API error payload and extracts actionable message for operator feedback.
-  const parseApiErrorMessage = useCallback(async (response: Response): Promise<string> => {
-    try {
-      const payload = (await response.json()) as ApiErrorPayload;
-      return payload.message ?? `HTTP ${response.status}`;
-    } catch {
-      return `HTTP ${response.status}`;
-    }
-  }, []);
-
   const actions = useScmActions({
+    client,
     adminRole,
     roleCapabilities,
     webhookForm,
@@ -83,7 +75,6 @@ export function useScmDomain({
     setScmWebhookOpsMessage,
     setScmWebhookMetrics,
     setScmWebhookRejections,
-    parseApiErrorMessage,
     log,
     audit,
     refreshAll

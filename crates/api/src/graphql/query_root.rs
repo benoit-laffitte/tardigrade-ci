@@ -1,8 +1,10 @@
 use async_graphql::{Context, Error as GraphQLError, Object};
+use axum::http::StatusCode;
 
 use super::{
     GqlBuildRecord, GqlDashboardSnapshot, GqlHealthResponse, GqlJobDefinition, GqlLiveResponse,
-    GqlReadyResponse, GqlRuntimeMetrics, GqlWorkerInfo, gql_err_from_api,
+    GqlPluginAuthorizationCheckResponse, GqlPluginInfo, GqlPluginPolicyResponse, GqlReadyResponse,
+    GqlRuntimeMetrics, GqlScmWebhookRejectionEntry, GqlWorkerInfo, gql_err_from_api,
 };
 use crate::ApiState;
 
@@ -61,10 +63,62 @@ impl QueryRoot {
         Ok(workers.into_iter().map(Into::into).collect())
     }
 
+    /// Returns plugin lifecycle inventory currently loaded in API state.
+    async fn plugins(&self, ctx: &Context<'_>) -> Result<Vec<GqlPluginInfo>, GraphQLError> {
+        let state = ctx.data_unchecked::<ApiState>();
+        let plugins = state.list_plugins().map_err(gql_err_from_status)?;
+        Ok(plugins.into_iter().map(Into::into).collect())
+    }
+
+    /// Returns granted plugin capabilities for one context with global fallback.
+    async fn plugin_policy(
+        &self,
+        ctx: &Context<'_>,
+        context: Option<String>,
+    ) -> Result<GqlPluginPolicyResponse, GraphQLError> {
+        let state = ctx.data_unchecked::<ApiState>();
+        let policy = state
+            .plugin_policy(context.as_deref())
+            .map_err(gql_err_from_status)?;
+        Ok(policy.into())
+    }
+
+    /// Returns authorization decision for one plugin in one context.
+    async fn plugin_authorization_check(
+        &self,
+        ctx: &Context<'_>,
+        plugin_name: String,
+        context: Option<String>,
+    ) -> Result<GqlPluginAuthorizationCheckResponse, GraphQLError> {
+        let state = ctx.data_unchecked::<ApiState>();
+        let decision = state
+            .plugin_authorization_check(plugin_name.trim(), context.as_deref())
+            .map_err(gql_err_from_status)?;
+        Ok(decision.into())
+    }
+
     /// Returns runtime reliability counters.
     async fn metrics(&self, ctx: &Context<'_>) -> GqlRuntimeMetrics {
         let state = ctx.data_unchecked::<ApiState>();
         state.service.metrics_snapshot().into()
+    }
+
+    /// Returns recent SCM webhook rejection diagnostics.
+    async fn scm_webhook_rejections(
+        &self,
+        ctx: &Context<'_>,
+        provider: Option<String>,
+        repository_url: Option<String>,
+        limit: Option<i32>,
+    ) -> Vec<GqlScmWebhookRejectionEntry> {
+        let state = ctx.data_unchecked::<ApiState>();
+        let limit = limit.unwrap_or(20).max(0) as usize;
+        state
+            .service
+            .list_scm_webhook_rejections(provider.as_deref(), repository_url.as_deref(), limit)
+            .into_iter()
+            .map(Into::into)
+            .collect()
     }
 
     /// Returns builds currently moved to dead-letter set.
@@ -108,4 +162,9 @@ impl QueryRoot {
             dead_letter_builds: dead_letter_builds.into_iter().map(Into::into).collect(),
         })
     }
+}
+
+/// Converts an HTTP status-style failure into a GraphQL transport error.
+fn gql_err_from_status(status: StatusCode) -> GraphQLError {
+    GraphQLError::new(format!("request failed with status {}", status.as_u16()))
 }

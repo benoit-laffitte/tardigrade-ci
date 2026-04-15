@@ -2,7 +2,9 @@ use anyhow::{Result, anyhow};
 use std::sync::Arc;
 use std::time::Duration;
 use tardigrade_api::{ApiState, build_router};
-use tardigrade_scheduler::{FileBackedScheduler, InMemoryScheduler, PostgresScheduler, RedisScheduler};
+use tardigrade_scheduler::{
+    FileBackedScheduler, InMemoryScheduler, PostgresScheduler, RedisScheduler,
+};
 use tardigrade_storage::{InMemoryStorage, PostgresStorage, Storage};
 use tokio::net::TcpListener;
 use tracing::{info, warn};
@@ -11,10 +13,15 @@ use tracing_subscriber::EnvFilter;
 mod config;
 mod dashboard;
 mod runtime;
+mod webhook_adapter;
+
+#[cfg(test)]
+mod webhook_adapter_tests;
 
 use config::{RuntimeMode, load_runtime_mode_from_config};
 use dashboard::{WEB_ROOT_ENV_VAR, mount_dashboard_assets, resolve_web_root};
 use runtime::shutdown_signal;
+use webhook_adapter::mount_webhook_adapter;
 
 /// Parses an environment variable as bool and warns when the value is invalid.
 fn parse_env_bool(
@@ -235,30 +242,30 @@ fn build_scheduler(
         },
     };
 
-    let scheduler: Arc<dyn tardigrade_scheduler::Scheduler + Send + Sync> =
-        match selected_backend {
-            SchedulerBackend::InMemory => {
-                info!("using in-memory scheduler");
-                Arc::new(InMemoryScheduler::default())
-            }
-            SchedulerBackend::File => {
-                let queue_file = queue
-                    .queue_file
-                    .as_deref()
-                    .ok_or_else(|| anyhow!("file scheduler requires TARDIGRADE_QUEUE_FILE"))?;
-                info!(queue_file = %queue_file, "using file-backed scheduler");
-                Arc::new(FileBackedScheduler::open(queue_file)?)
-            }
-            SchedulerBackend::Redis => {
-                let redis_url = queue.redis_url.as_deref().ok_or_else(|| {
-                    anyhow!("redis scheduler requires TARDIGRADE_REDIS_URL")
-                })?;
-                let redis_prefix = queue.redis_prefix.as_str();
-                info!(redis_prefix = %redis_prefix, "using redis-backed scheduler");
-                Arc::new(RedisScheduler::open(redis_url, redis_prefix)?)
-            }
-            SchedulerBackend::Postgres => {
-                let database_url = queue
+    let scheduler: Arc<dyn tardigrade_scheduler::Scheduler + Send + Sync> = match selected_backend {
+        SchedulerBackend::InMemory => {
+            info!("using in-memory scheduler");
+            Arc::new(InMemoryScheduler::default())
+        }
+        SchedulerBackend::File => {
+            let queue_file = queue
+                .queue_file
+                .as_deref()
+                .ok_or_else(|| anyhow!("file scheduler requires TARDIGRADE_QUEUE_FILE"))?;
+            info!(queue_file = %queue_file, "using file-backed scheduler");
+            Arc::new(FileBackedScheduler::open(queue_file)?)
+        }
+        SchedulerBackend::Redis => {
+            let redis_url = queue
+                .redis_url
+                .as_deref()
+                .ok_or_else(|| anyhow!("redis scheduler requires TARDIGRADE_REDIS_URL"))?;
+            let redis_prefix = queue.redis_prefix.as_str();
+            info!(redis_prefix = %redis_prefix, "using redis-backed scheduler");
+            Arc::new(RedisScheduler::open(redis_url, redis_prefix)?)
+        }
+        SchedulerBackend::Postgres => {
+            let database_url = queue
                     .scheduler_database_url
                     .as_deref()
                     .or(storage_database_url)
@@ -267,11 +274,11 @@ fn build_scheduler(
                             "postgres scheduler requires TARDIGRADE_SCHEDULER_DATABASE_URL or TARDIGRADE_DATABASE_URL"
                         )
                     })?;
-                let namespace = queue.scheduler_namespace.as_str();
-                info!(namespace = %namespace, "using postgres-backed scheduler");
-                Arc::new(PostgresScheduler::open(database_url, namespace)?)
-            }
-        };
+            let namespace = queue.scheduler_namespace.as_str();
+            info!(namespace = %namespace, "using postgres-backed scheduler");
+            Arc::new(PostgresScheduler::open(database_url, namespace)?)
+        }
+    };
 
     Ok((scheduler, selected_backend))
 }
@@ -350,7 +357,7 @@ async fn main() -> Result<()> {
     );
     start_scm_polling_if_enabled(&state, &scm);
 
-    let router = mount_dashboard_assets(build_router(state));
+    let router = mount_dashboard_assets(mount_webhook_adapter(build_router(state.clone()), state));
 
     // Bind socket first, then hand listener to Axum for graceful shutdown support.
     let bind_addr = bind_address;

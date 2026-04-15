@@ -1,10 +1,10 @@
 use super::{ClaimStep, claim_step, complete_step};
-use crate::{WorkerApi, complete_url, completion_body};
+use crate::{WorkerApi, completion_body, graphql_url};
 use anyhow::{Result, anyhow};
 use async_trait::async_trait;
 use std::collections::VecDeque;
 use std::sync::Mutex;
-use tardigrade_api::{ClaimBuildResponse, WorkerBuildStatus};
+use tardigrade_api::WorkerBuildStatus;
 use tardigrade_core::BuildRecord;
 use uuid::Uuid;
 
@@ -22,7 +22,7 @@ struct CompleteCall {
 /// Mock API transport that replays claim/complete outcomes deterministically.
 struct MockWorkerApi {
     /// Queued claim outcomes consumed in FIFO order.
-    claim_results: Mutex<VecDeque<Result<ClaimBuildResponse>>>,
+    claim_results: Mutex<VecDeque<Result<Option<BuildRecord>>>>,
     /// Queued completion outcomes consumed in FIFO order.
     complete_results: Mutex<VecDeque<Result<()>>>,
     /// Captured completion calls for assertion.
@@ -31,7 +31,7 @@ struct MockWorkerApi {
 
 impl MockWorkerApi {
     /// Builds mock transport preloaded with claim outcomes.
-    fn with_claim_results(claim_results: Vec<Result<ClaimBuildResponse>>) -> Self {
+    fn with_claim_results(claim_results: Vec<Result<Option<BuildRecord>>>) -> Self {
         Self {
             claim_results: Mutex::new(claim_results.into()),
             complete_results: Mutex::new(VecDeque::new()),
@@ -52,7 +52,7 @@ impl MockWorkerApi {
 #[async_trait]
 impl WorkerApi for MockWorkerApi {
     /// Returns next mocked claim payload or error.
-    async fn claim(&self, _claim_url: &str) -> Result<ClaimBuildResponse> {
+    async fn claim(&self, _graphql_url: &str, _worker_id: &str) -> Result<Option<BuildRecord>> {
         self.claim_results
             .lock()
             .expect("claim results poisoned")
@@ -63,14 +63,16 @@ impl WorkerApi for MockWorkerApi {
     /// Records completion request and returns next mocked completion result.
     async fn complete(
         &self,
-        complete_url: &str,
+        graphql_url: &str,
+        _worker_id: &str,
+        _build_id: Uuid,
         body: &tardigrade_api::CompleteBuildRequest,
     ) -> Result<()> {
         self.complete_calls
             .lock()
             .expect("complete calls poisoned")
             .push(CompleteCall {
-                url: complete_url.to_string(),
+                url: graphql_url.to_string(),
                 status_is_success: matches!(body.status, WorkerBuildStatus::Success),
                 log_line: body.log_line.clone(),
             });
@@ -87,15 +89,15 @@ impl WorkerApi for MockWorkerApi {
 #[tokio::test]
 async fn claim_step_returns_retry_on_claim_error() {
     let api = MockWorkerApi::with_claim_results(vec![Err(anyhow!("boom"))]);
-    let step = claim_step(&api, "http://127.0.0.1:8080/workers/worker-a/claim").await;
+    let step = claim_step(&api, "http://127.0.0.1:8080/graphql", "worker-a").await;
     assert!(matches!(step, ClaimStep::Retry));
 }
 
 /// Confirms claim step returns NoBuild when queue is empty.
 #[tokio::test]
 async fn claim_step_returns_no_build_when_queue_is_empty() {
-    let api = MockWorkerApi::with_claim_results(vec![Ok(ClaimBuildResponse { build: None })]);
-    let step = claim_step(&api, "http://127.0.0.1:8080/workers/worker-a/claim").await;
+    let api = MockWorkerApi::with_claim_results(vec![Ok(None)]);
+    let step = claim_step(&api, "http://127.0.0.1:8080/graphql", "worker-a").await;
     assert!(matches!(step, ClaimStep::NoBuild));
 }
 
@@ -103,10 +105,8 @@ async fn claim_step_returns_no_build_when_queue_is_empty() {
 #[tokio::test]
 async fn claim_step_returns_build_when_payload_contains_one() {
     let build = BuildRecord::queued(Uuid::new_v4());
-    let api = MockWorkerApi::with_claim_results(vec![Ok(ClaimBuildResponse {
-        build: Some(build.clone()),
-    })]);
-    let step = claim_step(&api, "http://127.0.0.1:8080/workers/worker-a/claim").await;
+    let api = MockWorkerApi::with_claim_results(vec![Ok(Some(build.clone()))]);
+    let step = claim_step(&api, "http://127.0.0.1:8080/graphql", "worker-a").await;
 
     let ClaimStep::Build(claimed) = step else {
         panic!("expected build claim result");
@@ -119,10 +119,10 @@ async fn claim_step_returns_build_when_payload_contains_one() {
 async fn complete_step_reports_success_and_captures_call() {
     let api = MockWorkerApi::with_complete_results(vec![Ok(())]);
     let build_id = Uuid::new_v4();
-    let url = complete_url("http://127.0.0.1:8080", "worker-a", build_id);
+    let url = graphql_url("http://127.0.0.1:8080");
     let body = completion_body();
 
-    let success = complete_step(&api, &url, &body).await;
+    let success = complete_step(&api, &url, "worker-a", build_id, &body).await;
     assert!(success);
 
     let calls = api.complete_calls.lock().expect("complete calls poisoned");
@@ -140,9 +140,9 @@ async fn complete_step_reports_success_and_captures_call() {
 async fn complete_step_reports_failure_on_error() {
     let api = MockWorkerApi::with_complete_results(vec![Err(anyhow!("network"))]);
     let build_id = Uuid::new_v4();
-    let url = complete_url("http://127.0.0.1:8080", "worker-a", build_id);
+    let url = graphql_url("http://127.0.0.1:8080");
     let body = completion_body();
 
-    let success = complete_step(&api, &url, &body).await;
+    let success = complete_step(&api, &url, "worker-a", build_id, &body).await;
     assert!(!success);
 }

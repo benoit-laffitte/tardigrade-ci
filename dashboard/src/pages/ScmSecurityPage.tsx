@@ -23,14 +23,14 @@ export function ScmSecurityPage({
       <article className="panel panel-full reveal" style={{ ["--delay" as string]: "0.02s" }}>
         <h2>Page en mode roadmap</h2>
         <p className="hint">
-          Vue SCM Security partiellement activee en read-only a partir de GET /health, GET /jobs, GET /builds.
+          Vue SCM Security en transition: diagnostics webhook et configuration webhook passent par GraphQL.
         </p>
         <div className="list">
           <div className="list-item">
             <div>
               <p className="item-title">API coverage: roadmap</p>
               <p className="item-subtitle">
-                Configuration webhook/polling et diagnostics SCM en attente d'endpoints publics dedies.
+                Webhooks natifs preserves via un adaptateur HTTP dedie. Le polling SCM est pilote via GraphQL.
               </p>
             </div>
           </div>
@@ -90,6 +90,7 @@ export function ScmSecurityPage({
           <span className="pill">domain</span>
         </div>
         <p className="hint">{scmDomain.webhookMessage || "Aucune operation webhook recente."}</p>
+        <p className="hint">Adaptateur natif attendu sur /webhooks/scm pour les fournisseurs SCM.</p>
         <p className="hint">{scmDomain.pollingMessage || "Aucune operation polling recente."}</p>
         <p className="hint">{scmDomain.scmWebhookOpsMessage || "Aucun refresh diagnostics recent."}</p>
         {scmDomain.pollingTickSummary ? (

@@ -120,8 +120,8 @@ impl Scheduler for PostgresScheduler {
 
     /// Reclaims stale leases and requeues reclaimed builds with retry priority.
     fn reclaim_stale(&self, max_age: Duration) -> Result<Vec<Uuid>> {
-        let max_age = chrono::Duration::from_std(max_age)
-            .unwrap_or_else(|_| chrono::Duration::seconds(0));
+        let max_age =
+            chrono::Duration::from_std(max_age).unwrap_or_else(|_| chrono::Duration::seconds(0));
         let stale_before = Utc::now() - max_age;
 
         let mut connection = self.connection.lock().expect("postgres queue poisoned");

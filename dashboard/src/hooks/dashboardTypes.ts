@@ -160,12 +160,33 @@ export interface ListScmWebhookRejectionsResponse {
   rejections: ScmWebhookRejectionEntry[];
 }
 
-// Models runtime metrics exposed by the dashboard REST surface.
+// Models webhook-related counters returned by the dashboard GraphQL diagnostics query.
 export interface RuntimeMetricsApiResponse {
   scm_webhook_received_total: number;
   scm_webhook_accepted_total: number;
   scm_webhook_rejected_total: number;
   scm_webhook_duplicate_total: number;
+}
+
+// Models the GraphQL mutation response for webhook security upsert.
+export interface UpsertWebhookSecurityConfigResponse {
+  upsert_webhook_security_config: boolean;
+}
+
+// Models the GraphQL mutation response for SCM polling configuration upsert.
+export interface UpsertScmPollingConfigResponse {
+  upsert_scm_polling_config: boolean;
+}
+
+// Models the GraphQL mutation response for one manual SCM polling tick.
+export interface RunScmPollingTickResponse {
+  run_scm_polling_tick: ScmPollingTickSummary;
+}
+
+// Models the GraphQL query response for webhook counters and diagnostics timeline.
+export interface ScmWebhookOperationsResponse {
+  metrics: RuntimeMetricsApiResponse;
+  scm_webhook_rejections: ScmWebhookRejectionEntry[];
 }
 
 // Represents filters used by webhook operations diagnostics.

@@ -1,16 +1,27 @@
-use anyhow::Result;
+use anyhow::{Result, anyhow};
 use async_trait::async_trait;
+use chrono::{DateTime, Utc};
 use reqwest::Client;
-use tardigrade_api::{ClaimBuildResponse, CompleteBuildRequest};
+use serde::Deserialize;
+use serde_json::json;
+use tardigrade_api::CompleteBuildRequest;
+use tardigrade_core::{BuildRecord, JobStatus};
+use uuid::Uuid;
 
 /// Abstraction over worker claim/complete HTTP interactions.
 #[async_trait]
 pub(crate) trait WorkerApi {
-    /// Requests next build claim from API.
-    async fn claim(&self, claim_url: &str) -> Result<ClaimBuildResponse>;
+    /// Requests next build claim from the GraphQL API.
+    async fn claim(&self, graphql_url: &str, worker_id: &str) -> Result<Option<BuildRecord>>;
 
-    /// Reports one build completion payload to API.
-    async fn complete(&self, complete_url: &str, body: &CompleteBuildRequest) -> Result<()>;
+    /// Reports one build completion payload through the GraphQL API.
+    async fn complete(
+        &self,
+        graphql_url: &str,
+        worker_id: &str,
+        build_id: Uuid,
+        body: &CompleteBuildRequest,
+    ) -> Result<()>;
 }
 
 /// Reqwest-backed implementation of worker API transport.
@@ -28,27 +39,186 @@ impl HttpWorkerApi {
 
 #[async_trait]
 impl WorkerApi for HttpWorkerApi {
-    /// Sends claim request and decodes claim response body.
-    async fn claim(&self, claim_url: &str) -> Result<ClaimBuildResponse> {
-        let payload = self
+    /// Sends worker claim mutation and converts GraphQL payload into a build record.
+    async fn claim(&self, graphql_url: &str, worker_id: &str) -> Result<Option<BuildRecord>> {
+        let payload: GraphqlEnvelope<ClaimMutationData> = self
             .client
-            .post(claim_url)
+            .post(graphql_url)
+            .json(&json!({
+                "query": CLAIM_MUTATION,
+                "variables": { "workerId": worker_id },
+            }))
             .send()
             .await?
             .error_for_status()?
-            .json::<ClaimBuildResponse>()
+            .json()
             .await?;
-        Ok(payload)
+
+        let data = payload.into_data()?;
+        data.worker_claim_build.map(TryInto::try_into).transpose()
     }
 
-    /// Sends completion request and validates successful status code.
-    async fn complete(&self, complete_url: &str, body: &CompleteBuildRequest) -> Result<()> {
-        self.client
-            .post(complete_url)
-            .json(body)
+    /// Sends worker completion mutation and validates GraphQL success.
+    async fn complete(
+        &self,
+        graphql_url: &str,
+        worker_id: &str,
+        build_id: Uuid,
+        body: &CompleteBuildRequest,
+    ) -> Result<()> {
+        let status = match body.status {
+            tardigrade_api::WorkerBuildStatus::Success => "SUCCESS",
+            tardigrade_api::WorkerBuildStatus::Failed => "FAILED",
+        };
+
+        let payload: GraphqlEnvelope<CompleteMutationData> = self
+            .client
+            .post(graphql_url)
+            .json(&json!({
+                "query": COMPLETE_MUTATION,
+                "variables": {
+                    "workerId": worker_id,
+                    "buildId": build_id.to_string(),
+                    "status": status,
+                    "logLine": body.log_line,
+                },
+            }))
             .send()
             .await?
-            .error_for_status()?;
+            .error_for_status()?
+            .json()
+            .await?;
+
+        let data = payload.into_data()?;
+        let _ = data.worker_complete_build.id;
         Ok(())
+    }
+}
+
+/// GraphQL mutation used by workers to claim one build.
+const CLAIM_MUTATION: &str = r#"
+mutation Claim($workerId: String!) {
+  worker_claim_build(workerId: $workerId) {
+    id
+    job_id
+    status
+    queued_at
+    started_at
+    finished_at
+    logs
+  }
+}
+"#;
+
+/// GraphQL mutation used by workers to complete one build.
+const COMPLETE_MUTATION: &str = r#"
+mutation Complete($workerId: String!, $buildId: ID!, $status: GqlWorkerBuildStatus!, $logLine: String) {
+  worker_complete_build(workerId: $workerId, buildId: $buildId, status: $status, logLine: $logLine) {
+    id
+  }
+}
+"#;
+
+/// GraphQL top-level envelope returned by the API.
+#[derive(Debug, Deserialize)]
+struct GraphqlEnvelope<T> {
+    data: Option<T>,
+    errors: Option<Vec<GraphqlErrorEntry>>,
+}
+
+impl<T> GraphqlEnvelope<T> {
+    /// Extracts data payload or converts GraphQL errors into one anyhow error.
+    fn into_data(self) -> Result<T> {
+        if let Some(errors) = self.errors
+            && !errors.is_empty()
+        {
+            let messages = errors
+                .into_iter()
+                .map(|error| error.message)
+                .collect::<Vec<_>>()
+                .join("; ");
+            return Err(anyhow!(messages));
+        }
+
+        self.data
+            .ok_or_else(|| anyhow!("missing GraphQL data payload"))
+    }
+}
+
+/// Minimal GraphQL error entry used by worker transport.
+#[derive(Debug, Deserialize)]
+struct GraphqlErrorEntry {
+    message: String,
+}
+
+/// GraphQL payload for worker claim mutation.
+#[derive(Debug, Deserialize)]
+struct ClaimMutationData {
+    worker_claim_build: Option<GraphqlBuildRecord>,
+}
+
+/// GraphQL payload for worker completion mutation.
+#[derive(Debug, Deserialize)]
+struct CompleteMutationData {
+    worker_complete_build: GraphqlBuildRecordId,
+}
+
+/// GraphQL build record shape returned to workers.
+#[derive(Debug, Deserialize)]
+struct GraphqlBuildRecord {
+    id: String,
+    job_id: String,
+    status: String,
+    queued_at: String,
+    started_at: Option<String>,
+    finished_at: Option<String>,
+    logs: Vec<String>,
+}
+
+impl TryFrom<GraphqlBuildRecord> for BuildRecord {
+    type Error = anyhow::Error;
+
+    /// Converts GraphQL worker build payload into the core build record model.
+    fn try_from(value: GraphqlBuildRecord) -> Result<Self> {
+        Ok(Self {
+            id: Uuid::parse_str(&value.id)?,
+            job_id: Uuid::parse_str(&value.job_id)?,
+            status: parse_job_status(&value.status)?,
+            queued_at: parse_datetime(&value.queued_at)?,
+            started_at: value
+                .started_at
+                .as_deref()
+                .map(parse_datetime)
+                .transpose()?,
+            finished_at: value
+                .finished_at
+                .as_deref()
+                .map(parse_datetime)
+                .transpose()?,
+            logs: value.logs,
+        })
+    }
+}
+
+/// GraphQL identifier-only payload returned by completion mutation.
+#[derive(Debug, Deserialize)]
+struct GraphqlBuildRecordId {
+    id: String,
+}
+
+/// Parses one RFC3339 timestamp into UTC.
+fn parse_datetime(raw: &str) -> Result<DateTime<Utc>> {
+    Ok(DateTime::parse_from_rfc3339(raw)?.with_timezone(&Utc))
+}
+
+/// Parses GraphQL enum string into the core build lifecycle enum.
+fn parse_job_status(raw: &str) -> Result<JobStatus> {
+    match raw {
+        "PENDING" => Ok(JobStatus::Pending),
+        "RUNNING" => Ok(JobStatus::Running),
+        "SUCCESS" => Ok(JobStatus::Success),
+        "FAILED" => Ok(JobStatus::Failed),
+        "CANCELED" => Ok(JobStatus::Canceled),
+        _ => Err(anyhow!("unknown build status: {raw}")),
     }
 }

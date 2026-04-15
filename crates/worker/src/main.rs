@@ -10,7 +10,7 @@ mod worker_config;
 mod worker_steps;
 
 pub(crate) use completion_payload::completion_body;
-pub(crate) use endpoint_urls::{claim_url, complete_url};
+pub(crate) use endpoint_urls::graphql_url;
 pub(crate) use worker_api::{HttpWorkerApi, WorkerApi};
 use worker_config::load_worker_config;
 pub(crate) use worker_steps::{ClaimStep, claim_step, complete_step};
@@ -25,14 +25,14 @@ async fn main() -> Result<()> {
     let worker_id = config.worker_id;
     let poll_ms = config.poll_ms;
 
-    let claim_url = claim_url(&server_url, &worker_id);
+    let graphql_url = graphql_url(&server_url);
     let api = HttpWorkerApi::new(Client::new());
 
     info!(%server_url, %worker_id, poll_ms, "worker started");
 
     // Long-running control loop: claim -> execute -> complete.
     loop {
-        let build = match claim_step(&api, &claim_url).await {
+        let build = match claim_step(&api, &graphql_url, &worker_id).await {
             ClaimStep::Build(build) => build,
             ClaimStep::NoBuild | ClaimStep::Retry => {
                 // No work or claim failure: back off polling to reduce API pressure.
@@ -46,10 +46,9 @@ async fn main() -> Result<()> {
         // Placeholder execution: this worker simulates a successful run.
         tokio::time::sleep(Duration::from_millis(75)).await;
 
-        let complete_url = complete_url(&server_url, &worker_id, build.id);
         let body = completion_body();
 
-        if complete_step(&api, &complete_url, &body).await {
+        if complete_step(&api, &graphql_url, &worker_id, build.id, &body).await {
             info!(build_id = %build.id, "build completed");
         }
     }

@@ -1,18 +1,35 @@
+import type { ApolloClient } from "@apollo/client";
 import { useCallback } from "react";
+
+import {
+  RUN_SCM_POLLING_TICK_MUTATION,
+  SCM_WEBHOOK_OPERATIONS_QUERY,
+  UPSERT_SCM_POLLING_CONFIG_MUTATION,
+  UPSERT_WEBHOOK_SECURITY_CONFIG_MUTATION
+} from "../dashboardConstants";
 
 import type {
   AdminRole,
-  ListScmWebhookRejectionsResponse,
   RuntimeMetricsApiResponse,
   ScmPollingInput,
   ScmPollingTickSummary,
   ScmWebhookOpsFilter,
   ScmWebhookRejectionEntry,
+  ScmWebhookOperationsResponse,
+  RunScmPollingTickResponse,
+  UpsertScmPollingConfigResponse,
+  UpsertWebhookSecurityConfigResponse,
   WebhookSecurityInput
 } from "../dashboardTypes";
 import { normalizeAllowlistInput, normalizeBranchesInput } from "../dashboardUtils";
 
+// Maps dashboard SCM provider ids to the GraphQL enum literals expected by async-graphql.
+function toGraphQlScmProvider(provider: "github" | "gitlab"): "Github" | "Gitlab" {
+  return provider === "github" ? "Github" : "Gitlab";
+}
+
 interface ScmActionsParams {
+  client: ApolloClient<object>;
   adminRole: AdminRole;
   roleCapabilities: {
     can_mutate_sensitive: boolean;
@@ -30,7 +47,6 @@ interface ScmActionsParams {
   setScmWebhookOpsMessage: React.Dispatch<React.SetStateAction<string>>;
   setScmWebhookMetrics: React.Dispatch<React.SetStateAction<RuntimeMetricsApiResponse | null>>;
   setScmWebhookRejections: React.Dispatch<React.SetStateAction<ScmWebhookRejectionEntry[]>>;
-  parseApiErrorMessage: (response: Response) => Promise<string>;
   log: (message: string, kind?: string) => void;
   audit: (action: string, target: string) => void;
   refreshAll: () => Promise<void>;
@@ -38,6 +54,7 @@ interface ScmActionsParams {
 
 // Groups SCM security, polling, and webhook-ops callbacks in one dedicated domain hook.
 export function useScmActions({
+  client,
   adminRole,
   roleCapabilities,
   webhookForm,
@@ -53,7 +70,6 @@ export function useScmActions({
   setScmWebhookOpsMessage,
   setScmWebhookMetrics,
   setScmWebhookRejections,
-  parseApiErrorMessage,
   log,
   audit,
   refreshAll
@@ -91,51 +107,37 @@ export function useScmActions({
 
       const payload = {
         repository_url: repository,
-        provider: webhookForm.provider,
+        provider: toGraphQlScmProvider(webhookForm.provider),
         secret,
         allowed_ips: normalizeAllowlistInput(webhookForm.allowed_ips_text)
       };
 
       try {
-        const response = await fetch("/scm/webhook-security/configs", {
-          method: "POST",
-          headers: {
-            "content-type": "application/json"
-          },
-          body: JSON.stringify(payload)
+        const { data } = await client.mutate<UpsertWebhookSecurityConfigResponse>({
+          mutation: UPSERT_WEBHOOK_SECURITY_CONFIG_MUTATION,
+          variables: {
+            input: payload
+          }
         });
 
-        if (response.status === 204) {
-          setWebhookMessage("Configuration webhook enregistree.");
-          setKnownWebhookConfigs((previous) => new Set(previous).add(configKey));
-          log(`Webhook security sauvegardee pour ${repository} (${webhookForm.provider})`, "ok");
-          audit("webhook_security_update", repository);
-          return;
+        if (!data?.upsert_webhook_security_config) {
+          throw new Error("upsert_webhook_security_config did not acknowledge success");
         }
 
-        if (response.status === 400) {
-          setWebhookMessage("Configuration invalide.");
-          log("Rejet de configuration webhook: payload invalide", "warn");
-          return;
-        }
-
-        if (response.status === 403) {
-          setWebhookMessage("Configuration refusee (forbidden).");
-          log("Configuration webhook refusee (403)", "error");
-          return;
-        }
-
-        setWebhookMessage("Erreur interne lors de la sauvegarde webhook.");
-        log(`Configuration webhook en echec: HTTP ${response.status}`, "error");
+        setWebhookMessage("Configuration webhook enregistree.");
+        setKnownWebhookConfigs((previous) => new Set(previous).add(configKey));
+        log(`Webhook security sauvegardee pour ${repository} (${webhookForm.provider})`, "ok");
+        audit("webhook_security_update", repository);
       } catch (error) {
         const message = error instanceof Error ? error.message : "Unknown error";
-        setWebhookMessage("Erreur reseau lors de la sauvegarde webhook.");
+        setWebhookMessage(`Erreur lors de la sauvegarde webhook: ${message}.`);
         log(`Configuration webhook en echec: ${message}`, "error");
       }
     },
     [
       adminRole,
       audit,
+      client,
       knownWebhookConfigs,
       log,
       roleCapabilities.can_mutate_sensitive,
@@ -145,85 +147,78 @@ export function useScmActions({
     ]
   );
 
-  // Saves one SCM polling configuration for repository/provider pair.
+  // Saves SCM polling settings through the GraphQL control plane.
   const saveScmPollingConfig = useCallback(
     async (event: { preventDefault: () => void }) => {
       event.preventDefault();
       if (!roleCapabilities.can_mutate_sensitive) {
-        setPollingMessage("Role insuffisant pour modifier la configuration polling.");
-        log(`Role ${adminRole} ne peut pas modifier polling config`, "warn");
+        setPollingMessage("Role insuffisant pour modifier le polling SCM.");
+        log(`Role ${adminRole} ne peut pas modifier polling SCM`, "warn");
         audit("polling_config_update_denied", pollingForm.repository_url || "unknown");
         return;
       }
 
       const repository = pollingForm.repository_url.trim();
-      const configKey = `${repository.toLowerCase()}::${pollingForm.provider}`;
       const interval = Number.parseInt(pollingForm.interval_secs_text, 10);
+      const configKey = `${repository.toLowerCase()}::${pollingForm.provider}`;
 
-      if (!repository || !Number.isFinite(interval) || interval <= 0) {
-        setPollingMessage("Parametres invalides: repository requis et interval > 0.");
+      if (!repository || Number.isNaN(interval) || interval <= 0) {
+        setPollingMessage("Parametres invalides pour le polling.");
         log("Configuration polling invalide", "warn");
         return;
       }
 
-      if (knownPollingStates.get(configKey) === true && !pollingForm.enabled) {
+      const knownState = knownPollingStates.get(configKey);
+      if (knownState !== undefined && knownState !== pollingForm.enabled) {
         const confirmed = globalThis.confirm(
-          "Confirmer la desactivation de ce polling repository/provider ?"
+          "Une configuration de polling existe deja pour ce repository/provider. Confirmer le changement ?"
         );
         if (!confirmed) {
-          setPollingMessage("Desactivation annulee.");
+          setPollingMessage("Modification du polling annulee.");
           return;
         }
       }
 
       const payload = {
         repository_url: repository,
-        provider: pollingForm.provider,
+        provider: toGraphQlScmProvider(pollingForm.provider),
         enabled: pollingForm.enabled,
         interval_secs: interval,
         branches: normalizeBranchesInput(pollingForm.branches_text)
       };
 
       try {
-        const response = await fetch("/scm/polling/configs", {
-          method: "POST",
-          headers: {
-            "content-type": "application/json"
-          },
-          body: JSON.stringify(payload)
+        const { data } = await client.mutate<UpsertScmPollingConfigResponse>({
+          mutation: UPSERT_SCM_POLLING_CONFIG_MUTATION,
+          variables: {
+            input: payload
+          }
         });
 
-        if (response.status === 204) {
-          setKnownPollingStates((previous) => {
-            const next = new Map(previous);
-            next.set(configKey, pollingForm.enabled);
-            return next;
-          });
-          setPollingMessage(
-            pollingForm.enabled ? "Configuration polling enregistree." : "Polling desactive."
-          );
-          log(`Polling config sauvegardee pour ${repository} (${pollingForm.provider})`, "ok");
-          audit("polling_config_update", repository);
-          return;
+        if (!data?.upsert_scm_polling_config) {
+          throw new Error("upsert_scm_polling_config did not acknowledge success");
         }
 
-        if (response.status === 400) {
-          setPollingMessage("Configuration polling invalide.");
-          log("Rejet configuration polling (400)", "warn");
-          return;
-        }
-
-        setPollingMessage("Erreur interne lors de la sauvegarde polling.");
-        log(`Configuration polling en echec: HTTP ${response.status}`, "error");
+        setKnownPollingStates((previous) => {
+          const next = new Map(previous);
+          next.set(configKey, pollingForm.enabled);
+          return next;
+        });
+        setPollingMessage(
+          pollingForm.enabled ? "Configuration polling enregistree." : "Polling desactive."
+        );
+        log(`Polling config sauvegardee pour ${repository} (${pollingForm.provider})`, "ok");
+        audit("polling_config_update", repository);
       } catch (error) {
         const message = error instanceof Error ? error.message : "Unknown error";
-        setPollingMessage("Erreur reseau lors de la sauvegarde polling.");
+        setPollingMessage(`Erreur lors de la sauvegarde polling: ${message}.`);
         log(`Configuration polling en echec: ${message}`, "error");
       }
     },
     [
       adminRole,
       audit,
+      client,
       knownPollingStates,
       log,
       pollingForm,
@@ -236,17 +231,15 @@ export function useScmActions({
   // Triggers one manual SCM polling tick and renders immediate summary.
   const runManualScmPollingTick = useCallback(async () => {
     try {
-      const response = await fetch("/scm/polling/tick", {
-        method: "POST"
+      const { data } = await client.mutate<RunScmPollingTickResponse>({
+        mutation: RUN_SCM_POLLING_TICK_MUTATION
       });
 
-      if (!response.ok) {
-        setPollingMessage(`Tick polling en echec (HTTP ${response.status}).`);
-        log(`Tick polling en echec: HTTP ${response.status}`, "error");
-        return;
+      if (!data?.run_scm_polling_tick) {
+        throw new Error("run_scm_polling_tick did not return a summary");
       }
 
-      const payload = (await response.json()) as ScmPollingTickSummary;
+      const payload = data.run_scm_polling_tick;
       setPollingTickSummary(payload);
       setPollingMessage(
         `Tick execute: ${payload.polled_repositories} repo(s), ${payload.enqueued_builds} build(s) enqueued.`
@@ -258,54 +251,38 @@ export function useScmActions({
       await refreshAll();
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown error";
-      setPollingMessage("Erreur reseau lors du tick polling.");
+      setPollingMessage(`Erreur lors du tick polling: ${message}.`);
       log(`Tick polling en echec: ${message}`, "error");
     }
-  }, [log, refreshAll, setPollingMessage, setPollingTickSummary]);
+  }, [client, log, refreshAll, setPollingMessage, setPollingTickSummary]);
 
   // Refreshes SCM webhook counters and recent rejection diagnostics timeline.
   const refreshScmWebhookOperations = useCallback(async () => {
     const provider = scmWebhookOpsFilter.provider.trim();
     const repositoryUrl = scmWebhookOpsFilter.repository_url.trim();
 
-    const query = new URLSearchParams();
-    if (provider) {
-      query.set("provider", provider);
-    }
-    if (repositoryUrl) {
-      query.set("repository_url", repositoryUrl);
-    }
-    query.set("limit", "20");
-
     try {
-      const [metricsResponse, diagnosticsResponse] = await Promise.all([
-        fetch("/metrics", { method: "GET" }),
-        fetch(`/scm/webhook-security/rejections?${query.toString()}`, { method: "GET" })
-      ]);
+      const { data } = await client.query<ScmWebhookOperationsResponse>({
+        query: SCM_WEBHOOK_OPERATIONS_QUERY,
+        variables: {
+          provider: provider || null,
+          repositoryUrl: repositoryUrl || null,
+          limit: 20
+        },
+        fetchPolicy: "network-only"
+      });
 
-      if (!metricsResponse.ok) {
-        const details = await parseApiErrorMessage(metricsResponse);
-        setScmWebhookOpsMessage(`Chargement metrics webhook en echec: ${details}.`);
-        log(`Metrics webhook en echec: ${details}`, "error");
-        return;
+      if (!data?.metrics) {
+        throw new Error("scm webhook diagnostics query did not return metrics");
       }
 
-      if (!diagnosticsResponse.ok) {
-        const details = await parseApiErrorMessage(diagnosticsResponse);
-        setScmWebhookOpsMessage(`Chargement diagnostics webhook en echec: ${details}.`);
-        log(`Diagnostics webhook en echec: ${details}`, "error");
-        return;
-      }
-
-      const metricsPayload = (await metricsResponse.json()) as RuntimeMetricsApiResponse;
-      const diagnosticsPayload = (await diagnosticsResponse.json()) as ListScmWebhookRejectionsResponse;
-      setScmWebhookMetrics(metricsPayload);
-      setScmWebhookRejections(diagnosticsPayload.rejections);
+      setScmWebhookMetrics(data.metrics);
+      setScmWebhookRejections(data.scm_webhook_rejections);
       setScmWebhookOpsMessage(
-        `Diagnostics webhook rafraichis (${diagnosticsPayload.rejections.length} rejection(s)).`
+        `Diagnostics webhook rafraichis (${data.scm_webhook_rejections.length} rejection(s)).`
       );
       log(
-        `Diagnostics webhook rafraichis: received=${metricsPayload.scm_webhook_received_total}, rejected=${metricsPayload.scm_webhook_rejected_total}`,
+        `Diagnostics webhook rafraichis: received=${data.metrics.scm_webhook_received_total}, rejected=${data.metrics.scm_webhook_rejected_total}`,
         "ok"
       );
     } catch (error) {
@@ -314,8 +291,8 @@ export function useScmActions({
       log(`Webhook operations en echec: ${message}`, "error");
     }
   }, [
+    client,
     log,
-    parseApiErrorMessage,
     scmWebhookOpsFilter.provider,
     scmWebhookOpsFilter.repository_url,
     setScmWebhookMetrics,

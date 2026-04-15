@@ -1,4 +1,8 @@
-use axum::http::StatusCode;
+use axum::{
+    Json,
+    http::{HeaderMap, StatusCode},
+    response::{IntoResponse, Response},
+};
 use chrono::Utc;
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
@@ -12,8 +16,9 @@ use tardigrade_storage::{InMemoryStorage, Storage};
 
 use crate::service::CiService;
 use crate::{
-    PluginAuthorizationCheckResponse, PluginInfo, PluginPolicyResponse, ServiceSettings,
-    UpsertScmPollingConfigRequest, UpsertWebhookSecurityConfigRequest,
+    ApiError, ApiErrorResponse, PluginAuthorizationCheckResponse, PluginInfo, PluginPolicyResponse,
+    ScmWebhookAcceptedResponse, ServiceSettings, UpsertScmPollingConfigRequest,
+    UpsertWebhookSecurityConfigRequest,
 };
 
 const GLOBAL_POLICY_CONTEXT: &str = "global";
@@ -276,6 +281,87 @@ impl ApiState {
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
     }
 
+    /// Accepts one native SCM webhook over HTTP without restoring the general REST API surface.
+    pub async fn ingest_scm_webhook_http(&self, headers: HeaderMap, body: &[u8]) -> Response {
+        let provider = optional_header_value(&headers, "x-scm-provider");
+        let repository_url = optional_header_value(&headers, "x-scm-repository");
+
+        self.service.record_scm_webhook_received();
+
+        match self.service.ingest_scm_webhook(&headers, body).await {
+            Ok(()) => {
+                self.service.record_scm_webhook_accepted();
+                (
+                    StatusCode::ACCEPTED,
+                    Json(ScmWebhookAcceptedResponse {
+                        status: "accepted".to_string(),
+                    }),
+                )
+                    .into_response()
+            }
+            Err(ApiError::BadRequest) => {
+                self.service.record_scm_webhook_rejected();
+                self.service.record_scm_webhook_rejection(
+                    "invalid_webhook_request",
+                    provider.as_deref(),
+                    repository_url.as_deref(),
+                );
+                (
+                    StatusCode::BAD_REQUEST,
+                    Json(ApiErrorResponse {
+                        code: "invalid_webhook_request".to_string(),
+                        message: "webhook request is missing required headers".to_string(),
+                        details: None,
+                    }),
+                )
+                    .into_response()
+            }
+            Err(ApiError::Unauthorized) => {
+                self.service.record_scm_webhook_rejected();
+                self.service.record_scm_webhook_rejection(
+                    "invalid_webhook_signature",
+                    provider.as_deref(),
+                    repository_url.as_deref(),
+                );
+                (
+                    StatusCode::UNAUTHORIZED,
+                    Json(ApiErrorResponse {
+                        code: "invalid_webhook_signature".to_string(),
+                        message: "webhook signature is missing, invalid, or expired".to_string(),
+                        details: None,
+                    }),
+                )
+                    .into_response()
+            }
+            Err(ApiError::Forbidden) => {
+                self.service.record_scm_webhook_rejected();
+                self.service.record_scm_webhook_rejection(
+                    "webhook_forbidden",
+                    provider.as_deref(),
+                    repository_url.as_deref(),
+                );
+                (
+                    StatusCode::FORBIDDEN,
+                    Json(ApiErrorResponse {
+                        code: "webhook_forbidden".to_string(),
+                        message: "webhook provider/repository/ip is not authorized".to_string(),
+                        details: None,
+                    }),
+                )
+                    .into_response()
+            }
+            Err(err) => {
+                self.service.record_scm_webhook_rejected();
+                self.service.record_scm_webhook_rejection(
+                    "webhook_internal_error",
+                    provider.as_deref(),
+                    repository_url.as_deref(),
+                );
+                err.status_code().into_response()
+            }
+        }
+    }
+
     /// Upserts one SCM polling configuration for one repository/provider.
     pub async fn upsert_scm_polling_config(
         &self,
@@ -383,6 +469,16 @@ fn normalize_policy_context(context: Option<&str>) -> String {
     }
 
     trimmed.to_string()
+}
+
+/// Reads one optional string header value and normalizes invalid values to None.
+fn optional_header_value(headers: &HeaderMap, key: &str) -> Option<String> {
+    headers
+        .get(key)
+        .and_then(|value| value.to_str().ok())
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToString::to_string)
 }
 
 /// Resolves granted capabilities for context with fallback to global default context.

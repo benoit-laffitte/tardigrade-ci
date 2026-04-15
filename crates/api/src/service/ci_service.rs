@@ -82,12 +82,6 @@ impl CiService {
         }
     }
 
-    /// Subscribes to the in-process broadcast bus used by SSE clients.
-    pub(crate) fn subscribe_events(&self) -> broadcast::Receiver<LiveEvent> {
-        // Each subscriber receives live events from this point forward.
-        self.event_tx.subscribe()
-    }
-
     /// Emits one operational event to all connected live subscribers.
     fn emit_event(
         &self,

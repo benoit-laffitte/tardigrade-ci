@@ -19,6 +19,40 @@ Chaque decision doit etre ajoutee ici avant implementation (ou juste apres en ca
 
 ---
 
+## UX-004 - Surface API unifiee en GraphQL uniquement
+
+- Date: 2026-04-15
+- Statut: accepted
+- Owner: Engineering
+- Type: integration contract
+
+### Contexte
+
+Demande utilisateur explicite: supprimer toute surface REST cote Rust et ne conserver qu'un point d'entree GraphQL.
+
+### Decision
+
+- Le controle plane Rust n'expose plus que `/graphql`.
+- Les operations jobs, builds, workers, plugins, policy et SCM passent par queries et mutations GraphQL.
+- Le worker Rust parle le meme endpoint GraphQL que les clients d'administration.
+
+### Impact attendu
+
+- Contrat d'integration unique pour les clients internes.
+- Reduction de la duplication REST et GraphQL dans la couche Rust.
+
+### Risques
+
+- Les integrations webhook SCM natives ne peuvent plus appeler directement l'API sans adaptateur GraphQL.
+- Le dashboard frontend doit migrer s'il consommait encore des endpoints REST.
+
+### Mise en oeuvre 2026-04-15
+
+- Les diagnostics webhook et le polling SCM du dashboard passent par GraphQL.
+- Les webhooks natifs SCM conservent un point d'entree HTTP dedie sur `/webhooks/scm` au niveau serveur uniquement.
+
+---
+
 ## UX-001 - Analyse de la situation actuelle (baseline)
 
 - Date: 2026-04-03
