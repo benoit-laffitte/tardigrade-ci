@@ -1475,3 +1475,35 @@ Prioriser la page Workers comme premiere verticale API-backed post-refactor:
 - Domaine Workers: [dashboard/src/hooks/workers/domain.ts](dashboard/src/hooks/workers/domain.ts)
 - Actions Workers: [dashboard/src/hooks/workers/actions.ts](dashboard/src/hooks/workers/actions.ts)
 - Orchestration coeur: [dashboard/src/hooks/core/controller.ts](dashboard/src/hooks/core/controller.ts)
+
+---
+
+## UX-021 - Synchronisation backend scheduler multi-backend
+
+- Date: 2026-04-15
+- Statut: implemented
+- Owner: Engineering
+- Type: backend capability sync
+
+### Contexte
+
+Le runtime supporte maintenant une selection explicite du backend scheduler, avec ajout d'un backend PostgreSQL en plus des backends in-memory, file et Redis.
+
+### Decision
+
+Synchroniser le journal UX avec la capacite backend pour eviter les divergences de communication produit/plateforme:
+
+1. Documenter les backends scheduler disponibles (`in-memory`, `file`, `redis`, `postgres`).
+2. Confirmer que le mode runtime peut etre surcharge via variable d'environnement dediee.
+3. Aligner la documentation d'exploitation sur le nouveau mode de selection explicite.
+
+### Impact attendu
+
+- Meilleure lisibilite cross-equipe sur les capacites backend actuelles.
+- Reduction du risque de malentendu pendant les ateliers UX/ops.
+
+### Evidence (code)
+
+- Selection backend scheduler: [crates/server/src/main.rs](crates/server/src/main.rs)
+- Backend PostgreSQL scheduler: [crates/scheduler/src/backend/postgres_scheduler.rs](crates/scheduler/src/backend/postgres_scheduler.rs)
+- Guide migration scheduler: [docs/scheduler-migration.md](docs/scheduler-migration.md)

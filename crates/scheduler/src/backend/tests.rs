@@ -1,4 +1,4 @@
-use super::{FileBackedScheduler, InMemoryScheduler};
+use super::{FileBackedScheduler, InMemoryScheduler, PostgresScheduler};
 use crate::Scheduler;
 use std::time::Duration;
 use uuid::Uuid;
@@ -240,4 +240,42 @@ fn file_backed_scheduler_reports_worker_loads() {
     assert!(scheduler.worker_loads().is_empty());
 
     let _ = std::fs::remove_file(state_file);
+}
+
+/// Verifies postgres-backed scheduler claim/requeue/ack semantics when test database is configured.
+#[test]
+fn postgres_scheduler_supports_claim_requeue_and_ack() {
+    let database_url = match std::env::var("TARDIGRADE_TEST_DATABASE_URL") {
+        Ok(value) => value,
+        Err(_) => return,
+    };
+    let namespace = format!("scheduler-test-{}", Uuid::new_v4());
+    let scheduler = PostgresScheduler::open(&database_url, &namespace).expect("open scheduler");
+    let build_id = Uuid::new_v4();
+
+    scheduler.enqueue(build_id).expect("enqueue should succeed");
+    let claimed = scheduler
+        .claim_next("worker-a")
+        .expect("claim should return enqueued build");
+    assert_eq!(claimed, build_id);
+    assert_eq!(
+        scheduler
+            .in_flight_owner(build_id)
+            .expect("in_flight_owner should succeed"),
+        Some("worker-a".to_string())
+    );
+
+    scheduler.requeue(build_id).expect("requeue should succeed");
+    let reclaimed = scheduler
+        .claim_next("worker-b")
+        .expect("requeued build should be claimable");
+    assert_eq!(reclaimed, build_id);
+
+    scheduler.ack(build_id).expect("ack should succeed");
+    assert_eq!(
+        scheduler
+            .in_flight_owner(build_id)
+            .expect("in_flight_owner should succeed"),
+        None
+    );
 }

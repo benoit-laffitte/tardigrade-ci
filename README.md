@@ -43,7 +43,7 @@ This workspace is a starting point for building an enterprise-grade open-source 
 
 Current DSL runtime model is technology-agnostic: each pipeline step defines its own container image and command, so one pipeline can mix Rust, Python, Java, Node, or any stack available as an OCI image.
 
-Current state is a bootstrap baseline with pluggable adapters: in-memory for local bootstrap, plus PostgreSQL storage and Redis queue backends for distributed deployments.
+Current state is a bootstrap baseline with pluggable adapters: in-memory/file/Redis/PostgreSQL scheduler backends, plus PostgreSQL storage for durable jobs/builds.
 
 ## Run
 
@@ -78,7 +78,7 @@ Build dashboard assets served by Rust server:
 The Vite build outputs to `target/public` (`index.html`, `app.js`, `styles.css`) and the Axum server serves them dynamically at runtime.
 If `target/public` is missing, dashboard routes return runtime errors until `make dashboard-build` is executed.
 
-Run server in dev mode from config file (Redis optional, in-memory fallback):
+Run server in dev mode from config file (default fallback is Redis when configured, otherwise in-memory):
 
 TARDIGRADE_CONFIG_FILE=config/runtime-dev.toml \
 env -u https_proxy -u http_proxy -u PXY_FAB_FONC cargo run -p tardigrade-server
@@ -97,6 +97,14 @@ TARDIGRADE_REDIS_URL=redis://127.0.0.1:6379 \
 TARDIGRADE_REDIS_PREFIX=tardigrade \
 env -u https_proxy -u http_proxy -u PXY_FAB_FONC cargo run -p tardigrade-server
 
+Run server with PostgreSQL storage + PostgreSQL scheduler:
+
+TARDIGRADE_CONFIG_FILE=config/runtime-prod.toml \
+TARDIGRADE_DATABASE_URL=postgres://tardigrade:tardigrade@127.0.0.1:5432/tardigrade \
+TARDIGRADE_SCHEDULER_BACKEND=postgres \
+TARDIGRADE_SCHEDULER_NAMESPACE=tardigrade \
+env -u https_proxy -u http_proxy -u PXY_FAB_FONC cargo run -p tardigrade-server
+
 Run a dedicated external worker:
 
 TARDIGRADE_SERVER_URL=http://127.0.0.1:8080 \
@@ -110,8 +118,12 @@ Cloud-friendly runtime env vars:
 - TARDIGRADE_SERVICE_NAME (default: tardigrade-ci)
 - TARDIGRADE_EMBEDDED_WORKER (default: true)
 - TARDIGRADE_DATABASE_URL (optional PostgreSQL URL for jobs/builds persistence)
+- TARDIGRADE_SCHEDULER_BACKEND (optional explicit scheduler backend: in-memory, file, redis, postgres)
+- TARDIGRADE_SCHEDULER_DATABASE_URL (optional PostgreSQL URL dedicated to scheduler, falls back to TARDIGRADE_DATABASE_URL)
+- TARDIGRADE_SCHEDULER_NAMESPACE (optional scheduler namespace for Redis keys / PostgreSQL rows, default: tardigrade)
 - TARDIGRADE_REDIS_URL (optional Redis URL for distributed queue backend)
 - TARDIGRADE_REDIS_PREFIX (optional Redis key prefix, default: tardigrade)
+- TARDIGRADE_QUEUE_FILE (queue state file path used by file scheduler backend)
 - TARDIGRADE_SERVER_URL (worker -> controller URL)
 - TARDIGRADE_WORKER_ID (worker identity)
 - TARDIGRADE_WORKER_POLL_MS (worker polling interval)
@@ -119,11 +131,12 @@ Cloud-friendly runtime env vars:
 Runtime mode is read from config file under `[runtime]`:
 
 - `mode = "dev"`: scheduler uses Redis when configured, otherwise in-memory fallback.
-- `mode = "prod"`: server fails fast unless both PostgreSQL and Redis are configured.
+- `mode = "prod"`: scheduler defaults to Redis and fails fast when Redis is missing.
+- `TARDIGRADE_SCHEDULER_BACKEND` overrides runtime defaults to one of in-memory/file/redis/postgres.
 
-`TARDIGRADE_QUEUE_FILE` is deprecated and ignored.
+`TARDIGRADE_QUEUE_FILE` is used only when `TARDIGRADE_SCHEDULER_BACKEND=file`.
 
-Migration notes for Redis-first scheduler rollout:
+Migration notes for scheduler backend selection:
 
 - [docs/scheduler-migration.md](docs/scheduler-migration.md)
 

@@ -420,6 +420,7 @@ Goal: make Redis the default production scheduler path and reduce file-backed us
 - [x] `SCHED-04` Add startup diagnostics when production prerequisites are missing.
 - [x] `SCHED-05` Update deployment manifests and docs to reflect Redis-first behavior.
 - [x] `SCHED-06` Add migration notes for users still relying on file-backed queue in clustered runs.
+- [x] `SCHED-07` Add explicit scheduler backend selection with PostgreSQL backend support (`in-memory`, `file`, `redis`, `postgres`).
 
 Definition of done:
 
@@ -491,6 +492,7 @@ Definition of done:
 ### Completed
 
 - [x] Redis-backed queue scheduler (distributed claim/ack/requeue).
+- [x] PostgreSQL-backed queue scheduler (durable claim/ack/requeue with namespace isolation).
 - [x] Worker ownership check on build completion (`409` on mismatch).
 - [x] Stale lease reclaim with configurable timeout (`TARDIGRADE_WORKER_LEASE_TIMEOUT_SECS`).
 - [x] Runtime metrics API (`GET /metrics`) with:

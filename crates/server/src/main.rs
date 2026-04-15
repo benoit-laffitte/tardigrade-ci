@@ -2,7 +2,7 @@ use anyhow::{Result, anyhow};
 use std::sync::Arc;
 use std::time::Duration;
 use tardigrade_api::{ApiState, build_router};
-use tardigrade_scheduler::RedisScheduler;
+use tardigrade_scheduler::{FileBackedScheduler, InMemoryScheduler, PostgresScheduler, RedisScheduler};
 use tardigrade_storage::{InMemoryStorage, PostgresStorage, Storage};
 use tokio::net::TcpListener;
 use tracing::{info, warn};
@@ -14,7 +14,7 @@ mod runtime;
 
 use config::{RuntimeMode, load_runtime_mode_from_config};
 use dashboard::{WEB_ROOT_ENV_VAR, mount_dashboard_assets, resolve_web_root};
-use runtime::{FILE_BACKED_PROD_DEPRECATION_TARGET, shutdown_signal};
+use runtime::shutdown_signal;
 
 /// Parses an environment variable as bool and warns when the value is invalid.
 fn parse_env_bool(
@@ -78,6 +78,9 @@ struct QueueConfig {
     redis_url: Option<String>,
     redis_prefix: String,
     queue_file: Option<String>,
+    scheduler_backend: Option<String>,
+    scheduler_database_url: Option<String>,
+    scheduler_namespace: String,
 }
 
 impl QueueConfig {
@@ -87,11 +90,40 @@ impl QueueConfig {
             std::env::var("TARDIGRADE_REDIS_PREFIX").unwrap_or_else(|_| "tardigrade".to_string());
         let redis_url = std::env::var("TARDIGRADE_REDIS_URL").ok();
         let queue_file = std::env::var("TARDIGRADE_QUEUE_FILE").ok();
+        let scheduler_backend = std::env::var("TARDIGRADE_SCHEDULER_BACKEND").ok();
+        let scheduler_database_url = std::env::var("TARDIGRADE_SCHEDULER_DATABASE_URL").ok();
+        let scheduler_namespace = std::env::var("TARDIGRADE_SCHEDULER_NAMESPACE")
+            .unwrap_or_else(|_| "tardigrade".to_string());
 
         Self {
             redis_url,
             redis_prefix,
             queue_file,
+            scheduler_backend,
+            scheduler_database_url,
+            scheduler_namespace,
+        }
+    }
+}
+
+/// Enumerates supported scheduler backend implementations.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum SchedulerBackend {
+    InMemory,
+    File,
+    Redis,
+    Postgres,
+}
+
+impl SchedulerBackend {
+    /// Parses backend identifiers from environment variables.
+    fn parse(raw: &str) -> Option<Self> {
+        match raw.to_ascii_lowercase().as_str() {
+            "in-memory" | "in_memory" | "inmemory" => Some(Self::InMemory),
+            "file" => Some(Self::File),
+            "redis" => Some(Self::Redis),
+            "postgres" | "postgresql" => Some(Self::Postgres),
+            _ => None,
         }
     }
 }
@@ -171,42 +203,92 @@ async fn build_storage(
 /// Builds the scheduler backend selected by runtime mode.
 fn build_scheduler(
     runtime_mode: RuntimeMode,
-    redis_url: Option<&str>,
-    redis_prefix: &str,
-) -> Result<Arc<dyn tardigrade_scheduler::Scheduler + Send + Sync>> {
-    let scheduler: Arc<dyn tardigrade_scheduler::Scheduler + Send + Sync> = match runtime_mode {
-        RuntimeMode::Prod => {
-            let redis_url =
-                redis_url.ok_or_else(|| anyhow!("prod mode requires TARDIGRADE_REDIS_URL"))?;
-            info!(redis_prefix = %redis_prefix, "using redis-backed scheduler (prod mode)");
-            Arc::new(RedisScheduler::open(redis_url, redis_prefix)?)
-        }
-        RuntimeMode::Dev => match redis_url {
-            // Dev mode fallback chain is intentionally Redis -> in-memory.
-            Some(redis_url) => {
-                info!(redis_prefix = %redis_prefix, "using redis-backed scheduler (dev mode)");
-                Arc::new(RedisScheduler::open(redis_url, redis_prefix)?)
+    queue: &QueueConfig,
+    storage_database_url: Option<&str>,
+) -> Result<(
+    Arc<dyn tardigrade_scheduler::Scheduler + Send + Sync>,
+    SchedulerBackend,
+)> {
+    let configured_backend = queue
+        .scheduler_backend
+        .as_deref()
+        .map(|raw| {
+            SchedulerBackend::parse(raw).ok_or_else(|| {
+                anyhow!(
+                    "invalid TARDIGRADE_SCHEDULER_BACKEND value: {raw} (expected one of: in-memory, file, redis, postgres)"
+                )
+            })
+        })
+        .transpose()?;
+
+    let selected_backend = match configured_backend {
+        Some(backend) => backend,
+        None => match runtime_mode {
+            RuntimeMode::Prod => SchedulerBackend::Redis,
+            RuntimeMode::Dev => {
+                if queue.redis_url.is_some() {
+                    SchedulerBackend::Redis
+                } else {
+                    SchedulerBackend::InMemory
+                }
             }
-            None => Arc::new(tardigrade_scheduler::InMemoryScheduler::default()),
         },
     };
 
-    Ok(scheduler)
+    let scheduler: Arc<dyn tardigrade_scheduler::Scheduler + Send + Sync> =
+        match selected_backend {
+            SchedulerBackend::InMemory => {
+                info!("using in-memory scheduler");
+                Arc::new(InMemoryScheduler::default())
+            }
+            SchedulerBackend::File => {
+                let queue_file = queue
+                    .queue_file
+                    .as_deref()
+                    .ok_or_else(|| anyhow!("file scheduler requires TARDIGRADE_QUEUE_FILE"))?;
+                info!(queue_file = %queue_file, "using file-backed scheduler");
+                Arc::new(FileBackedScheduler::open(queue_file)?)
+            }
+            SchedulerBackend::Redis => {
+                let redis_url = queue.redis_url.as_deref().ok_or_else(|| {
+                    anyhow!("redis scheduler requires TARDIGRADE_REDIS_URL")
+                })?;
+                let redis_prefix = queue.redis_prefix.as_str();
+                info!(redis_prefix = %redis_prefix, "using redis-backed scheduler");
+                Arc::new(RedisScheduler::open(redis_url, redis_prefix)?)
+            }
+            SchedulerBackend::Postgres => {
+                let database_url = queue
+                    .scheduler_database_url
+                    .as_deref()
+                    .or(storage_database_url)
+                    .ok_or_else(|| {
+                        anyhow!(
+                            "postgres scheduler requires TARDIGRADE_SCHEDULER_DATABASE_URL or TARDIGRADE_DATABASE_URL"
+                        )
+                    })?;
+                let namespace = queue.scheduler_namespace.as_str();
+                info!(namespace = %namespace, "using postgres-backed scheduler");
+                Arc::new(PostgresScheduler::open(database_url, namespace)?)
+            }
+        };
+
+    Ok((scheduler, selected_backend))
 }
 
-/// Logs queue file deprecation notices with mode-specific messaging.
-fn log_queue_file_deprecation(queue_file: Option<&str>, runtime_mode: RuntimeMode) {
+/// Logs queue file usage hints when a queue file path is present.
+fn log_queue_file_usage(queue_file: Option<&str>, selected_backend: SchedulerBackend) {
     if let Some(path) = queue_file {
-        if runtime_mode != RuntimeMode::Dev {
+        if selected_backend == SchedulerBackend::File {
+            info!(queue_file = %path, "queue file configured for file-backed scheduler");
+        } else {
             warn!(
                 queue_file = %path,
-                sunset_target = FILE_BACKED_PROD_DEPRECATION_TARGET,
-                "TARDIGRADE_QUEUE_FILE is deprecated outside dev mode and ignored",
+                selected_backend = ?selected_backend,
+                "TARDIGRADE_QUEUE_FILE is set but only used by file scheduler backend"
             );
-        } else {
-            warn!(queue_file = %path, "TARDIGRADE_QUEUE_FILE is deprecated and ignored in dev mode");
         }
-    }
+    };
 }
 
 /// Starts SCM polling only when enabled in runtime configuration.
@@ -251,15 +333,14 @@ async fn main() -> Result<()> {
         web_root_env_var = WEB_ROOT_ENV_VAR,
         "dashboard web asset root resolved"
     );
-    log_queue_file_deprecation(queue.queue_file.as_deref(), runtime_mode);
 
     // Share one storage backend across request handlers through an Arc trait object.
     let storage = build_storage(runtime_mode, database_url.as_deref()).await?;
 
     // Same pattern for the scheduler: runtime decides concrete impl, API keeps trait abstraction.
-    let redis_prefix = queue.redis_prefix.as_str();
-    let redis_url = queue.redis_url.as_deref();
-    let scheduler = build_scheduler(runtime_mode, redis_url, redis_prefix)?;
+    let (scheduler, selected_scheduler_backend) =
+        build_scheduler(runtime_mode, &queue, database_url.as_deref())?;
+    log_queue_file_usage(queue.queue_file.as_deref(), selected_scheduler_backend);
     let run_embedded_worker = has_embedded_worker;
     let state = ApiState::with_components_and_mode(
         service_name.clone(),
