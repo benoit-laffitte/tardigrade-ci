@@ -6,6 +6,9 @@ use std::sync::{
     atomic::{AtomicUsize, Ordering},
 };
 use std::time::{Duration, Instant};
+use tardigrade_api::{ApiState, build_router};
+use tardigrade_scheduler::InMemoryScheduler;
+use tardigrade_storage::InMemoryStorage;
 use tokio::net::TcpListener;
 use tokio::task::JoinHandle;
 use uuid::Uuid;
@@ -39,6 +42,9 @@ const DEFAULT_ITERATIONS: usize = 200;
 /// Default number of warmup cycles per scenario.
 const DEFAULT_WARMUP: usize = 25;
 
+/// Default worker fanout used by concurrent benchmark scenarios.
+const DEFAULT_WORKERS: usize = 8;
+
 /// Holds immutable state shared by the local benchmark GraphQL server.
 #[derive(Debug)]
 struct BenchServerState {
@@ -67,27 +73,100 @@ async fn main() -> Result<()> {
     let args: Vec<String> = std::env::args().collect();
     let iterations = parse_usize_flag(&args, "--iterations", DEFAULT_ITERATIONS);
     let warmup = parse_usize_flag(&args, "--warmup", DEFAULT_WARMUP);
+    let workers = parse_usize_flag(&args, "--workers", DEFAULT_WORKERS).max(1);
 
-    let server = spawn_bench_server().await?;
+    let mock_server = spawn_mock_bench_server().await?;
 
-    let http1 = run_scenario(
-        "http1",
-        benchmark_config(&server.server_url, false, false),
+    let mock_http1_seq = run_scenario(
+        "mock-http1-seq",
+        benchmark_config(&mock_server.server_url, false, false),
         iterations,
         warmup,
     )
     .await?;
-    let http2 = run_scenario(
-        "http2-h2c",
-        benchmark_config(&server.server_url, true, true),
+    let mock_http2_seq = run_scenario(
+        "mock-http2-h2c-seq",
+        benchmark_config(&mock_server.server_url, true, true),
         iterations,
         warmup,
     )
     .await?;
 
-    print_summary(&http1, &http2);
+    let mock_http1_conc = run_scenario_concurrent(
+        "mock-http1-conc",
+        benchmark_config(&mock_server.server_url, false, false),
+        iterations,
+        warmup,
+        workers,
+    )
+    .await?;
+    let mock_http2_conc = run_scenario_concurrent(
+        "mock-http2-h2c-conc",
+        benchmark_config(&mock_server.server_url, true, true),
+        iterations,
+        warmup,
+        workers,
+    )
+    .await?;
 
-    server.task.abort();
+    mock_server.task.abort();
+
+    let real_server = spawn_real_bench_server().await?;
+    seed_real_server_builds(&real_server.server_url, iterations + warmup).await?;
+    let real_http1_seq = run_scenario(
+        "real-http1-seq",
+        benchmark_config(&real_server.server_url, false, false),
+        iterations,
+        warmup,
+    )
+    .await?;
+
+    seed_real_server_builds(&real_server.server_url, iterations + warmup).await?;
+    let real_http2_seq = run_scenario(
+        "real-http2-h2c-seq",
+        benchmark_config(&real_server.server_url, true, true),
+        iterations,
+        warmup,
+    )
+    .await?;
+
+    seed_real_server_builds(&real_server.server_url, iterations + warmup).await?;
+    let real_http1_conc = run_scenario_concurrent(
+        "real-http1-conc",
+        benchmark_config(&real_server.server_url, false, false),
+        iterations,
+        warmup,
+        workers,
+    )
+    .await?;
+
+    seed_real_server_builds(&real_server.server_url, iterations + warmup).await?;
+    let real_http2_conc = run_scenario_concurrent(
+        "real-http2-h2c-conc",
+        benchmark_config(&real_server.server_url, true, true),
+        iterations,
+        warmup,
+        workers,
+    )
+    .await?;
+
+    print_table(&[
+        &mock_http1_seq,
+        &mock_http2_seq,
+        &mock_http1_conc,
+        &mock_http2_conc,
+        &real_http1_seq,
+        &real_http2_seq,
+        &real_http1_conc,
+        &real_http2_conc,
+    ]);
+
+    print_pair_delta("mock-seq", &mock_http1_seq, &mock_http2_seq);
+    print_pair_delta("mock-conc", &mock_http1_conc, &mock_http2_conc);
+    print_pair_delta("real-seq", &real_http1_seq, &real_http2_seq);
+    print_pair_delta("real-conc", &real_http1_conc, &real_http2_conc);
+
+    real_server.task.abort();
     Ok(())
 }
 
@@ -118,7 +197,7 @@ fn benchmark_config(
 }
 
 /// Spawns one local Axum server implementing the minimal worker GraphQL contract.
-async fn spawn_bench_server() -> Result<BenchServer> {
+async fn spawn_mock_bench_server() -> Result<BenchServer> {
     let listener = TcpListener::bind("127.0.0.1:0").await?;
     let addr = listener.local_addr()?;
     let state = Arc::new(BenchServerState {
@@ -130,6 +209,28 @@ async fn spawn_bench_server() -> Result<BenchServer> {
     let app = Router::new()
         .route("/graphql", post(graphql_handler))
         .with_state(state);
+
+    let task = tokio::spawn(async move {
+        let _ = axum::serve(listener, app).await;
+    });
+
+    Ok(BenchServer {
+        server_url: format!("http://{addr}"),
+        task,
+    })
+}
+
+/// Spawns one local real API server using the production router and in-memory state.
+async fn spawn_real_bench_server() -> Result<BenchServer> {
+    let listener = TcpListener::bind("127.0.0.1:0").await?;
+    let addr = listener.local_addr()?;
+    let state = ApiState::with_components_and_mode(
+        "transport-bench",
+        Arc::new(InMemoryStorage::default()),
+        Arc::new(InMemoryScheduler::default()),
+        false,
+    );
+    let app = build_router(state);
 
     let task = tokio::spawn(async move {
         let _ = axum::serve(listener, app).await;
@@ -226,6 +327,70 @@ async fn run_scenario(
     })
 }
 
+/// Runs one warmup+measurement scenario with concurrent workers.
+async fn run_scenario_concurrent(
+    label: &'static str,
+    config: WorkerConfig,
+    iterations: usize,
+    warmup: usize,
+    workers: usize,
+) -> Result<ScenarioResult> {
+    let graphql_url = format!("{}/graphql", config.server_url);
+
+    let warmup_started = Instant::now();
+    run_concurrent_cycles(&config, &graphql_url, warmup, workers).await?;
+    let _warmup_total = warmup_started.elapsed();
+
+    let started = Instant::now();
+    run_concurrent_cycles(&config, &graphql_url, iterations, workers).await?;
+    let measured_total = started.elapsed();
+
+    // Concurrent scenario keeps aggregate timing as one sample per scenario run.
+    Ok(ScenarioResult {
+        label,
+        cycles: iterations,
+        total: measured_total,
+        samples: vec![measured_total],
+    })
+}
+
+/// Distributes cycles across worker tasks and executes claim/complete in parallel.
+async fn run_concurrent_cycles(
+    config: &WorkerConfig,
+    graphql_url: &str,
+    cycles: usize,
+    workers: usize,
+) -> Result<()> {
+    let mut handles = Vec::with_capacity(workers);
+    let base = cycles / workers;
+    let extra = cycles % workers;
+
+    for index in 0..workers {
+        let per_worker_cycles = base + usize::from(index < extra);
+        if per_worker_cycles == 0 {
+            continue;
+        }
+
+        let worker_id = format!("{}-{index}", config.worker_id);
+        let cfg = config.clone();
+        let url = graphql_url.to_string();
+
+        handles.push(tokio::spawn(async move {
+            let api = HttpWorkerApi::from_config(&cfg)?;
+            for _ in 0..per_worker_cycles {
+                run_cycle(&api, &url, &worker_id).await?;
+            }
+            Result::<(), anyhow::Error>::Ok(())
+        }));
+    }
+
+    for handle in handles {
+        handle.await??;
+    }
+
+    Ok(())
+}
+
 /// Executes one full worker claim then complete roundtrip against the benchmark server.
 async fn run_cycle(api: &HttpWorkerApi, graphql_url: &str, worker_id: &str) -> Result<()> {
     let build = api
@@ -246,34 +411,39 @@ async fn run_cycle(api: &HttpWorkerApi, graphql_url: &str, worker_id: &str) -> R
 }
 
 /// Prints aggregate statistics and a relative average-latency delta between protocols.
-fn print_summary(http1: &ScenarioResult, http2: &ScenarioResult) {
-    println!(
-        "label,total_ms,avg_ms,p50_ms,p95_ms,ops_per_sec,cycles\n{},{:.3},{:.3},{:.3},{:.3},{:.2},{}\n{},{:.3},{:.3},{:.3},{:.3},{:.2},{}",
-        http1.label,
-        duration_ms(http1.total),
-        duration_ms(average_duration(&http1.samples)),
-        duration_ms(percentile_duration(&http1.samples, 0.50)),
-        duration_ms(percentile_duration(&http1.samples, 0.95)),
-        operations_per_sec(http1),
-        http1.cycles,
-        http2.label,
-        duration_ms(http2.total),
-        duration_ms(average_duration(&http2.samples)),
-        duration_ms(percentile_duration(&http2.samples, 0.50)),
-        duration_ms(percentile_duration(&http2.samples, 0.95)),
-        operations_per_sec(http2),
-        http2.cycles,
-    );
+fn print_table(results: &[&ScenarioResult]) {
+    println!("label,total_ms,avg_ms,p50_ms,p95_ms,ops_per_sec,cycles");
+    for result in results {
+        println!(
+            "{},{:.3},{:.3},{:.3},{:.3},{:.2},{}",
+            result.label,
+            duration_ms(result.total),
+            duration_ms(average_duration(&result.samples)),
+            duration_ms(percentile_duration(&result.samples, 0.50)),
+            duration_ms(percentile_duration(&result.samples, 0.95)),
+            operations_per_sec(result),
+            result.cycles,
+        );
+    }
+}
 
+/// Prints relative average-latency delta between two protocol variants.
+fn print_pair_delta(scope: &str, http1: &ScenarioResult, http2: &ScenarioResult) {
+    println!(
+        "relative_delta_avg_ms_percent[{scope}],{:.2}",
+        relative_delta_percent(http1, http2)
+    );
+}
+
+/// Returns relative average-latency delta between the two scenarios.
+fn relative_delta_percent(http1: &ScenarioResult, http2: &ScenarioResult) -> f64 {
     let http1_avg = duration_ms(average_duration(&http1.samples));
     let http2_avg = duration_ms(average_duration(&http2.samples));
-    let delta_percent = if http1_avg > 0.0 {
+    if http1_avg > 0.0 {
         ((http1_avg - http2_avg) / http1_avg) * 100.0
     } else {
         0.0
-    };
-
-    println!("relative_delta_avg_ms_percent,{delta_percent:.2}");
+    }
 }
 
 /// Returns the mean duration across all recorded samples.
@@ -310,4 +480,57 @@ fn duration_ms(duration: Duration) -> f64 {
 fn nanos_to_duration(nanos: u128) -> Duration {
     let clamped = nanos.min(u128::from(u64::MAX));
     Duration::from_nanos(clamped as u64)
+}
+
+/// Seeds one real API server with enough queued builds for the benchmark scenario.
+async fn seed_real_server_builds(server_url: &str, count: usize) -> Result<()> {
+    let graphql_url = format!("{server_url}/graphql");
+    let bootstrap_client = reqwest::Client::new();
+
+    let create_payload = bootstrap_client
+        .post(&graphql_url)
+        .json(&json!({
+            "query": "mutation CreateJob($input: GqlCreateJobInput!) { create_job(input: $input) { id } }",
+            "variables": {
+                "input": {
+                    "name": "bench-job",
+                    "repository_url": "https://example.invalid/bench.git",
+                    "pipeline_path": "pipelines/bench.yml"
+                }
+            }
+        }))
+        .send()
+        .await?
+        .error_for_status()?
+        .json::<Value>()
+        .await?;
+
+    let job_id = create_payload
+        .get("data")
+        .and_then(|value| value.get("create_job"))
+        .and_then(|value| value.get("id"))
+        .and_then(Value::as_str)
+        .ok_or_else(|| anyhow!("failed to bootstrap benchmark job id"))?;
+
+    for _ in 0..count {
+        let payload = bootstrap_client
+            .post(&graphql_url)
+            .json(&json!({
+                "query": "mutation RunJob($jobId: ID!) { run_job(jobId: $jobId) { id } }",
+                "variables": {
+                    "jobId": job_id
+                }
+            }))
+            .send()
+            .await?
+            .error_for_status()?
+            .json::<Value>()
+            .await?;
+
+        if payload.get("errors").and_then(Value::as_array).is_some() {
+            return Err(anyhow!("failed to enqueue benchmark build"));
+        }
+    }
+
+    Ok(())
 }
