@@ -1,6 +1,6 @@
 # Tardigrade CI Admin UI Runbook
 
-## Scope
+## Portee
 
 This runbook defines step-by-step operational procedures for the Tardigrade admin UI:
 
@@ -15,32 +15,32 @@ This runbook defines step-by-step operational procedures for the Tardigrade admi
 
 The goal is to let operators handle day-2 tasks without API/CLI fallback.
 
-## Ownership and Review
+## Responsabilite et revue
 
 - Runbook owner: Platform Team
 - Operations reviewer: On-call Operations Lead
 - Update policy: mandatory update whenever UIADM workflows or API contracts change
 
-## Roles and Boundaries
+## Roles et limites
 
-- `viewer`: read-only troubleshooting views, no mutations
-- `operator`: operational actions (run/claim/complete), no sensitive policy/security writes
+- `viewer`: lecture seule troubleshooting views, no mutations
+- `operator`: operational actions (run/claim/complete), no sensitive policy/security ecritures
 - `admin`: full access including sensitive changes (webhook security, plugin unload, policy grants)
 
 Sensitive actions must be executed as `admin` and are recorded in the `Admin Activity` panel.
 
-## Secret Handling Rules
+## Regles de gestion des secrets
 
 - Keep webhook secrets masked unless actively validating value entry.
 - Never paste secrets into free-text logs.
 - Do not capture screenshots with visible secret values.
 - Do not copy raw secret values into tickets/chat; use masked form (`****`).
 
-## Environment Prerequisites
+## Prerequis environnementaux
 
 - Server running: `env -u https_proxy -u http_proxy -u PXY_FAB_FONC cargo run -p tardigrade-server`
 - Dashboard reachable: `http://127.0.0.1:8080/`
-- Staging data seeded with representative jobs/builds/workers/plugins before drill exercises.
+- Staging data seeded with representative jobs/builds/agents d execution/plugins before drill exercises.
 
 ## Playbook 1: SCM Webhook Security
 
@@ -96,7 +96,7 @@ Escalation:
 ## Playbook 3: Worker Control
 
 Intent:
-Diagnose worker execution and perform controlled claim/complete simulation.
+Diagnose agent d execution execution and perform controlled claim/complete simulation.
 
 UI path:
 `Tardigrade CI Console -> Worker Control`
@@ -254,7 +254,7 @@ Symptoms:
 - Completion returns conflict, ownership metrics increase.
 
 Immediate actions:
-1. Check worker ID and current claim owner context.
+1. Check agent d execution ID and current claim owner context.
 2. Retry claim before completion.
 3. Avoid parallel manual completions for same build.
 
@@ -299,13 +299,13 @@ After any admin mutation, verify:
 ## On-Call Severity Mapping
 
 - `SEV-1`: platform-wide trigger failure, queue blocked, or major security exposure.
-- `SEV-2`: partial trigger/worker degradation with customer-visible delay.
+- `SEV-2`: partial trigger/agent d execution degradation with customer-visible delay.
 - `SEV-3`: isolated repo/plugin issue with known workaround.
 - `SEV-4`: cosmetic UI issue with no operational risk.
 
 ## On-Call First Response Checklist
 
-1. Identify impacted scope (provider, repository, worker, plugin, context).
+1. Identify impacted scope (provider, repository, agent d execution, plugin, context).
 2. Capture current counters and filtered observability export.
 3. Capture relevant `Admin Activity` entries.
 4. Apply smallest reversible mitigation from playbooks.
@@ -317,7 +317,7 @@ After any admin mutation, verify:
 Each procedure must be rehearsed in staging with seeded demo scenarios.
 
 Minimum cadence:
-- Weekly: SCM webhook/polling and worker control drills.
+- Weekly: SCM webhook/polling and agent d execution control drills.
 - Bi-weekly: plugin lifecycle/policy drills.
 - Monthly: incident simulation for all five scenarios.
 

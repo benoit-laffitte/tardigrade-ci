@@ -1,6 +1,6 @@
 ## Tardigrade CI - Copilot Instructions
 
-### Project Context
+### Contexte du projet
 - Tardigrade CI is a Rust workspace for an open-source CI/CD platform.
 - Main crates and roles:
 	- `crates/server`: Axum server entry point, static web console.
@@ -8,11 +8,11 @@
 	- `crates/core`: domain entities (`JobDefinition`, `BuildRecord`, `JobStatus`).
 	- `crates/storage`: storage trait with in-memory implementation.
 	- `crates/scheduler`: scheduling trait with in-memory queue.
-	- `crates/executor`: worker execution abstraction/simulation.
+	- `crates/executor`: agent d execution execution abstraction/simulation.
 	- `crates/plugins`: plugin contract and registry.
 	- `crates/auth`: authentication primitives.
 
-### Current API Surface
+### Surface API actuelle
 - `GET /health`
 - `POST /jobs`
 - `GET /jobs`
@@ -20,13 +20,13 @@
 - `POST /builds/{id}/cancel`
 - `GET /builds`
 
-### Build, Test, and Run
+### Construire, tester et executer
 - Always use proxy-safe commands in this repository:
 	- `env -u https_proxy -u http_proxy -u PXY_FAB_FONC cargo test --workspace`
 	- `env -u https_proxy -u http_proxy -u PXY_FAB_FONC cargo run -p tardigrade-server`
 - Respect local Cargo registry overrides from `.cargo/config.toml` (workspace uses `cargo-public`).
 
-### Coding Expectations
+### Exigences de codage
 - Keep changes minimal, focused, and aligned with the current modular architecture.
 - Preserve existing public APIs unless a change request requires otherwise.
 - Add or update tests when behavior changes.
@@ -39,7 +39,7 @@
 	- Avoid redundant comments that repeat self-explanatory code.
 - each function, structure and test must be commented
 
-### Collaboration Guidelines
+### Lignes directrices de collaboration
 - Work through tasks systematically and report progress concisely.
 - Follow Rust and Axum best practices for error handling, async code, and type safety.
 - Keep this instructions file updated over time with major project directions and any development rules the team formally adopts.

@@ -12,28 +12,29 @@ This file is the delivery backlog derived from the current roadmap.
 
 ### Priority reminder (current)
 
-1. Epic 2 (`SCM-*`) for external trigger automation.
-2. Epic 3 (`PLUG-*`) for extension safety model.
-3. Epic 7 (`UIADM-*`) for product administration IHM coverage.
-4. Epic 6 (`REFAC-*`) for Rust source maintainability refactor.
-5. Reliability follow-ups (`REL-*`) as hardening milestones.
-6. Epic 0 (`INDUS-*`) hardening follow-ups.
-7. Epic 5 (`CLOUD-*`) cloud/container delivery track (deferred).
-8. Epic 8 (`UXREAL-*`) mockup-to-real-dashboard rollout.
+1. Epic 9 (`CORECI-*`) for core CI productization (control-plane correctness, real execution path, production hardening).
+2. Epic 2 (`SCM-*`) for external trigger automation.
+3. Epic 3 (`PLUG-*`) for extension safety model.
+4. Epic 7 (`UIADM-*`) for product administration IHM coverage.
+5. Epic 6 (`REFAC-*`) for Rust source maintainability refactor.
+6. Reliability follow-ups (`REL-*`) as hardening milestones.
+7. Epic 0 (`INDUS-*`) hardening follow-ups.
+8. Epic 5 (`CLOUD-*`) cloud/container delivery track (deferred).
+9. Epic 8 (`UXREAL-*`) mockup-to-real-dashboard rollout.
 
-Context update:
+Mise a jour du contexte:
 
 - Epic 1 (`DSL-*`) is complete.
 - Epic 1b (`TECH-*`) is complete.
 - Docker/cloud scope has been deferred and tracked under Epic 5 (`CLOUD-*`).
 - Multi-page UX mockup is available and tracked in `UX.md`; implementation is now phased under Epic 8 (`UXREAL-*`).
 
-Release note (2026-04-02):
+Note de version (2026-04-02):
 
 - Docker/container delivery artifacts and make module were intentionally removed from the active delivery surface.
 - Existing non-Docker Make entrypoints remain the canonical local/CI workflow while cloud scope is redesigned under Epic 5 (`CLOUD-*`).
 
-## Status legend
+## Legende des statuts
 
 - `[ ]` not started
 - `[-]` in progress
@@ -43,9 +44,9 @@ Release note (2026-04-02):
 
 ### Epic 0: Industrialization and build orchestration
 
-Goal: provide one consistent command surface to build/test/package the full project (Rust, Node, Docker).
+Objectif: provide one consistent command surface to build/test/package the full project (Rust, Node, Docker).
 
-Refinement decisions:
+Decisions d affinage:
 
 - MVP includes `make ci` from day one.
 - `bootstrap` remains Rust-only at this stage.
@@ -59,7 +60,7 @@ Refinement decisions:
 - [x] `INDUS-204` Add quality targets (`make lint`, `make fmt-check`, `make clippy`).
 - [x] `INDUS-205` Add test matrix targets: `make test-fast` (unit only) and `make test-all` (unit + integration).
 - [x] `INDUS-206` Add Node/dashboard targets (`make dashboard-lint`, `make dashboard-build`) through canonical root automation.
-- [ ] `INDUS-207` Add Docker targets for server/worker build + security scan.
+- [ ] `INDUS-207` Add Docker targets for server/agent d execution build + security scan.
 - [-] `INDUS-208` Add `make ci` as canonical local/CI aggregate target.
 - [-] `INDUS-209` Add discoverability target and docs (`make help` + README command matrix).
 - [x] `INDUS-210` Wire CI pipeline to call Make targets as canonical entrypoints.
@@ -70,7 +71,7 @@ Refinement decisions:
 - [x] `INDUS-215` Remove `crates/xtask` and switch dashboard automation to direct Make+npm workflow.
 - [x] `INDUS-216` Switch dashboard build output to `target/public` and enforce strict runtime + packaging consumption without legacy fallback.
 
-Definition of done:
+Definition de termine:
 
 - A new contributor can run one command to bootstrap and one command to run the full CI-equivalent flow.
 - CI and local developer workflows use the same Make entrypoints.
@@ -83,7 +84,7 @@ Current gap note (2026-04-02):
 
 ### Epic 1: Pipeline DSL (YAML) parser and validator
 
-Goal: make pipeline definitions explicit, validated, and versioned.
+Objectif: make pipeline definitions explicit, validated, and versioned.
 
 - [x] `DSL-01` Define pipeline schema (`version`, `stages`, `steps`, retry policy hooks).
 - [x] `DSL-02` Add YAML parser/validator crate integration (`serde_yaml` + structural validation).
@@ -92,7 +93,7 @@ Goal: make pipeline definitions explicit, validated, and versioned.
 - [x] `DSL-05` Add tests for valid/invalid DSL samples and edge cases.
 - [x] `DSL-06` Document DSL format with examples in docs/README.
 
-Definition of done:
+Definition de termine:
 
 - Pipeline file can be parsed and validated deterministically.
 - Invalid definitions return actionable errors.
@@ -100,7 +101,7 @@ Definition of done:
 
 ### Epic 1b: Multi-technology pipeline execution profiles
 
-Goal: make Tardigrade CI clearly usable for Rust, Python, Java, and other stacks with first-class examples and execution defaults.
+Objectif: make Tardigrade CI clearly usable for Rust, Python, Java, and other stacks with first-class examples and execution defaults.
 
 - [x] `TECH-01` Define technology profile model (language/runtime/build strategy metadata).
 - [x] `TECH-02` Provide built-in profile catalog for Rust, Python, Java, Node, and Go.
@@ -109,7 +110,7 @@ Goal: make Tardigrade CI clearly usable for Rust, Python, Java, and other stacks
 - [x] `TECH-05` Add end-to-end smoke matrix (at least Rust + Python + Java templates).
 - [x] `TECH-06` Document onboarding flow for adding a new stack profile.
 
-Definition of done:
+Definition de termine:
 
 - A user can bootstrap a valid pipeline quickly for at least Rust, Python, and Java.
 - Multi-stack behavior is documented with copy/paste-ready pipeline examples.
@@ -117,9 +118,9 @@ Definition of done:
 
 ### Epic 2: Webhook triggers and SCM polling
 
-Goal: trigger builds from SCM events and periodic repository checks.
+Objectif: trigger builds from SCM events and periodic repository checks.
 
-Refinement decisions (MVP):
+Decisions d affinage (MVP):
 
 - Delivery mode: webhook + polling in parallel.
 - First providers: GitHub and GitLab.
@@ -129,7 +130,7 @@ Refinement decisions (MVP):
 - Polling scope: branch polling by default (`main` / `master` + configured branches).
 - Ingestion failure behavior: return error, emit logs, emit metrics.
 
-Refinement outcome for `SCM-02` (2026-03-31):
+Resultat d affinage for `SCM-02` (2026-03-31):
 
 - Unified endpoint path: `/webhooks/scm`.
 - Secret source: per-repository secrets stored in persistence layer (database-backed model).
@@ -137,28 +138,28 @@ Refinement outcome for `SCM-02` (2026-03-31):
 - Replay defense: timestamp window set to 5 minutes.
 - Security scope for current step: implement signature verification and IP allowlist together.
 
-Refinement outcome for `SCM-04` (2026-03-31):
+Resultat d affinage for `SCM-04` (2026-03-31):
 
 - Target architecture: dedicated SCM polling service path (introduced with runtime loop support).
 - Default polling interval: 30 seconds per repository when configured accordingly.
 - Branch scope: all branches (provider adapters can later filter by branch policy).
 - Source of truth: polling configuration stored per repository in persistence layer.
 
-Refinement outcome for `SCM-05` (2026-03-31):
+Resultat d affinage for `SCM-05` (2026-03-31):
 
 - Primary dedup key: provider `event_id` when available in webhook headers.
 - Fallback dedup key: (`provider`, `repository`, `commit_sha`, `event_type`).
 - Idempotency window: in-memory TTL cache (default 3600s, configurable by env).
 - Duplicate behavior: accept webhook (`202`) but skip enqueue side effects.
 
-Refinement outcome for `SCM-06` (2026-03-31):
+Resultat d affinage for `SCM-06` (2026-03-31):
 
-- Webhook counters: received, accepted, rejected, duplicate.
+- Webhook counters: received, acceptee, rejected, duplicate.
 - Trigger activity counters: builds enqueued from SCM triggers.
 - Polling counters: tick count, repositories polled, builds enqueued by polling.
 - Exposure path: existing `/metrics` REST and GraphQL dashboard metrics projection.
 
-Refinement outcome for `SCM-07` (2026-03-31):
+Resultat d affinage for `SCM-07` (2026-03-31):
 
 - Coverage scope: webhook acceptance/rejection, dedup/idempotency, polling tick, and combined webhook+polling path.
 - Test level: API integration tests using in-memory state through HTTP routes.
@@ -168,13 +169,13 @@ Refinement outcome for `SCM-07` (2026-03-31):
 - [x] `SCM-01` Define trigger model (manual, webhook, polling).
 - [x] `SCM-02` Add webhook endpoint(s) with signature verification.
 - [x] `SCM-03` Implement provider adapters (GitHub/GitLab first).
-- [x] `SCM-04` Add SCM polling worker loop and configurable intervals.
+- [x] `SCM-04` Add SCM polling agent d execution loop and configurable intervals.
 - [x] `SCM-05` Add deduplication/idempotency for repeated webhook events.
 - [x] `SCM-06` Add observability events/metrics for trigger ingestion.
 - [x] `SCM-07` Add integration tests for webhook and polling flows.
 - [x] `SCM-08` Route dashboard SCM polling mutations through GraphQL and keep native webhook ingress on a dedicated server adapter.
 
-Definition of done:
+Definition de termine:
 
 - A push event can enqueue builds via webhook.
 - Polling can detect and trigger builds reliably.
@@ -183,28 +184,28 @@ Definition of done:
 
 ### Epic 3: Plugin loading and permissions model
 
-Goal: move from in-memory plugin registry to a controllable runtime plugin system.
+Objectif: move from in-memory plugin registry to a controllable runtime plugin system.
 
-Refinement outcome for `PLUG-01` (2026-03-31):
+Resultat d affinage for `PLUG-01` (2026-03-31):
 
 - Lifecycle states: `Loaded` -> `Initialized` -> `Unloaded`.
 - Lifecycle operations: explicit `load`, `init`, `execute`, `unload` methods in registry.
 - Compatibility: keep `register` as a backward-compatible alias to `load`.
 - Error semantics: typed errors for duplicate name, not found, invalid state, and execution failure.
 
-Refinement outcome for `PLUG-02` (2026-03-31):
+Resultat d affinage for `PLUG-02` (2026-03-31):
 
 - Discovery source: filesystem TOML manifest (`plugins.toml`) with `[[plugins]]` entries.
 - Entry schema: `name` + optional `enabled` (default `true`).
 - Loading strategy: registry reads manifest and asks caller factory to resolve plugin implementations by name.
 - Failure policy: fail on unreadable/invalid manifest or unknown plugin references.
 
-Refinement outcome for `PLUG-03` (2026-03-31):
+Resultat d affinage for `PLUG-03` (2026-03-31):
 
 - Capability taxonomy: `network`, `filesystem`, `secrets`, `runtime_hooks`.
 - Declaration sources: plugin implementation defaults + optional manifest override.
 - Registry metadata: normalized (sorted/deduplicated) capability list per loaded plugin.
-- Scope limit: model only in this step; policy enforcement is handled by `PLUG-04`.
+- Portee limit: model only in this step; policy enforcement is handled by `PLUG-04`.
 
 - [x] `PLUG-01` Define plugin lifecycle (`load`, `init`, `execute`, `unload`).
 - [x] `PLUG-02` Add plugin discovery/loading strategy (filesystem manifest first).
@@ -214,7 +215,7 @@ Refinement outcome for `PLUG-03` (2026-03-31):
 - [x] `PLUG-06` Add tests for duplicate names, denied capabilities, and load failures.
 - [x] `PLUG-07` Document plugin authoring and permission declaration.
 
-Definition of done:
+Definition de termine:
 
 - Plugins can be loaded from declared sources.
 - Permission checks are enforced before sensitive actions.
@@ -222,60 +223,60 @@ Definition of done:
 
 ### Epic 7: Product administration IHM coverage
 
-Goal: provide first-class administration UI for all operational features currently exposed only through API/GraphQL.
+Objectif: provide first-class administration UI for all operational features currently exposed only through API/GraphQL.
 
-Refinement decisions (MVP):
+Decisions d affinage (MVP):
 
 - Prioritize operator workflows over developer/debug-only tooling.
 - Reuse existing GraphQL dashboard snapshot/mutations when possible.
 - Any new admin action must provide visible success/error feedback in UI.
 - Security-sensitive actions require explicit confirmation UX and audit-friendly event messaging.
 
-Refinement outcome for `UIADM-01` (2026-04-02):
+Resultat d affinage for `UIADM-01` (2026-04-02):
 
 - UX scope: add a dedicated "SCM Webhook Security" admin panel in dashboard with repository, provider, secret, and IP allowlist form.
 - Primary actions: create/update one repository security config, clear form, and test payload helper (copy/paste headers checklist for provider setup).
 - Validation rules: reject empty repository/provider/secret in UI before submit; normalize allowlist as trimmed unique list.
 - Security UX: mask secret input by default, explicit reveal toggle, and confirmation prompt before overwriting an existing config.
 - Feedback model: show request outcome with clear status banner (`saved`, `invalid input`, `forbidden`, `internal error`) and append event in operator log feed.
-- API prerequisite: expose one admin write endpoint (or GraphQL mutation) that maps to existing `UpsertWebhookSecurityConfigRequest` state/service path.
+- API prerequisite: expose one admin ecriture endpoint (or GraphQL mutation) that maps to existing `UpsertWebhookSecurityConfigRequest` state/service path.
 - API compatibility note: current route surface exposes `/webhooks/scm` ingestion but does not yet expose a public admin route for webhook security upsert.
 - Test scope: dashboard integration tests for happy path save, invalid form submit, and server error surfacing.
 
-Refinement outcome for `UIADM-02` (2026-04-02):
+Resultat d affinage for `UIADM-02` (2026-04-02):
 
 - UX scope: add a dedicated "SCM Polling" admin panel with repository/provider selector, enable toggle, interval input, and branches editor.
 - Primary actions: save polling configuration, disable polling for a repository, and run one manual polling tick from UI.
 - Validation rules: repository required, provider required, interval must be integer > 0; branches input normalized to trimmed unique list.
-- Trigger UX: manual tick button returns immediate summary (`polled_repositories`, `enqueued_builds`) and writes one operator log line.
+- Trigger UX: manual tick button returns immediate summary (`polled_repositories`, `enqueued_builds`) and ecritures one operator log line.
 - Safety UX: confirmation prompt before disabling an active polling configuration.
 - API mapping: use existing `/scm/polling/configs` upsert and `/scm/polling/tick` trigger endpoints.
 - State visibility: surface last known polling config values and last tick result in panel for operator verification.
 - Test scope: dashboard integration tests for config save/update, validation errors, disable flow, and manual tick outcome rendering.
 
-Refinement outcome for `UIADM-03` (2026-04-02):
+Resultat d affinage for `UIADM-03` (2026-04-02):
 
-- UX scope: add a "Worker Control" panel focused on day-2 diagnostics and manual worker-flow simulation.
-- Primary actions: list workers, claim next build for a selected worker id, and complete a claimed build with `success`/`failed` + optional log line.
-- Validation rules: worker id required for claim/complete simulation; build id required for completion action; status limited to known enum values.
-- Diagnostic UX: display claim result (`no build` vs `build id`), completion result, active builds count, last seen timestamp, and worker status.
+- UX scope: add a "Worker Control" panel focused on day-2 diagnostics and manual agent d execution-flow simulation.
+- Primary actions: list agents d execution, claim next build for a selected agent d execution id, and complete a claimed build with `success`/`failed` + optional log line.
+- Validation rules: agent d execution id required for claim/complete simulation; build id required for completion action; status limited to known enum values.
+- Diagnostic UX: display claim result (`no build` vs `build id`), completion result, active builds count, last seen timestamp, and agent d execution status.
 - Error UX: expose ownership conflict (`409`) and invalid transitions as explicit operator-friendly messages.
-- API mapping: use existing `/workers`, `/workers/{worker_id}/claim`, and `/workers/{worker_id}/builds/{id}/complete` endpoints.
+- API mapping: use existing `/agents d execution`, `/agents d execution/{worker_id}/claim`, and `/agents d execution/{worker_id}/builds/{id}/complete` endpoints.
 - Safety UX: completion simulation requires explicit confirmation when status is `failed` to avoid accidental retries/dead-letter side effects.
 - Test scope: dashboard integration tests for claim success/empty queue, completion success, completion conflict, and error banner rendering.
 
-Refinement outcome for `UIADM-04` (2026-04-02):
+Resultat d affinage for `UIADM-04` (2026-04-02):
 
 - UX scope: add a "Plugin Administration" panel with inventory table (name, lifecycle state, declared capabilities, source manifest entry).
 - Primary actions: load plugin, initialize plugin, execute plugin (diagnostic), unload plugin, and refresh plugin state snapshot.
 - Visibility requirements: show per-plugin lifecycle (`Loaded`, `Initialized`, `Unloaded`) and normalized capability set.
 - Error UX: map lifecycle errors (`duplicate`, `invalid state`, `not found`, `execution failed`, `execution panicked`) to actionable operator messages.
 - Safety UX: require explicit confirmation before `unload` and before diagnostic `execute` on production-tagged contexts.
-- API prerequisite: expose plugin registry read/write admin endpoints or GraphQL fields/mutations (list plugins, lifecycle actions, capability metadata).
+- API prerequisite: expose plugin registry read/ecriture admin endpoints or GraphQL fields/mutations (list plugins, lifecycle actions, capability metadata).
 - API compatibility note: plugin registry capabilities currently exist in `crates/plugins`, but API/dashboard layer does not yet expose plugin inventory/lifecycle operations.
 - Test scope: dashboard integration tests for lifecycle happy path (load->init->execute->unload), invalid transition error rendering, and panic-safe execution reporting.
 
-Refinement outcome for `UIADM-05` (2026-04-02):
+Resultat d affinage for `UIADM-05` (2026-04-02):
 
 - UX scope: add a "Plugin Policy" panel to manage granted capabilities per execution context (global default + optional context override).
 - Primary actions: edit granted capabilities set, preview effective permissions for a plugin, and run a dry-run authorization check before execution.
@@ -287,10 +288,10 @@ Refinement outcome for `UIADM-05` (2026-04-02):
 - API compatibility note: runtime authorization exists through `execute_authorized`, but there is no API-managed policy store/context mapping yet.
 - Test scope: dashboard integration tests for allow path, deny path with missing capability highlight, and secrets-grant confirmation flow.
 
-Refinement outcome for `UIADM-06` (2026-04-02):
+Resultat d affinage for `UIADM-06` (2026-04-02):
 
 - UX scope: add a "Webhook Security Operations" panel focused on signature/replay/allowlist health and rejection diagnostics.
-- Primary views: webhook counters (`received`, `accepted`, `rejected`, `duplicate`) plus recent rejection reasons timeline.
+- Primary views: webhook counters (`received`, `acceptee`, `rejected`, `duplicate`) plus recent rejection reasons timeline.
 - Primary actions: filter by provider/repository, inspect last failed webhook summary, and copy remediation checklist for provider configuration.
 - Security diagnostics: classify failures into missing/invalid signature, replay-window violation, and forbidden IP/repository/provider.
 - Metric mapping: reuse existing SCM counters from runtime metrics endpoint as top-level KPI cards.
@@ -299,7 +300,7 @@ Refinement outcome for `UIADM-06` (2026-04-02):
 - UX guardrails: redact secrets/tokens from any displayed payload snippets and keep IP visibility limited to diagnostics context.
 - Test scope: dashboard integration tests for counters rendering, rejection reason drill-down fallback states, and no-secret-leak assertions in UI logs.
 
-Refinement outcome for `UIADM-07` (2026-04-02):
+Resultat d affinage for `UIADM-07` (2026-04-02):
 
 - UX scope: add an "Advanced Observability" panel combining runtime counters, live event stream, and troubleshooting filters in one operator workspace.
 - Primary views: time-sliced counters dashboard + searchable event timeline (`kind`, `severity`, `message`, `job_id`, `build_id`, `worker_id`, `at`).
@@ -311,7 +312,7 @@ Refinement outcome for `UIADM-07` (2026-04-02):
 - API compatibility note: current event model carries enough identifiers for drill-down, but there is no persisted event history API yet.
 - Test scope: dashboard integration tests for filter behavior, export payload schema, stream reconnect fallback, and stale-data indicator rendering.
 
-Refinement outcome for `UIADM-08` (2026-04-02):
+Resultat d affinage for `UIADM-08` (2026-04-02):
 
 - UX scope: harden all administration panels with role-aware visibility, explicit destructive-action confirmations, and audit-trail surfacing.
 - Access model: define baseline admin roles (`viewer`, `operator`, `admin`) with progressively broader action permissions.
@@ -324,12 +325,12 @@ Refinement outcome for `UIADM-08` (2026-04-02):
 - Accessibility requirement: confirmation dialogs and permission-state controls must be keyboard navigable and screen-reader labeled.
 - Test scope: dashboard integration tests for role gating matrix, confirmation bypass prevention, audit entry emission, and accessibility smoke checks.
 
-Refinement outcome for `UIADM-09` (2026-04-02):
+Resultat d affinage for `UIADM-09` (2026-04-02):
 
-- Test scope: establish an end-to-end admin UI suite covering SCM, workers, plugin administration, policy deny/allow flows, and observability panels.
-- Priority journeys: webhook security save, polling config + manual tick, worker claim/complete simulation, plugin lifecycle actions, and policy deny feedback.
+- Test scope: establish an end-to-end admin UI suite covering SCM, agents d execution, plugin administration, policy deny/allow flows, and observability panels.
+- Priority journeys: webhook security save, polling config + manual tick, agent d execution claim/complete simulation, plugin lifecycle actions, and policy deny feedback.
 - Negative coverage: invalid forms, unauthorized role attempts, ownership conflict paths, missing capability deny, and stream disconnect fallback.
-- Data strategy: deterministic fixture seed for jobs/builds/workers/plugins to keep snapshots and assertions stable.
+- Data strategy: deterministic fixture seed for jobs/builds/agents d execution/plugins to keep snapshots and assertions stable.
 - Environment strategy: run E2E against in-memory backend profile by default, with optional extended run against postgres+redis profile.
 - Tooling expectation: use one browser automation stack with trace/video capture enabled on failures for triage.
 - CI gate: admin E2E suite required on pull requests touching dashboard/admin/API contract surfaces.
@@ -337,11 +338,11 @@ Refinement outcome for `UIADM-09` (2026-04-02):
 - API prerequisite: expose test-only or seed endpoints/helpers to preload admin scenarios without brittle UI bootstrapping.
 - Exit criteria: all UIADM panels have at least one happy path and one failure path automated in CI.
 
-Refinement outcome for `UIADM-10` (2026-04-02):
+Resultat d affinage for `UIADM-10` (2026-04-02):
 
-- Documentation scope: publish an operations-oriented admin UI runbook with step-by-step procedures for SCM, workers, plugins, policy, and observability panels.
+- Documentation scope: publish an operations-oriented admin UI runbook with step-by-step procedures for SCM, agents d execution, plugins, policy, and observability panels.
 - Playbook structure: each playbook must include intent, prerequisites, exact UI path, expected signals, rollback path, and escalation contacts.
-- Incident scenarios: include at least webhook rejection storm, polling stall, worker ownership conflicts, plugin execution panic, and policy deny regressions.
+- Incident scenarios: include at least webhook rejection storm, polling stall, agent d execution ownership conflicts, plugin execution panic, and policy deny regressions.
 - Security chapter: document secret-handling rules, role boundaries, and audit-trail review process for sensitive actions.
 - Verification chapter: provide post-action validation checklist using metrics/event panels and expected counter deltas.
 - On-call chapter: define triage severity mapping and first-response checklist for admin UI alerts.
@@ -352,7 +353,7 @@ Refinement outcome for `UIADM-10` (2026-04-02):
 
 - [-] `UIADM-01` Add SCM webhook administration panel (repository/provider/secret/allowlist management).
 - [-] `UIADM-02` Add SCM polling administration panel (enable/disable, intervals, branches, manual tick).
-- [-] `UIADM-03` Add worker control panel (manual claim/complete simulation and ownership diagnostics).
+- [-] `UIADM-03` Add agent d execution control panel (manual claim/complete simulation and ownership diagnostics).
 - [-] `UIADM-04` Add plugin administration panel (manifest entries, lifecycle state, declared capabilities).
 - [-] `UIADM-05` Add plugin policy panel (granted capabilities per execution context with deny feedback).
 - [-] `UIADM-06` Add webhook/security operations panel (signature status, replay-window rejects, allowlist diagnostics).
@@ -361,20 +362,20 @@ Refinement outcome for `UIADM-10` (2026-04-02):
 - [-] `UIADM-09` Add end-to-end UI integration tests for critical admin workflows.
 - [-] `UIADM-10` Document administration playbooks and UI runbook for operations teams.
 
-Definition of done:
+Definition de termine:
 
 - Every critical product administration workflow has a discoverable UI path.
 - API-only operations needed for day-2 operations are reachable from dashboard/admin screens.
 - Admin actions expose clear outcomes, errors, and operational telemetry in the interface.
-- UI integration tests cover SCM, plugin, and worker administration happy/error paths.
+- UI integration tests cover SCM, plugin, and agent d execution administration happy/error paths.
 
 ### Epic 4: Redis-first production scheduler mode
 
 ### Epic 8: Mockup-to-real dashboard rollout
 
-Goal: transform the validated multi-page mockup into the real dashboard with phased delivery aligned to currently exposed API functions.
+Objectif: transform the validated multi-page mockup into the real dashboard with phased delivery aligned to currently exposed API functions.
 
-Refinement decisions:
+Decisions d affinage:
 
 - Phase 1 strictly targets current API surface: `GET /health`, `POST /jobs`, `GET /jobs`, `POST /jobs/{id}/run`, `POST /builds/{id}/cancel`, `GET /builds`.
 - Non-covered pages/actions stay visible as roadmap but non-blocking and explicitly tagged.
@@ -385,27 +386,27 @@ Refinement decisions:
 - [x] `UXREAL-02` Add explicit API coverage indicator by page (`full`, `partial`, `roadmap`) in real dashboard.
 - [x] `UXREAL-03` Deliver Pipelines page on real API functions (`POST /jobs`, `GET /jobs`, `POST /jobs/{id}/run`, `GET /builds`, `POST /builds/{id}/cancel`).
 - [x] `UXREAL-04` Deliver Overview page with metrics strictly derivable from `GET /health`, `GET /jobs`, `GET /builds`.
-- [-] `UXREAL-05` Implement Workers page once worker runtime endpoints are finalized in public API surface.
+- [-] `UXREAL-05` Implement Workers page once agent d execution runtime endpoints are finalized in public API surface.
 - [-] `UXREAL-06` Implement SCM Security page once webhook-security admin endpoints are finalized.
 - [ ] `UXREAL-07` Implement Plugins & Policy page once plugin registry/policy endpoints are finalized.
 - [ ] `UXREAL-08` Implement Observability page once durable observability query contracts are finalized.
 - [ ] `UXREAL-09` Implement Administration page once role/audit APIs are finalized.
 - [x] `UXREAL-10` Add frontend integration tests for page navigation, API coverage gating, and Pipelines/Overview flows.
 - [x] `UXREAL-11` Serve dashboard static assets dynamically from filesystem (`TARDIGRADE_WEB_ROOT`) to allow runtime web updates without rebuilding the Rust binary.
-- [x] `UXREAL-12` Decouple dashboard monolith view into reusable widgets (`DashboardHeader`, `SideNav`, implemented-page widgets, roadmap widgets, and console widget).
+- [x] `UXREAL-12` Decouple dashboard monolith view into reusable widgets (`DashboardHeader`, `SideNav`, implementee-page widgets, roadmap widgets, and console widget).
 - [x] `UXREAL-13` Extract dashboard business logic from `App.tsx` into dedicated controller hook (`useDashboardController`) while keeping widget composition in `App.tsx`.
 - [x] `UXREAL-14` Split dashboard page rendering into one TSX component per sidenav entry (`Pipelines`, `Overview`, `Workers`, `SCM Security`, `Plugins & Policy`, `Observability`, `Administration`).
 - [x] `UXREAL-15` Remove obsolete aggregate page widgets and centralize page prop types under `dashboard/src/pages/types.ts`.
 - [x] `UXREAL-16` Split `useDashboardController` into dedicated hook support modules (`dashboardTypes`, `dashboardConstants`, `dashboardUtils`, derived-state hook, runtime-effects hook) to keep controller orchestration focused.
-- [x] `UXREAL-17` Extract SCM/plugins/workers roadmap callbacks into `useDashboardRoadmapActions` to keep `useDashboardController` focused on core orchestration and API-backed pages.
+- [x] `UXREAL-17` Extract SCM/plugins/agents d execution roadmap callbacks into `useDashboardRoadmapActions` to keep `useDashboardController` focused on core orchestration and API-backed pages.
 - [x] `UXREAL-18` Split roadmap callbacks by domain into `useDashboardScmActions`, `useDashboardPluginActions`, and `useDashboardWorkerActions`, while preserving `useDashboardRoadmapActions` as an aggregator.
 - [x] `UXREAL-19` Make SCM/Plugins/Workers autonomous by moving each domain's state ownership to dedicated domain hooks (`useDashboardScmDomain`, `useDashboardPluginDomain`, `useDashboardWorkerDomain`) and keeping `useDashboardController` as orchestration-only.
 - [x] `UXREAL-20` Wire roadmap pages to domain objects (`workerDomain`, `scmDomain`, `pluginDomain`) so UI components consume autonomous domain signals/actions instead of static placeholders.
-- [x] `UXREAL-21` Move domain-hook ownership into pages (`Workers`, `SCM Security`, `Plugins & Policy`), remove `keepRoadmapReferences`, and reorganize hook files by domain folders (`core`, `scm`, `plugins`, `workers`) with filenames that no longer use the `useDashboard*` pattern.
+- [x] `UXREAL-21` Move domain-hook ownership into pages (`Workers`, `SCM Security`, `Plugins & Policy`), remove `keepRoadmapReferences`, and reorganize hook files by domain folders (`core`, `scm`, `plugins`, `agents d execution`) with filenames that no longer use the `useDashboard*` pattern.
 - [x] `UXREAL-22` Remove remaining `useDashboard*` symbol names across core/domain hooks and consumers (`useController`, `useDerivedState`, `useRuntimeEffects`, `useScmDomain`, `usePluginDomain`, `useWorkerDomain`) to align naming with the new domain-oriented folder architecture.
-- [ ] `UXREAL-23` Refine and deliver the first API-backed Workers vertical (fleet list, claim, complete, conflict/errors, success feedback) on top of existing `/workers*` endpoints and convert Workers page coverage from `roadmap` to `partial`.
+- [ ] `UXREAL-23` Refine and deliver the first API-backed Workers vertical (fleet list, claim, complete, conflict/errors, success feedback) on top of existing `/agents d execution*` endpoints and convert Workers page coverage from `roadmap` to `partial`.
 
-Definition of done:
+Definition de termine:
 
 - Real dashboard navigation matches validated 7-page IA from `UX.md`.
 - Pages backed by current API are fully actionable and tested.
@@ -414,7 +415,7 @@ Definition of done:
 
 ### Epic 4: Redis-first production scheduler mode
 
-Goal: make Redis the default production scheduler path and reduce file-backed usage to local/dev only.
+Objectif: make Redis the default production scheduler path and reduce file-backed usage to local/dev only.
 
 - [x] `SCHED-01` Add explicit runtime mode selection (`dev`, `prod`).
 - [x] `SCHED-02` Enforce Redis scheduler for production mode.
@@ -424,25 +425,25 @@ Goal: make Redis the default production scheduler path and reduce file-backed us
 - [x] `SCHED-06` Add migration notes for users still relying on file-backed queue in clustered runs.
 - [x] `SCHED-07` Add explicit scheduler backend selection with PostgreSQL backend support (`in-memory`, `file`, `redis`, `postgres`).
 
-Definition of done:
+Definition de termine:
 
 - Production mode cannot start without Redis configuration.
 - Local developer workflow remains simple with non-Redis fallback.
 
 ### Epic 5: Cloud/container delivery track (deferred)
 
-Goal: reintroduce and harden container/cloud delivery later, after current SCM and platform priorities.
+Objectif: reintroduce and harden container/cloud delivery later, after current SCM and platform priorities.
 
 Status: deferred for a later planning cycle.
 
-- [ ] `CLOUD-01` Reintroduce reproducible Linux container builds for server and worker.
+- [ ] `CLOUD-01` Reintroduce reproducible Linux container builds for server and agent d execution.
 - [ ] `CLOUD-02` Define image tagging/versioning policy for local, CI, and release channels.
 - [ ] `CLOUD-03` Add registry publish flow and pull authentication model.
-- [ ] `CLOUD-04` Rebuild Kubernetes baseline manifests (server=1, worker=2, dependencies).
-- [ ] `CLOUD-05` Add cloud smoke checks (health endpoints, worker registration, basic pipeline run).
+- [ ] `CLOUD-04` Rebuild Kubernetes baseline manifests (server=1, agent d execution=2, dependencies).
+- [ ] `CLOUD-05` Add cloud smoke checks (health endpoints, agent d execution registration, basic pipeline run).
 - [ ] `CLOUD-06` Document deployment and troubleshooting runbook (TLS, pull failures, architecture mismatch).
 
-Definition of done:
+Definition de termine:
 
 - Tardigrade can be deployed from published images to a Kubernetes cluster with documented steps.
 - CI validates image/runtime architecture compatibility before deployment.
@@ -450,17 +451,17 @@ Definition of done:
 
 ### Epic 6: Rust source maintainability (one object per file)
 
-Goal: improve maintainability by enforcing one primary Rust object per `.rs` source file.
+Objectif: improve maintainability by enforcing one primary Rust object per `.rs` source file.
 
-Refinement outcome for `REFAC-01` (2026-03-31):
+Resultat d affinage for `REFAC-01` (2026-03-31):
 
-- Scope target (at refinement date): all workspace Rust crates (`api`, `auth`, `core`, `executor`, `plugins`, `scheduler`, `server`, `storage`, `worker`, `xtask`).
+- Portee target (at refinement date): all workspace Rust crates (`api`, `auth`, `core`, `executor`, `plugins`, `scheduler`, `server`, `storage`, `agent d execution`, `xtask`).
 - Object granularity: one primary object per file (`struct`, `enum`, `trait`, or type-focused module API surface).
 - `impl` policy: keep `impl` blocks in the same file as their primary object.
 - Module layout: split large `lib.rs`/`main.rs` internals into dedicated module files while keeping crate public APIs stable.
 - API compatibility policy: strict backward compatibility for public APIs during the refactor.
 - Migration strategy: incremental by crate, with compile + tests passing at each step.
-- Execution order (at refinement date): `core` -> `storage` -> `scheduler` -> `plugins` -> `executor` -> `api` -> `server` -> `worker` -> `auth` -> `xtask`.
+- Execution order (at refinement date): `core` -> `storage` -> `scheduler` -> `plugins` -> `executor` -> `api` -> `server` -> `agent d execution` -> `auth` -> `xtask`.
 - Safety constraint: no behavior changes in this epic, only structure and readability improvements.
 - Validation gate: run `cargo test --workspace` on every `REFAC-*` ticket.
 - Naming convention: file names use `snake_case` and match their primary object (example: `definition.rs` for `PipelineDefinition` inside `pipeline/`).
@@ -476,12 +477,12 @@ Refinement outcome for `REFAC-01` (2026-03-31):
 - [x] `REFAC-03` Refactor `crates/storage` and `crates/scheduler` into one-object-per-file module structure.
 - [x] `REFAC-04` Refactor `crates/plugins` and `crates/executor` into one-object-per-file module structure.
 - [x] `REFAC-05` Refactor `crates/api` and `crates/server` into one-object-per-file module structure.
-- [x] `REFAC-06` Refactor `crates/worker`, `crates/auth`, and `crates/xtask` into one-object-per-file module structure (historical; `xtask` removed later in `INDUS-215`).
+- [x] `REFAC-06` Refactor `crates/agent d execution`, `crates/auth`, and `crates/xtask` into one-object-per-file module structure (historical; `xtask` removed later in `INDUS-215`).
 - [x] `REFAC-07` Validate workspace stability (`cargo test --workspace`) and update docs/contribution guidelines.
 - [x] `REFAC-08` Replace file-specific dashboard handlers with one directory-backed web asset service rooted at `TARDIGRADE_WEB_ROOT` / `target/public`.
-- [x] `REFAC-09` Remove the Rust REST control-plane surface and consolidate server and worker interactions on GraphQL only.
+- [x] `REFAC-09` Remove the Rust REST control-plane surface and consolidate server and agent d execution interactions on GraphQL only.
 
-Definition of done:
+Definition de termine:
 
 - Rust source modules follow one-primary-object-per-file convention across targeted crates.
 - Rust source layout is organized by domain folders instead of filename prefixes.
@@ -490,9 +491,114 @@ Definition of done:
 - Tests are colocated near modules in dedicated test files, with root tests reserved for cross-module coverage.
 - Contribution docs describe the convention for future changes.
 
+### Epic 9: Core CI productization (Rust control-plane reality)
+
+Objectif: close the gap between current orchestration capabilities and a production-ready CI platform with real execution, durable reliability state, and secure runtime behavior.
+
+Portee:
+
+- API contract coherence and authentication enforcement.
+- Queue/build lifecycle correctness (run, claim, complete, cancel).
+- Real pipeline execution replacing simulated agent d execution/executor success flow.
+- Durable persistence for reliability and operational telemetry state.
+- Production hardening for multi-instance deployments.
+
+Resultat d affinage for Phase 1 (2026-04-16):
+
+- Canonical API contract must be explicit and consistently mounted (GraphQL-first baseline).
+- Authentication is mandatory for ecriture operations before expanding operator surface.
+- Cancel behavior must include queue/lease cleanup semantics, not only build state mutation.
+- Runtime correctness must be validated by end-to-end tests covering server and agent d execution flows.
+
+Resultat d affinage for Phase 2 (2026-04-16):
+
+- Execution path must consume real pipeline definition content, not validation-only metadata.
+- Worker completion payload must be derived from real step execution outcomes.
+- Build logs and failure reasons must become first-class persisted artifacts for operator diagnostics.
+
+Resultat d affinage for Phase 3 (2026-04-16):
+
+- Distributed scheduler semantics require idempotent completion and robust lease reclaim behavior.
+- Critical runtime telemetry (retry/dead-letter/rejections) must survive process restarts.
+- Plugin hooks must be integrated into build flow with policy-enforced safety boundaries.
+
+- [ ] `CORECI-01` Formalize and document canonical public API contract (GraphQL-first) and remove or remount any orphan handler surfaces.
+- [ ] `CORECI-02` Add authentication middleware and enforce API key checks on all ecriture mutations/routes.
+- [ ] `CORECI-03` Fix cancel semantics to deschedule queued builds and release/resolve in-flight ownership safely.
+- [ ] `CORECI-04` Add end-to-end integration tests for health/jobs/run/cancel/build-list/agent d execution-claim/agent d execution-complete on mounted runtime routes.
+- [ ] `CORECI-05` Persist retry counters and dead-letter registry in storage backends (in-memory + postgres parity).
+- [ ] `CORECI-06` Persist webhook rejection history and reliability counters required for operational diagnostics.
+- [ ] `CORECI-07` Extend job/build model to bind executable pipeline content or revision reference used at run time.
+- [ ] `CORECI-08` Replace simulated executor path with real pipeline step execution (checkout + command stages + exit-code propagation).
+- [ ] `CORECI-09` Upgrade agent d execution completion flow to submit real execution status, logs, and structured failure reasons.
+- [ ] `CORECI-10` Add persisted build logs/artifact metadata and expose them in API query surfaces.
+- [ ] `CORECI-11` Apply branch/provider filtering in SCM webhook and polling enqueue paths using stored SCM config rules.
+- [ ] `CORECI-12` Harden distributed queue semantics (idempotent completion, duplicate suppression, lease timeout tuning) across Redis/Postgres schedulers.
+- [ ] `CORECI-13` Integrate plugin pre-run/post-run hooks into execution flow with capability policy enforcement and failure containment.
+- [ ] `CORECI-14` Add resilience/load test suite for multi-instance server+agent d execution topology on Redis/Postgres backends.
+- [ ] `CORECI-15` Harden webhook trust path (signature canonicalization, replay diagnostics, proxy boundary guidance) and validate through integration tests.
+
+Sprint planning breakdown (CORECI foundation slice: `CORECI-01` to `CORECI-04`):
+
+- Sprint target window: 2 weeks.
+- Capacity assumption: 1 to 2 Rust contributors + QA support on integration tests.
+- Estimation scale: Story points (`SP`) and ideal engineering days (`d`).
+
+`CORECI-01` (5 SP, ~3d) - Canonical API contract and route surface cleanup
+
+- [ ] `CORECI-01a` Inventory mounted routes vs orphan handlers and produce route matrix (`SP:1`, `~0.5d`).
+- [ ] `CORECI-01b` Publish canonical contract note (GraphQL-first + webhook adapter exception) in API docs (`SP:1`, `~0.5d`).
+- [ ] `CORECI-01c` Remove or explicitly quarantine orphan REST handlers from runtime path (`SP:2`, `~1.5d`).
+- [ ] `CORECI-01d` Add contract regression tests asserting mounted route surface (`SP:1`, `~0.5d`).
+- Exit criteria: running server exposes only documented control-plane routes and test suite fails on accidental route drift.
+
+`CORECI-02` (8 SP, ~4d) - Authentication enforcement for ecriture operations
+
+- [ ] `CORECI-02a` Define auth policy matrix for read vs ecriture GraphQL operations (`SP:1`, `~0.5d`).
+- [ ] `CORECI-02b` Add API key extraction/verification middleware layer in server routing (`SP:2`, `~1d`).
+- [ ] `CORECI-02c` Enforce auth guard on mutating GraphQL operations and webhook admin ecritures (`SP:3`, `~1.5d`).
+- [ ] `CORECI-02d` Add unauthorized/forbidden integration tests and operator-facing error mapping (`SP:2`, `~1d`).
+- Exit criteria: all ecriture operations reject missing/invalid API key and existing lecture seule behavior remains intact.
+
+`CORECI-03` (5 SP, ~3d) - Correct cancel semantics with scheduler cleanup
+
+- [ ] `CORECI-03a` Specify cancel state transitions for queued, running, and already terminal builds (`SP:1`, `~0.5d`).
+- [ ] `CORECI-03b` Implement scheduler-side deschedule/release behavior in service flow (`SP:2`, `~1.5d`).
+- [ ] `CORECI-03c` Update Redis/Postgres/InMemory scheduler contracts where needed for deterministic cancellation (`SP:1`, `~0.5d`).
+- [ ] `CORECI-03d` Add tests for cancel-before-claim, cancel-while-running, and race with completion (`SP:1`, `~0.5d`).
+- Exit criteria: canceled builds are not re-claimed, ownership is resolved safely, and race behavior is deterministic.
+
+`CORECI-04` (8 SP, ~5d) - End-to-end runtime flow tests
+
+- [ ] `CORECI-04a` Create deterministic E2E test fixture for server + agent d execution GraphQL flows (`SP:2`, `~1d`).
+- [ ] `CORECI-04b` Cover happy path: health, create job, run job, agent d execution claim, agent d execution complete, list builds (`SP:2`, `~1.5d`).
+- [ ] `CORECI-04c` Cover failure path: auth denied, ownership conflict, cancel interactions, dead-letter entry (`SP:3`, `~2d`).
+- [ ] `CORECI-04d` Add CI lane integration for these E2E tests with stable proxy-safe command invocation (`SP:1`, `~0.5d`).
+- Exit criteria: CI enforces end-to-end runtime correctness on mounted routes and agent d execution flow critical paths.
+
+Dependency map (execution order recommendation):
+
+- `CORECI-01` -> prerequisite for `CORECI-02` and `CORECI-04` (stable contract surface).
+- `CORECI-02` -> prerequisite for auth scenarios in `CORECI-04`.
+- `CORECI-03` can start after `CORECI-01` and should complete before finalizing `CORECI-04c` race/cancel scenarios.
+
+Sprint acceptance gate for this slice:
+
+- `CORECI-01` to `CORECI-04` completed or explicitly re-estimated with documented blocker.
+- `env -u https_proxy -u http_proxy -u PXY_FAB_FONC cargo test --workspace` remains green.
+- Updated docs/backlog/UX trace remain synchronized with delivered contract behavior.
+
+Definition de termine:
+
+- CI runs execute real pipeline steps and no longer rely on simulated success-only agent d execution behavior.
+- Queue/build lifecycle is correct and observable for run/claim/complete/cancel across supported scheduler backends.
+- Auth is enforced for mutating operations in all supported runtime modes.
+- Reliability and security telemetry needed for operations are durable and queryable after restarts.
+- Multi-instance resilience tests pass for supported production backends.
+
 ## Queue reliability follow-ups
 
-### Completed
+### Termine
 
 - [x] Redis-backed queue scheduler (distributed claim/ack/requeue).
 - [x] PostgreSQL-backed queue scheduler (durable claim/ack/requeue with namespace isolation).
@@ -507,29 +613,30 @@ Definition of done:
 - [x] Real-time event stream (`GET /events`) wired to dashboard live feed.
 - [x] Dead-letter flow for builds exceeding max retries (`GET /dead-letter-builds`) visible in dashboard.
 
-### Remaining
+### Restant
 
 - [ ] `REL-01` Retry policy refinement (configurable caps per job profile).
 - [ ] `REL-02` Metrics persistence/export (Prometheus/OpenTelemetry).
 - [-] `REL-03` Worker transport optimization on HTTP/2 first (connection reuse, multiplexing, and latency/throughput benchmarks for claim/complete flows).
-- [ ] `REL-04` Add optional gRPC worker transport mode behind feature/config flag, while keeping GraphQL/HTTP as default control-plane path.
+- [ ] `REL-04` Add optional gRPC agent d execution transport mode behind feature/config flag, while keeping GraphQL/HTTP as default control-plane path.
 
-Refinement outcome for transport strategy (2026-04-16):
+Resultat d affinage for transport strategy (2026-04-16):
 
-- Decision: prioritize HTTP/2 for current worker-server communication.
+- Decision: prioritize HTTP/2 for current agent d execution-server communication.
 - gRPC is postponed and tracked as an optional transport mode, not as a mandatory migration.
-- Compatibility constraint: keep existing GraphQL worker flow operational during and after transport improvements.
-- Implementation update (2026-04-16): worker HTTP client now supports HTTP/2 tuning (pool/timeout/keepalive) with optional h2c prior-knowledge mode via environment configuration.
-- Benchmark update (2026-04-16): add a reproducible local claim/complete benchmark harness comparing HTTP/1 and HTTP/2 worker transport paths.
+- Compatibility constraint: keep existing GraphQL agent d execution flow operational during and after transport improvements.
+- Implementation update (2026-04-16): agent d execution HTTP client now supports HTTP/2 tuning (pool/timeout/keepalive) with optional h2c prior-knowledge mode via environment configuration.
+- Benchmark update (2026-04-16): add a reproducible local claim/complete benchmark harness comparing HTTP/1 and HTTP/2 agent d execution transport paths.
 - Report update (2026-04-16): the first local sequential loopback benchmark shows HTTP/1 ahead of h2c for tiny GraphQL payloads; keep REL-03 in progress until concurrent and real-server measurements are added.
 
-## Suggested delivery order
+## Ordre de livraison suggere
 
-1. Epic 2 (`SCM-*`) for external trigger automation.
-2. Epic 3 (`PLUG-*`) for extension safety model.
-3. Epic 7 (`UIADM-*`) for product administration IHM coverage.
-4. Epic 6 (`REFAC-*`) for Rust source maintainability refactor.
-5. Reliability follow-ups (`REL-*`) as hardening milestones.
-6. Epic 0 (`INDUS-*`) hardening follow-ups.
-7. Epic 5 (`CLOUD-*`) cloud/container delivery track (deferred).
-8. Epic 8 (`UXREAL-*`) mockup-to-real-dashboard rollout.
+1. Epic 9 (`CORECI-*`) for core CI productization.
+2. Epic 2 (`SCM-*`) for external trigger automation.
+3. Epic 3 (`PLUG-*`) for extension safety model.
+4. Epic 7 (`UIADM-*`) for product administration IHM coverage.
+5. Epic 6 (`REFAC-*`) for Rust source maintainability refactor.
+6. Reliability follow-ups (`REL-*`) as hardening milestones.
+7. Epic 0 (`INDUS-*`) hardening follow-ups.
+8. Epic 5 (`CLOUD-*`) cloud/container delivery track (deferred).
+9. Epic 8 (`UXREAL-*`) mockup-to-real-dashboard rollout.

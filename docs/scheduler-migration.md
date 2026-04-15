@@ -45,7 +45,7 @@ This guide covers migration from legacy runtime fallback behavior to explicit sc
 5. Run smoke checks:
    - `GET /live`
    - `GET /ready`
-   - `GET /workers`
+   - `GET /agents d execution`
 6. Execute one end-to-end job run and verify claim/complete flow.
 
 ## Compose migration

@@ -12,27 +12,27 @@ Chaque decision doit etre ajoutee ici avant implementation (ou juste apres en ca
 
 ## Statuts
 
-- proposed: idee formulee, pas encore validee.
-- accepted: decision validee et a executer.
-- implemented: decision livree dans l'interface.
-- deprecated: decision abandonnee ou remplacee.
+- proposee: idee formulee, pas encore validee.
+- acceptee: decision validee et a executer.
+- implementee: decision livree dans l'interface.
+- depreciee: decision abandonnee ou remplacee.
 
 ---
 
-## UX-022 - Strategie transport worker: HTTP/2 d'abord, gRPC en option
+## UX-022 - Strategie transport agent d execution: HTTP/2 d'abord, gRPC en option
 
 - Date: 2026-04-16
-- Statut: accepted
-- Owner: Engineering
+- Statut: acceptee
+- Responsable: Engineering
 - Type: integration contract
 
 ### Contexte
 
-La communication serveur-worker est un point critique de latence et de debit. La decision produit/technique est de prioriser une optimisation incrementale sans rupture du contrat actuel.
+La communication serveur-agent d execution est un point critique de latence et de debit. La decision produit/technique est de prioriser une optimisation incrementale sans rupture du contrat actuel.
 
 ### Decision
 
-- Prioriser HTTP/2 sur le canal serveur-worker existant.
+- Prioriser HTTP/2 sur le canal serveur-agent d execution existant.
 - Conserver le flux GraphQL actuel comme chemin principal.
 - Reporter gRPC a une phase ulterieure et le cadrer comme mode optionnel activable par configuration.
 
@@ -43,22 +43,78 @@ La communication serveur-worker est un point critique de latence et de debit. La
 
 ### Risques
 
-- Le polling worker reste present tant qu'un modele push/streaming n'est pas introduit.
+- Le polling agent d execution reste present tant qu'un modele push/streaming n'est pas introduit.
 - Le mode gRPC optionnel ajoutera une complexite d'exploitation lors de son introduction.
 
 ### Mise en oeuvre 2026-04-16
 
-- Le worker construit un client HTTP partage avec tuning explicite: timeout de requete, pool idle, max connexions idle, TCP keepalive et mode HTTP/2.
+- Le agent d execution construit un client HTTP partage avec tuning explicite: timeout de requete, pool idle, max connexions idle, TCP keepalive et mode HTTP/2.
 - Le mode h2c (HTTP/2 prior knowledge) est activable par variable d'environnement pour les deploiements cleartext internes.
-- Les mutations GraphQL worker existantes sont conservees (pas de rupture de contrat).
+- Les mutations GraphQL agent d execution existantes sont conservees (pas de rupture de contrat).
+
+---
+
+## UX-023 - Priorisation produit: Core CI d'abord
+
+- Date: 2026-04-16
+- Statut: acceptee
+- Responsable: Engineering
+- Type: product prioritization
+
+### Contexte
+
+L'analyse des sources Rust montre un controle-plane deja structure (jobs/builds/queue/agents d execution/SCM) mais encore des limitations produit majeures: execution de build simulee, etat de fiabilite partiellement volatile et securite/auth incomplète sur le chemin de mutation.
+
+### Decision
+
+- Ajouter un epic de priorite haute dedie a la productisation du coeur CI.
+- Sequencer la livraison en trois phases: correction du control-plane, execution reelle des pipelines, puis durcissement production multi-instance.
+- Conserver les chantiers UX/admin en parallele, mais derriere la correction du socle d'execution.
+
+### Impact attendu
+
+- Alignement entre promesse produit CI et comportement runtime effectif.
+- Reduction des risques operationnels avant extension de surface fonctionnelle.
+
+### Evidence (tracking)
+
+- Backlog de reference: [BACKLOG.md](../BACKLOG.md)
+
+---
+
+## UX-024 - Decoupage sprint de la fondation Core CI
+
+- Date: 2026-04-16
+- Statut: acceptee
+- Responsable: Engineering
+- Type: delivery planning
+
+### Contexte
+
+La priorisation Core CI etant actee, il faut une mise en execution immediate et mesurable sur les quatre premiers tickets critiques (contrat API, auth ecriture path, cancel semantics, E2E runtime).
+
+### Decision
+
+- Decomposer `CORECI-01` a `CORECI-04` en sous-taches sprint-ready avec estimations `SP` et `jours ideaux`.
+- Poser un ordre de dependances explicite pour limiter les blocages entre contrat API, auth et scenarios E2E.
+- Definir une porte de sortie sprint unique: flux runtime critique couvert en tests et commande workspace `cargo test --workspace` au vert.
+
+### Impact attendu
+
+- Meilleure predictibilite de livraison sur le socle CI.
+- Reduction des regressions via criteres d'acceptation testables des la phase fondation.
+
+### Evidence (tracking)
+
+- Decoupage backlog: [BACKLOG.md](../BACKLOG.md)
 
 ---
 
 ## UX-004 - Surface API unifiee en GraphQL uniquement
 
 - Date: 2026-04-15
-- Statut: accepted
-- Owner: Engineering
+- Statut: acceptee
+- Responsable: Engineering
 - Type: integration contract
 
 ### Contexte
@@ -68,8 +124,8 @@ Demande utilisateur explicite: supprimer toute surface REST cote Rust et ne cons
 ### Decision
 
 - Le controle plane Rust n'expose plus que `/graphql`.
-- Les operations jobs, builds, workers, plugins, policy et SCM passent par queries et mutations GraphQL.
-- Le worker Rust parle le meme endpoint GraphQL que les clients d'administration.
+- Les operations jobs, builds, agents d execution, plugins, policy et SCM passent par queries et mutations GraphQL.
+- Le agent d execution Rust parle le meme endpoint GraphQL que les clients d'administration.
 
 ### Impact attendu
 
@@ -91,8 +147,8 @@ Demande utilisateur explicite: supprimer toute surface REST cote Rust et ne cons
 ## UX-001 - Analyse de la situation actuelle (baseline)
 
 - Date: 2026-04-03
-- Statut: accepted
-- Owner: Copilot + equipe produit
+- Statut: acceptee
+- Responsable: Copilot + equipe produit
 - Type: diagnostic
 
 ### Contexte
@@ -126,7 +182,7 @@ Objectif: etablir une baseline partagee avant toute refonte UX.
 
 - Ecran unique et grille principale: [dashboard/src/App.tsx](dashboard/src/App.tsx#L1692)
 - Selecteur de role dans le header: [dashboard/src/App.tsx](dashboard/src/App.tsx#L1673)
-- Concentration des panels metier (jobs/builds/workers/ops/plugins/observabilite): [dashboard/src/App.tsx](dashboard/src/App.tsx#L1693)
+- Concentration des panels metier (jobs/builds/agents d execution/ops/plugins/observabilite): [dashboard/src/App.tsx](dashboard/src/App.tsx#L1693)
 - Journal global: [dashboard/src/App.tsx](dashboard/src/App.tsx#L2442)
 
 ### Decision
@@ -149,7 +205,7 @@ La refonte UX doit commencer par une re-architecture de l'information (IA) avant
 - Augmentation temporaire de complexite d'implementation.
 - Besoin de migration progressive pour ne pas desorienter les utilisateurs existants.
 
-### Next
+### Suite
 
 - Cadrer les hypotheses de refonte sous forme d'options comparees (Mission Control vs Workflow guide vs UI par role).
 - Definir les criteres de choix (time-to-action, taux d'erreur, effort technique, maintenabilite).
@@ -159,8 +215,8 @@ La refonte UX doit commencer par une re-architecture de l'information (IA) avant
 ## UX-002 - Navigation multi-pages par vision metier CI
 
 - Date: 2026-04-03
-- Statut: accepted
-- Owner: Product + Design + Engineering
+- Statut: acceptee
+- Responsable: Product + Design + Engineering
 - Type: information architecture
 
 ### Contexte
@@ -199,7 +255,7 @@ Page d'entree prioritaire: Pipelines (Delivery).
 - KPI globaux, incidents, builds en erreur, flux live resumee.
 
 3. Workers (execution)
-- Capacite workers, claim/complete, saturation, troubleshooting execution.
+- Capacite agents d execution, claim/complete, saturation, troubleshooting execution.
 
 4. SCM Security (confiance integration)
 - Webhook security, allowlist IP, polling SCM, diagnostics rejections.
@@ -228,7 +284,7 @@ Page d'entree prioritaire: Pipelines (Delivery).
 - Effort initial de refactor navigation et routage.
 - Besoin de definir des responsabilites claires par page pour eviter les doublons.
 
-### Next
+### Suite
 
 - Produire une matrice Action -> Page (source de verite IA).
 - Definir le menu de navigation (ordre, labels, badges d'alerte) avec Delivery en premier.
@@ -239,8 +295,8 @@ Page d'entree prioritaire: Pipelines (Delivery).
 ## UX-003 - Page Administration dediee
 
 - Date: 2026-04-03
-- Statut: accepted
-- Owner: Product + Design + Engineering
+- Statut: acceptee
+- Responsable: Product + Design + Engineering
 - Type: information architecture
 
 ### Contexte
@@ -293,7 +349,7 @@ La cible IA passe a 7 pages racines:
 
 - Navigation supplementaire pour certains cas mixtes (ops + admin).
 
-### Next
+### Suite
 
 - Mettre a jour la matrice Action -> Page avec un bloc Administration explicite.
 - Definir les garde-fous UX admin (confirmations, niveau de criticite, traces).
@@ -303,8 +359,8 @@ La cible IA passe a 7 pages racines:
 ## UX-004 - Structure IHM cible + maquettes navigables
 
 - Date: 2026-04-03
-- Statut: accepted
-- Owner: Product + Design + Engineering
+- Statut: acceptee
+- Responsable: Product + Design + Engineering
 - Type: interaction design
 
 ### Contexte
@@ -333,8 +389,8 @@ Chaque page doit respecter la meme structure d'ecran:
 ## UX-005 - Distribution package structure for operators
 
 - Date: 2026-04-09
-- Statut: implemented
-- Owner: Engineering
+- Statut: implementee
+- Responsable: Engineering
 - Type: delivery operations
 
 ### Contexte
@@ -372,8 +428,8 @@ Automatisation ajoutee via `make package-platform-zips`.
 ## UX-006 - Dashboard access decoupled from crate paths in release zips
 
 - Date: 2026-04-09
-- Statut: implemented
-- Owner: Engineering
+- Statut: implementee
+- Responsable: Engineering
 - Type: delivery operations
 
 ### Contexte
@@ -406,8 +462,8 @@ Standardiser l'acces dashboard dans chaque zip:
 ## UX-008 - Dashboard web resources served as one directory-backed runtime surface
 
 - Date: 2026-04-10
-- Statut: implemented
-- Owner: Engineering
+- Statut: implementee
+- Responsable: Engineering
 - Type: runtime delivery
 
 ### Contexte
@@ -443,8 +499,8 @@ Servir le dashboard comme une seule surface de ressources montee sur un dossier 
 ## UX-007 - Dashboard source tree relocated to repository root
 
 - Date: 2026-04-09
-- Statut: implemented
-- Owner: Engineering
+- Statut: implementee
+- Responsable: Engineering
 - Type: information architecture
 
 ### Contexte
@@ -496,7 +552,7 @@ Relocaliser les sources dashboard vers `dashboard/` a la racine, puis aligner to
 - Validation rapide du decoupage fonctionnel avant implementation React multi-pages.
 - Reduction du risque de refactor inutile sur [dashboard/src/App.tsx](dashboard/src/App.tsx).
 
-### Next
+### Suite
 
 - Faire une revue metier de la maquette (par role: viewer, operator, admin).
 - Finaliser la matrice Action -> Page et les composants partages.
@@ -507,8 +563,8 @@ Relocaliser les sources dashboard vers `dashboard/` a la racine, puis aligner to
 ## UX-005 - Atelier maquette et tracabilite des changements
 
 - Date: 2026-04-03
-- Statut: accepted
-- Owner: Product + Design + Engineering
+- Statut: acceptee
+- Responsable: Product + Design + Engineering
 - Type: process
 
 ### Contexte
@@ -522,7 +578,7 @@ Tous les changements de maquette seront traces dans un journal d'iterations uniq
 Regles d'entree pour chaque changement:
 
 - ID: M-XXX (incremental)
-- Statut: proposed | accepted | implemented | deprecated
+- Statut: proposee | acceptee | implementee | depreciee
 - Portee: quelle page ou composant est impacte
 - Pourquoi: probleme utilisateur vise
 - Changement: description concrete avant/apres
@@ -533,7 +589,7 @@ Regles d'entree pour chaque changement:
 #### M-001 - Lancement de l'atelier maquette trace
 
 - Date: 2026-04-03
-- Statut: implemented
+- Statut: implementee
 - Portee: gouvernance des iterations
 - Pourquoi: garantir un historique clair des decisions et eviter les retours arriere implicites
 - Changement: creation d'un cadre formel de suivi des modifications maquette
@@ -543,7 +599,7 @@ Regles d'entree pour chaque changement:
 #### M-002 - Pipelines: liste builds recents/en cours + detail build interactif
 
 - Date: 2026-04-03
-- Statut: implemented
+- Statut: implementee
 - Portee: page 1 Pipelines (Delivery)
 - Pourquoi: permettre un diagnostic rapide d'un run sans quitter la page de delivery
 - Changement:
@@ -558,7 +614,7 @@ Regles d'entree pour chaque changement:
 #### M-003 - Pipelines: support des etapes paralleles dans le graphe de build
 
 - Date: 2026-04-03
-- Statut: implemented
+- Statut: implementee
 - Portee: detail build de la page Pipelines
 - Pourquoi: un pipeline CI reel execute souvent plusieurs jobs en parallele; le modele sequentiel unique etait insuffisant
 - Changement:
@@ -574,7 +630,7 @@ Regles d'entree pour chaque changement:
 #### M-004 - Pipelines: bloc Build Explorer positionne en premier ecran
 
 - Date: 2026-04-03
-- Statut: implemented
+- Statut: implementee
 - Portee: priorisation visuelle de la page Pipelines
 - Pourquoi: faire du suivi build (recents/en cours + detail execution) l'entree principale de la vision Delivery
 - Changement:
@@ -587,7 +643,7 @@ Regles d'entree pour chaque changement:
 #### M-005 - Graphe: dependances entre etapes + logs filtres par etape
 
 - Date: 2026-04-03
-- Statut: implemented
+- Statut: implementee
 - Portee: detail build interactif de la page Pipelines
 - Pourquoi: rendre visible le lien de causalite entre etapes et faciliter l'analyse fine des executions
 - Changement:
@@ -603,7 +659,7 @@ Regles d'entree pour chaque changement:
 #### M-006 - Suppression du bloc "Action principale" dans Pipelines
 
 - Date: 2026-04-03
-- Statut: implemented
+- Statut: implementee
 - Portee: page Pipelines
 - Pourquoi: simplifier l'ecran et recentrer la priorite sur le bloc Build Explorer
 - Changement:
@@ -616,7 +672,7 @@ Regles d'entree pour chaque changement:
 #### M-008 - Ecran 2 Overview: cadrage et implementation initiale
 
 - Date: 2026-04-03
-- Statut: implemented
+- Statut: implementee
 - Portee: page Overview
 - Pourquoi: aligner l'ecran 2 sur une vision admin de sante globale CI, majoritairement en lecture, avec mix temps reel + tendance
 - Reponses utilisateur integrees:
@@ -624,7 +680,7 @@ Regles d'entree pour chaque changement:
   - Audience primaire: admin
   - Nature de l'ecran: lecture uniquement
   - Horizon dominant: mix temps reel + tendance
-  - Blocs prioritaires: KPI globaux, incidents, capacite workers/queue, succes/echec, builds critiques, SLO, flux live resume
+  - Blocs prioritaires: KPI globaux, incidents, capacite agents d execution/queue, succes/echec, builds critiques, SLO, flux live resume
 - Changement:
   - Refonte de la page Overview en dashboard de pilotage admin.
   - Suppression de la logique d'action principale sur cette page.
@@ -636,7 +692,7 @@ Regles d'entree pour chaque changement:
 #### M-009 - Overview: dashboard plus graphique et sans trous de layout
 
 - Date: 2026-04-03
-- Statut: implemented
+- Statut: implementee
 - Portee: page Overview
 - Pourquoi: rendre l'ecran plus lisible en mode pilotage, avec une densite visuelle maitrisée et une disposition continue des widgets
 - Changement:
@@ -652,7 +708,7 @@ Regles d'entree pour chaque changement:
 #### M-010 - Bibliotheque cible pour les graphiques: Highcharts
 
 - Date: 2026-04-03
-- Statut: implemented
+- Statut: implementee
 - Portee: implementation future des widgets graphiques
 - Pourquoi: fixer une base technique unique pour les visualisations afin d'eviter des choix divergents lors du passage de la maquette a la vraie IHM
 - Changement:
@@ -668,24 +724,24 @@ Regles d'entree pour chaque changement:
 - Fichiers impactes:
   - [UX.md](UX.md)
 
-#### M-012 - Workers: cockpit SRE mixte flotte/pools + drill-down worker
+#### M-012 - Workers: cockpit SRE mixte flotte/pools + drill-down agent d execution
 
 - Date: 2026-04-03
-- Statut: implemented
+- Statut: implementee
 - Portee: page Workers
 - Pourquoi: donner aux profils SRE / plateforme une vue unique qui combine pilotage capacitaire, signaux d'incident et diagnostic individuel sans devoir changer d'ecran
 - Reponses utilisateur integrees:
   - Mission: mix capacite, operations et diagnostic
   - Audience primaire: SRE / plateforme
   - Nature de l'ecran: mix analytique + operations
-  - Granularite: equilibre strict entre vue flotte/pool et vue worker individuel
+  - Granularite: equilibre strict entre vue flotte/pool et vue agent d execution individuel
   - Preference: widgets graphiques quand c'est pertinent
 - Changement:
   - Refonte de la page Workers en dashboard plus dense et plus graphique.
   - Ajout d'un bloc de synthese flotte et d'un bloc capacite / saturation par pool.
-  - Ajout de widgets de surveillance rapide: workers unhealthy / silencieux, repartition des builds actifs, timeline d'incidents.
+  - Ajout de widgets de surveillance rapide: agents d execution unhealthy / silencieux, repartition des builds actifs, timeline d'incidents.
   - Conservation d'un bloc d'actions operatoires claim / complete, mais reduit a un role de support.
-  - Ajout d'un explorateur interactif de workers avec selection dans la flotte et detail individuel (etat, heartbeat, capacite locale, evenements recents).
+  - Ajout d'un explorateur interactif de agents d execution avec selection dans la flotte et detail individuel (etat, heartbeat, capacite locale, evenements recents).
 - Fichiers impactes:
   - [docs/ux-mockups/app.js](docs/ux-mockups/app.js)
   - [docs/ux-mockups/styles.css](docs/ux-mockups/styles.css)
@@ -694,16 +750,16 @@ Regles d'entree pour chaque changement:
 #### M-013 - Workers: passe de finition operationnelle (triage, actions guidees, taxonomie statuts)
 
 - Date: 2026-04-03
-- Statut: implemented
+- Statut: implementee
 - Portee: page Workers
 - Pourquoi: transformer l'ecran Workers en outil de decision immediate pour SRE/plateforme, sans perdre la profondeur de diagnostic individuel
 - Changement:
   - Ajout d'un bandeau Triage en tete de page (Workers down, Silent > 5m, Queue at risk) pour priorisation instantanee.
-  - Ajout d'un bloc Next best actions avec actions recommandees (drain/reassign/acknowledge) pour guider la reponse operationnelle.
+  - Ajout d'un bloc Suite best actions avec actions recommandees (drain/reassign/acknowledge) pour guider la reponse operationnelle.
   - Evolution du bloc capacite en vue Capacity vs Demand par pool avec tendance 30 minutes et indicateurs d'attente.
-  - Enrichissement du drill-down worker en sections explicites: Runtime health, Build workload, Failure signals, Impacted runs.
-  - Ajout de quick actions contextuelles sur le worker (drain, cordon, restart check) avec indication de confirmation requise.
-  - Harmonisation de la taxonomie des statuts workers (healthy, degraded, unhealthy, silent) dans la vue.
+  - Enrichissement du drill-down agent d execution en sections explicites: Runtime health, Build workload, Failure signals, Impacted runs.
+  - Ajout de quick actions contextuelles sur le agent d execution (drain, cordon, restart check) avec indication de confirmation requise.
+  - Harmonisation de la taxonomie des statuts agents d execution (healthy, degraded, unhealthy, silent) dans la vue.
 - Alignement implementation:
   - Mapping conserve avec la cible Highcharts pour la vue capacitaire (column/bar + line trend), tout en gardant le drill-down en composant UI custom.
 - Fichiers impactes:
@@ -714,7 +770,7 @@ Regles d'entree pour chaque changement:
 #### M-014 - Ecran 4 SCM Security: triage confiance + runbook de confinement
 
 - Date: 2026-04-04
-- Statut: implemented
+- Statut: implementee
 - Portee: page SCM Security
 - Pourquoi: faire de la page SCM Security une vraie frontiere de confiance operationnelle, orientee detection rapide, containment, puis preuve/audit
 - Changement:
@@ -736,7 +792,7 @@ Regles d'entree pour chaque changement:
 #### M-015 - Ecran 5 Plugins & Policy: gouvernance operationnelle de l'extensibilite
 
 - Date: 2026-04-04
-- Statut: implemented
+- Statut: implementee
 - Portee: page Plugins & Policy
 - Pourquoi: rendre l'extensibilite pilotable en temps reel, avec une boucle claire triage -> containment -> gouvernance -> audit
 - Changement:
@@ -758,7 +814,7 @@ Regles d'entree pour chaque changement:
 #### M-016 - Ecran 6 Observability: triage, correlation et preuve operationnelle
 
 - Date: 2026-04-04
-- Statut: implemented
+- Statut: implementee
 - Portee: page Observability
 - Pourquoi: transformer Observability en poste d'investigation priorisee, capable de relier rapidement les signaux techniques a l'impact delivery et d'alimenter les post-mortems
 - Changement:
@@ -767,7 +823,7 @@ Regles d'entree pour chaque changement:
   - Refonte du flux live events avec signaux plus actionnables et filtres explicites.
   - Ajout d'un bloc Signal quality pour mesurer la sante du systeme d'observabilite (coverage/freshness/noise).
   - Ajout d'un bloc incidents par severite pour priorisation P1/P2/P3.
-  - Ajout d'un bloc Correlation map (build/worker/plugin) pour reduire les allers-retours entre ecrans.
+  - Ajout d'un bloc Correlation map (build/agent d execution/plugin) pour reduire les allers-retours entre ecrans.
   - Ajout d'un bloc Exports & forensic snapshots pour la preuve/compliance.
   - Enrichissement du journal operations avec lien vers incidents.
 - Impact UX attendu:
@@ -781,7 +837,7 @@ Regles d'entree pour chaque changement:
 #### M-017 - Ecran 7 Administration: gouvernance priorisee et audit actionnable
 
 - Date: 2026-04-04
-- Statut: implemented
+- Statut: implementee
 - Portee: page Administration
 - Pourquoi: faire de la page Administration un cockpit de gouvernance avec priorisation des risques, controle des operations sensibles et audit directement exploitable
 - Changement:
@@ -803,7 +859,7 @@ Regles d'entree pour chaque changement:
 #### M-018 - Cohérence maquette avec fonctions API reellement disponibles
 
 - Date: 2026-04-04
-- Statut: implemented
+- Statut: implementee
 - Portee: maquette transversale (tous ecrans)
 - Pourquoi: eviter une divergence entre UX cible et capacites backend effectivement exposees aujourd'hui
 - Contrainte API actuelle retenue:
@@ -832,14 +888,14 @@ Regles d'entree pour chaque changement:
 |---|---|---|---|
 | Mini tendances availability / latency / throughput | Overview | `column` ou `areaspline` | series temporelles par fenetre (ex: 24h, 7j), timestamp + valeur + delta de reference |
 | Severite incidents empilee | Overview | `bar` empile ou `column` empile | nb d'incidents par severite, par statut, par fenetre temporelle |
-| Capacite workers / queue | Overview | `bar` horizontal, `bullet`, ou `xrange` simplifie | capacite totale, busy/idle/unhealthy, queue depth, wait time, trend |
+| Capacite agents d execution / queue | Overview | `bar` horizontal, `bullet`, ou `xrange` simplifie | capacite totale, busy/idle/unhealthy, queue depth, wait time, trend |
 | Ratio succes / echec | Overview | `pie`, `stacked bar`, ou `item chart` | total runs par statut sur fenetre donnee |
 | SLO / disponibilite | Overview | `solidgauge`, `bullet`, ou `column` compare objectif/reel | objectifs SLO, valeur observee, budget erreur consomme, historique |
 | Builds critiques | Overview | `xrange`, `bar`, ou `columnrange` selon finesse voulue | runs critiques, progression, statut, duree, phase courante, criticite |
 | Flux live resume | Overview / Observability | `timeline` si licence/plugin adapte, sinon liste enrichie hors chart | evenements ordonnes, timestamp, severite, ressource, message |
 | Graphe de phases pipeline | Pipelines | pas un fit naturel Highcharts standard; option `xrange` custom ou composant UI dedie | DAG de build: phases, jobs, dependances, statuts, durees |
 | Progression des runs critiques | Overview | `bar` horizontal | id run, pourcentage progression, statut, ETA |
-| Historique capacite / saturation | Workers / Overview | `areaspline` ou `line` | charge workers, queue depth, taux d'occupation dans le temps |
+| Historique capacite / saturation | Workers / Overview | `areaspline` ou `line` | charge agents d execution, queue depth, taux d'occupation dans le temps |
 
 ### Notes de conception
 
@@ -918,11 +974,11 @@ Regles d'entree pour chaque changement:
 - Usage Highcharts:
   - `bar` empile ou `column` empile
 
-#### BT-004 - Capacite workers et pression de queue
+#### BT-004 - Capacite agents d execution et pression de queue
 
 - Priorite: P0
 - Ecran: Overview, Workers
-- Widget: capacite workers / queue
+- Widget: capacite agents d execution / queue
 - Type de contrat: agregat runtime
 - Proposition:
   - `GET /capacity/summary`
@@ -973,8 +1029,8 @@ Regles d'entree pour chaque changement:
 ## UX-009 - Decoupage de App.tsx en widgets React dedies
 
 - Date: 2026-04-15
-- Statut: implemented
-- Owner: Engineering
+- Statut: implementee
+- Responsable: Engineering
 - Type: frontend architecture
 
 ### Contexte
@@ -989,7 +1045,7 @@ Extraire les zones UI stables en widgets dedies, tout en conservant l'orchestrat
 2. Navigation laterale (`SideNav`).
 3. Panneau perimetre API (`ApiCoveragePanel`).
 4. Pages implementees Pipelines/Overview (`ImplementedPagesWidget`).
-5. Pages roadmap/read-only (`RoadmapPagesWidget`).
+5. Pages roadmap/lecture seule (`RoadmapPagesWidget`).
 6. Journal operateur (`ConsoleWidget`).
 
 ### Impact attendu
@@ -1013,8 +1069,8 @@ Extraire les zones UI stables en widgets dedies, tout en conservant l'orchestrat
 ## UX-010 - Separation logique metier vs composition UI dans App
 
 - Date: 2026-04-15
-- Statut: implemented
-- Owner: Engineering
+- Statut: implementee
+- Responsable: Engineering
 - Type: frontend architecture
 
 ### Contexte
@@ -1026,7 +1082,7 @@ Apres le decoupage en widgets, `App.tsx` contenait encore une grande partie de l
 Introduire un hook de controleur dedie (`useDashboardController`) pour centraliser:
 
 1. Etats reactifs dashboard.
-2. Handlers metier (jobs/builds, polling, plugins, workers, observability).
+2. Handlers metier (jobs/builds, polling, plugins, agents d execution, observability).
 3. Effets de lifecycle (health polling, SSE, refresh schedule).
 4. View-models derives consommes par les widgets.
 
@@ -1048,8 +1104,8 @@ Introduire un hook de controleur dedie (`useDashboardController`) pour centralis
 ## UX-011 - Un composant TSX par page du sidenav
 
 - Date: 2026-04-15
-- Statut: implemented
-- Owner: Engineering
+- Statut: implementee
+- Responsable: Engineering
 - Type: frontend architecture
 
 ### Contexte
@@ -1092,8 +1148,8 @@ Creer un composant TSX dedie pour chaque page du sidenav:
 ## UX-012 - Nettoyage post-decoupage des pages
 
 - Date: 2026-04-15
-- Statut: implemented
-- Owner: Engineering
+- Statut: implementee
+- Responsable: Engineering
 - Type: frontend architecture
 
 ### Contexte
@@ -1152,8 +1208,8 @@ Une fois les 7 pages extraites, les widgets agreges historiques etaient devenus 
 ## UX-013 - Decoupage interne du controleur dashboard en sous-modules
 
 - Date: 2026-04-15
-- Statut: implemented
-- Owner: Engineering
+- Statut: implementee
+- Responsable: Engineering
 - Type: frontend architecture
 
 ### Contexte
@@ -1192,13 +1248,13 @@ Scinder le controleur en modules de support explicites tout en conservant l'API 
 ## UX-014 - Extraction des actions roadmap dans un sous-hook dedie
 
 - Date: 2026-04-15
-- Statut: implemented
-- Owner: Engineering
+- Statut: implementee
+- Responsable: Engineering
 - Type: frontend architecture
 
 ### Contexte
 
-Apres `UX-013`, le controleur principal restait encore charge par une longue serie de callbacks roadmap (SCM security/polling, plugins/policy, workers control) qui n'alimentent pas encore directement les pages API fully-wired.
+Apres `UX-013`, le controleur principal restait encore charge par une longue serie de callbacks roadmap (SCM security/polling, plugins/policy, agents d execution control) qui n'alimentent pas encore directement les pages API fully-wired.
 
 ### Decision
 
@@ -1226,8 +1282,8 @@ Le nouveau sous-hook encapsule la logique actionnelle roadmap tout en conservant
 ## UX-015 - Decoupage des actions roadmap par domaine fonctionnel
 
 - Date: 2026-04-15
-- Statut: implemented
-- Owner: Engineering
+- Statut: implementee
+- Responsable: Engineering
 - Type: frontend architecture
 
 ### Contexte
@@ -1240,7 +1296,7 @@ Decouper les callbacks roadmap en 3 hooks de domaine:
 
 1. `useDashboardScmActions` pour webhook-security, polling et diagnostics SCM.
 2. `useDashboardPluginActions` pour lifecycle plugin et policy authorization.
-3. `useDashboardWorkerActions` pour claim/complete/refresh worker control.
+3. `useDashboardWorkerActions` pour claim/complete/refresh agent d execution control.
 
 ### Impact attendu
 
@@ -1259,8 +1315,8 @@ Decouper les callbacks roadmap en 3 hooks de domaine:
 ## UX-016 - Domaines autonomes: etat + actions hors du controleur
 
 - Date: 2026-04-15
-- Statut: implemented
-- Owner: Engineering
+- Statut: implementee
+- Responsable: Engineering
 - Type: frontend architecture
 
 ### Contexte
@@ -1273,7 +1329,7 @@ Introduire des hooks de domaine qui possedent leur propre etat et composent leur
 
 1. `useDashboardScmDomain` (forms/messages/state + actions SCM).
 2. `useDashboardPluginDomain` (forms/messages/inventory/policy state + actions plugin).
-3. `useDashboardWorkerDomain` (worker control state + actions worker).
+3. `useDashboardWorkerDomain` (agent d execution control state + actions agent d execution).
 
 `useDashboardController` orchestre uniquement les domaines, les derivees globales et les actions coeur API-backed.
 
@@ -1295,8 +1351,8 @@ Introduire des hooks de domaine qui possedent leur propre etat et composent leur
 ## UX-017 - Pages roadmap branchees sur les domaines autonomes
 
 - Date: 2026-04-15
-- Statut: implemented
-- Owner: Engineering
+- Statut: implementee
+- Responsable: Engineering
 - Type: frontend architecture
 
 ### Contexte
@@ -1307,7 +1363,7 @@ Les hooks de domaine etaient autonomes, mais plusieurs pages roadmap restaient p
 
 Brancher les pages roadmap sur les objets domaine exposes par le controleur:
 
-1. `WorkersPage` consomme `workerDomain` (message, dernier claim, refresh workers).
+1. `WorkersPage` consomme `workerDomain` (message, dernier claim, refresh agents d execution).
 2. `ScmSecurityPage` consomme `scmDomain` (messages operations, tick summary, refresh diagnostics, tick manuel).
 3. `PluginsPolicyPage` consomme `pluginDomain` (inventory, messages plugin/policy, refresh inventory).
 4. `AdministrationPage` consomme des signaux gouvernance (`adminActivity`, `roleCapabilities`).
@@ -1331,8 +1387,8 @@ Brancher les pages roadmap sur les objets domaine exposes par le controleur:
 ## UX-018 - Pages proprietaires des hooks domaine + arborescence domaine
 
 - Date: 2026-04-15
-- Statut: implemented
-- Owner: Engineering
+- Statut: implementee
+- Responsable: Engineering
 - Type: frontend architecture
 
 ### Contexte
@@ -1347,7 +1403,7 @@ Le controleur exposait encore des objets domaine aux pages et conservait une log
   - `hooks/core/controller.ts`, `hooks/core/derivedState.ts`, `hooks/core/runtimeEffects.ts`
   - `hooks/scm/actions.ts`, `hooks/scm/domain.ts`
   - `hooks/plugins/actions.ts`, `hooks/plugins/domain.ts`
-  - `hooks/workers/actions.ts`, `hooks/workers/domain.ts`
+  - `hooks/agents d execution/actions.ts`, `hooks/agents d execution/domain.ts`
 
 ### Impact attendu
 
@@ -1358,7 +1414,7 @@ Le controleur exposait encore des objets domaine aux pages et conservait une log
 ### Evidence (code)
 
 - Controleur coeur: [dashboard/src/hooks/core/controller.ts](dashboard/src/hooks/core/controller.ts)
-- Domaine Workers: [dashboard/src/hooks/workers/domain.ts](dashboard/src/hooks/workers/domain.ts)
+- Domaine Workers: [dashboard/src/hooks/agents d execution/domain.ts](dashboard/src/hooks/agents d execution/domain.ts)
 - Domaine SCM: [dashboard/src/hooks/scm/domain.ts](dashboard/src/hooks/scm/domain.ts)
 - Domaine Plugins: [dashboard/src/hooks/plugins/domain.ts](dashboard/src/hooks/plugins/domain.ts)
 - Pages proprietaires: [dashboard/src/pages/WorkersPage.tsx](dashboard/src/pages/WorkersPage.tsx)
@@ -1422,7 +1478,7 @@ Le controleur exposait encore des objets domaine aux pages et conservait une log
 #### BT-011 - Meta contrat frontend pour widgets
 
 - Priorite: P1
-- Scope: tous ecrans dashboard
+- Portee: tous ecrans dashboard
 - Objectif: normaliser loading, empty, stale, error
 - Donnees meta recommandees sur chaque endpoint:
   - `generated_at`
@@ -1444,7 +1500,7 @@ Le controleur exposait encore des objets domaine aux pages et conservait une log
 #### M-011 - Conversion de la matrice UX en backlog technique API/data contracts
 
 - Date: 2026-04-03
-- Statut: implemented
+- Statut: implementee
 - Portee: preparation implementation reelle
 - Pourquoi: rendre la phase suivante directement actionnable pour le backend et le frontend
 - Changement:
@@ -1457,7 +1513,7 @@ Le controleur exposait encore des objets domaine aux pages et conservait une log
 #### M-007 - Validation de l'ecran 1 Pipelines et passage a l'ecran 2 Overview
 
 - Date: 2026-04-03
-- Statut: implemented
+- Statut: implementee
 - Portee: atelier maquette
 - Pourquoi: figer la validation de l'ecran 1 avant d'ouvrir une nouvelle iteration sur l'ecran 2
 - Changement:
@@ -1466,7 +1522,7 @@ Le controleur exposait encore des objets domaine aux pages et conservait une log
 - Fichiers impactes:
   - [UX.md](UX.md)
 
-### Next
+### Suite
 
 - Revue visuelle de l'ecran 2 Overview et ouverture de l'iteration suivante si besoin.
 
@@ -1475,13 +1531,13 @@ Le controleur exposait encore des objets domaine aux pages et conservait une log
 ## UX-019 - Normalisation finale du nommage des hooks domaine/core
 
 - Date: 2026-04-15
-- Statut: implemented
-- Owner: Engineering
+- Statut: implementee
+- Responsable: Engineering
 - Type: frontend architecture
 
 ### Contexte
 
-Apres la reorganisation des hooks par dossiers de domaine (`core`, `scm`, `plugins`, `workers`), il restait un legacy de nommage `useDashboard*` sur plusieurs symboles exportes/importes.
+Apres la reorganisation des hooks par dossiers de domaine (`core`, `scm`, `plugins`, `agents d execution`), il restait un legacy de nommage `useDashboard*` sur plusieurs symboles exportes/importes.
 
 ### Decision
 
@@ -1507,7 +1563,7 @@ Finaliser le nommage pour aligner les symboles avec l'architecture cible, sans m
 - Effets runtime: [dashboard/src/hooks/core/runtimeEffects.ts](dashboard/src/hooks/core/runtimeEffects.ts)
 - Domaine SCM: [dashboard/src/hooks/scm/domain.ts](dashboard/src/hooks/scm/domain.ts)
 - Domaine Plugins: [dashboard/src/hooks/plugins/domain.ts](dashboard/src/hooks/plugins/domain.ts)
-- Domaine Workers: [dashboard/src/hooks/workers/domain.ts](dashboard/src/hooks/workers/domain.ts)
+- Domaine Workers: [dashboard/src/hooks/agents d execution/domain.ts](dashboard/src/hooks/agents d execution/domain.ts)
 - Composition UI: [dashboard/src/App.tsx](dashboard/src/App.tsx)
 
 ---
@@ -1515,8 +1571,8 @@ Finaliser le nommage pour aligner les symboles avec l'architecture cible, sans m
 ## UX-020 - Transition vers la premiere verticale Workers API-backed
 
 - Date: 2026-04-15
-- Statut: accepted
-- Owner: Engineering
+- Statut: acceptee
+- Responsable: Engineering
 - Type: frontend architecture
 
 ### Contexte
@@ -1527,22 +1583,22 @@ Le cleanup de nommage et l'architecture orientee domaines sont stabilises. La pr
 
 Prioriser la page Workers comme premiere verticale API-backed post-refactor:
 
-1. Utiliser les endpoints workers existants pour les actions claim/complete/list.
+1. Utiliser les endpoints agents d execution existants pour les actions claim/complete/list.
 2. Exposer les retours de succes/erreur/conflit de maniere explicite dans la page.
 3. Garder les conventions de role/audit/log deja en place dans l'architecture domaine.
 4. Faire evoluer la couverture de page Workers de `roadmap` vers `partial` une fois les interactions critiques stabilisees.
 
 ### Impact attendu
 
-- Passage d'une page majoritairement statique a une page operable sur flux worker.
+- Passage d'une page majoritairement statique a une page operable sur flux agent d execution.
 - Validation de l'architecture pages proprietaires des hooks domaine sur un cas concret.
 - Reduction du risque de regressions sur les prochaines verticales (SCM/Plugins).
 
 ### Evidence (code)
 
 - Page Workers: [dashboard/src/pages/WorkersPage.tsx](dashboard/src/pages/WorkersPage.tsx)
-- Domaine Workers: [dashboard/src/hooks/workers/domain.ts](dashboard/src/hooks/workers/domain.ts)
-- Actions Workers: [dashboard/src/hooks/workers/actions.ts](dashboard/src/hooks/workers/actions.ts)
+- Domaine Workers: [dashboard/src/hooks/agents d execution/domain.ts](dashboard/src/hooks/agents d execution/domain.ts)
+- Actions Workers: [dashboard/src/hooks/agents d execution/actions.ts](dashboard/src/hooks/agents d execution/actions.ts)
 - Orchestration coeur: [dashboard/src/hooks/core/controller.ts](dashboard/src/hooks/core/controller.ts)
 
 ---
@@ -1550,8 +1606,8 @@ Prioriser la page Workers comme premiere verticale API-backed post-refactor:
 ## UX-021 - Synchronisation backend scheduler multi-backend
 
 - Date: 2026-04-15
-- Statut: implemented
-- Owner: Engineering
+- Statut: implementee
+- Responsable: Engineering
 - Type: backend capability sync
 
 ### Contexte

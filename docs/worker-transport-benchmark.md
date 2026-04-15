@@ -4,27 +4,27 @@ Date: 2026-04-16
 
 ## Objective
 
-Measure the current worker `claim -> complete` transport path and compare HTTP/1 vs HTTP/2 using the same GraphQL worker contract.
+Measure the current agent d execution `claim -> complete` transport path and compare HTTP/1 vs HTTP/2 using the same GraphQL agent d execution contract.
 
-This benchmark exists to support `REL-03` and to validate whether the newly added HTTP/2-capable worker client produces a measurable gain in the current implementation.
+This benchmark exists to support `REL-03` and to validate whether the newly added HTTP/2-capable agent d execution client produces a measurable gain in the current implementation.
 
 ## Harness
 
 Implementation entrypoint:
 
-- `crates/worker/src/bin/transport_bench.rs`
+- `crates/agent d execution/src/bin/transport_bench.rs`
 
 Run command:
 
 ```bash
-make worker-transport-bench
+make agent d execution-transport-bench
 ```
 
 Equivalent direct command:
 
 ```bash
 env -u https_proxy -u http_proxy -u PXY_FAB_FONC \
-cargo run -p tardigrade-worker --bin transport_bench -- --iterations 200
+cargo run -p tardigrade-agent d execution --bin transport_bench -- --iterations 200
 ```
 
 ## Method
@@ -32,10 +32,10 @@ cargo run -p tardigrade-worker --bin transport_bench -- --iterations 200
 - The benchmark starts two local servers on `127.0.0.1`:
   - one synthetic Axum mock GraphQL server
   - one real API router (`build_router(ApiState)`) backed by in-memory storage/scheduler
-- The mock server exposes the minimal GraphQL contract needed by the worker:
+- The mock server exposes the minimal GraphQL contract needed by the agent d execution:
   - `worker_claim_build`
   - `worker_complete_build`
-- Four benchmark scopes are measured with the same worker client code path:
+- Four benchmark scopes are measured with the same agent d execution client code path:
   - mock sequential
   - mock concurrent
   - real server sequential
@@ -92,19 +92,19 @@ That is a plausible result. HTTP/2 usually becomes more interesting when at leas
 - real network latency
 - TLS in front of the connection
 - more request multiplexing pressure
-- many workers sharing fewer long-lived connections
+- many agents d execution sharing fewer long-lived connections
 
 ## Practical Conclusion
 
 What is validated now:
 
-- the worker transport supports HTTP/2 tuning and h2c prior knowledge
+- the agent d execution transport supports HTTP/2 tuning and h2c prior knowledge
 - the benchmark harness is reproducible and useful for regressions
 - the current local micro-benchmark does not justify forcing HTTP/2 as universally faster
 
 What is **not** validated yet:
 
-- production-like gains under concurrent worker load
+- production-like gains under concurrent agent d execution load
 - gains against the real server instead of a synthetic mock
 - gains with TLS termination / HTTP/2 over TLS
 
@@ -114,8 +114,8 @@ What is **not** validated yet:
 - Keep HTTP/2 configurable instead of assuming it is always better.
 - Do not close `REL-03` yet based only on local h2c runs.
 
-## Next Benchmark Steps
+## Suite Benchmark Steps
 
 1. Add a TLS-enabled benchmark to compare HTTP/1.1 vs HTTP/2 in a production-like transport mode.
-2. Add higher worker fanout and larger payload variants to stress multiplexing effects.
+2. Add higher agent d execution fanout and larger payload variants to stress multiplexing effects.
 3. Re-run the same matrix on a remote network path (non-loopback) to include RTT effects.

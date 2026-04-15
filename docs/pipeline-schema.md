@@ -2,7 +2,7 @@
 
 This document defines the first version of the CI pipeline schema.
 
-## Goals
+## Objectifs
 
 - Provide a versioned, explicit pipeline contract.
 - Support ordered stages and steps.
@@ -83,5 +83,5 @@ Example validation details payload:
 ## Notes
 
 - This schema definition is the contract layer only.
-- YAML parsing and structural validation are implemented in `tardigrade-core`.
+- YAML parsing and structural validation are implementee in `tardigrade-core`.
 - API-level validation and error mapping are enforced on both REST and GraphQL create-job paths.

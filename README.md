@@ -2,18 +2,18 @@
 
 This workspace is a starting point for building an enterprise-grade open-source CI/CD service in Rust.
 
-## Current architecture
+## Architecture actuelle
 
 - crates/server: executable entry point and HTTP server bootstrap.
 - crates/api: HTTP routes and API state.
 - crates/core: domain model for jobs, pipeline runs, and statuses.
 - crates/scheduler: queueing and scheduling abstractions.
-- crates/executor: worker execution logic abstraction.
+- crates/executor: agent d execution execution logic abstraction.
 - crates/storage: persistence abstractions with in-memory and PostgreSQL implementations.
 - crates/plugins: plugin contract and registry.
 - crates/auth: authentication primitives.
 
-## Implemented now
+## Implemente actuellement
 
 - Workspace and crate structure.
 - Health check endpoint at GET /health.
@@ -22,7 +22,7 @@ This workspace is a starting point for building an enterprise-grade open-source 
 - API now delegates job/build lifecycle to a service layer backed by the storage crate.
 - Build transitions are exposed on the domain model to enforce status invariants.
 - Scheduler now uses claim/ack/requeue semantics to model cluster-safe work distribution.
-- Worker API endpoints allow external workers to claim and complete builds.
+- Worker API endpoints allow external agents d execution to claim and complete builds.
 - Example configuration at config/example.toml.
 
 ## Plugin runtime status
@@ -33,11 +33,11 @@ This workspace is a starting point for building an enterprise-grade open-source 
 - Plugin execution failures are typed (`ExecutionFailed`) and panic-safe (`ExecutionPanicked`).
 - One plugin failure does not block execution of other healthy plugins.
 
-## Architecture target
+## Cible d architecture
 
 - Multi-language CI via plugin-driven runtime adapters.
 - Horizontally scalable control plane (stateless API instances).
-- Distributed queue + worker pool for execution throughput.
+- Distributed queue + agent d execution pool for execution throughput.
 - Cluster-resilient operation with durable state and object storage.
 - Configurable behavior by environment, organization, and project.
 
@@ -105,11 +105,11 @@ TARDIGRADE_SCHEDULER_BACKEND=postgres \
 TARDIGRADE_SCHEDULER_NAMESPACE=tardigrade \
 env -u https_proxy -u http_proxy -u PXY_FAB_FONC cargo run -p tardigrade-server
 
-Run a dedicated external worker:
+Run a dedicated external agent d execution:
 
 TARDIGRADE_SERVER_URL=http://127.0.0.1:8080 \
-TARDIGRADE_WORKER_ID=worker-a \
-env -u https_proxy -u http_proxy -u PXY_FAB_FONC cargo run -p tardigrade-worker
+TARDIGRADE_WORKER_ID=agent d execution-a \
+env -u https_proxy -u http_proxy -u PXY_FAB_FONC cargo run -p tardigrade-agent d execution
 
 Cloud-friendly runtime env vars:
 
@@ -124,9 +124,9 @@ Cloud-friendly runtime env vars:
 - TARDIGRADE_REDIS_URL (optional Redis URL for distributed queue backend)
 - TARDIGRADE_REDIS_PREFIX (optional Redis key prefix, default: tardigrade)
 - TARDIGRADE_QUEUE_FILE (queue state file path used by file scheduler backend)
-- TARDIGRADE_SERVER_URL (worker -> controller URL)
-- TARDIGRADE_WORKER_ID (worker identity)
-- TARDIGRADE_WORKER_POLL_MS (worker polling interval)
+- TARDIGRADE_SERVER_URL (agent d execution -> controller URL)
+- TARDIGRADE_WORKER_ID (agent d execution identity)
+- TARDIGRADE_WORKER_POLL_MS (agent d execution polling interval)
 - TARDIGRADE_WORKER_HTTP2_ENABLED (default: true)
 - TARDIGRADE_WORKER_HTTP2_PRIOR_KNOWLEDGE (default: false, enables h2c prior knowledge)
 - TARDIGRADE_WORKER_REQUEST_TIMEOUT_SECS (default: 30)
@@ -168,7 +168,7 @@ Unified automation entrypoints from repository root:
 - `make dashboard-build` (frontend build via npm)
 - `cd dashboard && npm run e2e` (Playwright admin E2E suite)
 - `make build` (Rust + dashboard build)
-- `make worker-transport-bench` (local HTTP/1 vs HTTP/2 worker transport benchmark)
+- `make agent d execution-transport-bench` (local HTTP/1 vs HTTP/2 agent d execution transport benchmark)
 - `make package-platform-zips` (create release zip per platform: mac/windows/linux)
 - `make ci` (local CI-equivalent aggregate)
 
@@ -210,7 +210,7 @@ env -u https_proxy -u http_proxy -u PXY_FAB_FONC cargo test --workspace postgres
 - POST /jobs/{id}/run
 - POST /builds/{id}/cancel
 - GET /builds
-- GET /workers
+- GET /agents d execution
 - GET /plugins
 - POST /plugins
 - GET /plugins/policies
@@ -220,8 +220,8 @@ env -u https_proxy -u http_proxy -u PXY_FAB_FONC cargo test --workspace postgres
 - GET /scm/webhook-security/rejections
 - POST /scm/polling/configs
 - POST /scm/polling/tick
-- POST /workers/{worker_id}/claim
-- POST /workers/{worker_id}/builds/{id}/complete
+- POST /agents d execution/{worker_id}/claim
+- POST /agents d execution/{worker_id}/builds/{id}/complete
 - POST /plugins/{name}/init
 - POST /plugins/{name}/execute
 - POST /plugins/{name}/unload
@@ -231,17 +231,17 @@ GraphQL snapshot example (single request for dashboard panels):
 
 curl -X POST http://127.0.0.1:8080/graphql \
 	-H 'content-type: application/json' \
-	-d '{"query":"query { dashboard_snapshot { jobs { id name } builds { id status } workers { id status active_builds } metrics { reclaimed_total retry_requeued_total ownership_conflicts_total dead_letter_total } dead_letter_builds { id status } } }"}'
+	-d '{"query":"query { dashboard_snapshot { jobs { id name } builds { id status } agents d execution { id status active_builds } metrics { reclaimed_total retry_requeued_total ownership_conflicts_total dead_letter_total } dead_letter_builds { id status } } }"}'
 
 Worker claim example:
 
-curl -X POST http://127.0.0.1:8080/workers/worker-a/claim
+curl -X POST http://127.0.0.1:8080/agents d execution/agent d execution-a/claim
 
 Worker completion example:
 
-curl -X POST http://127.0.0.1:8080/workers/worker-a/builds/<build-id>/complete \
+curl -X POST http://127.0.0.1:8080/agents d execution/agent d execution-a/builds/<build-id>/complete \
 	-H 'content-type: application/json' \
-	-d '{"status":"success","log_line":"Build completed by external worker"}'
+	-d '{"status":"success","log_line":"Build completed by external agent d execution"}'
 
 Create a job:
 

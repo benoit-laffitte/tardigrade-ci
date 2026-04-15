@@ -4,7 +4,7 @@ This guide explains how to add a new first-class stack profile in Tardigrade CI.
 
 The onboarding flow keeps code, docs, and validation behavior aligned.
 
-## Scope
+## Portee
 
 A technology profile is the model consumed by the platform to describe:
 

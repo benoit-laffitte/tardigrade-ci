@@ -2,7 +2,7 @@
 
 This guide documents how to author plugins and how capability authorization is enforced in the current runtime registry.
 
-## Scope
+## Portee
 
 - Plugin lifecycle model: load, init, execute, unload.
 - Manifest-driven discovery (`plugins.toml`).
