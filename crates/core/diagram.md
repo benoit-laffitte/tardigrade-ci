@@ -169,7 +169,7 @@ flowchart TB
   subgraph JOB[Job]
     JD[JobDefinition\n- id\n- name\n- repository_url\n- pipeline_path\n- created_at]
     BR[BuildRecord\n- status lifecycle\n- timestamps\n- logs]
-    JS{{JobStatus\nPending|Running|Success|Failed|Canceled}}
+    JS{{JobStatus\nPending, Running, Success, Failed, Canceled}}
     JD -->|1..n executions| BR
     BR --> JS
   end
@@ -181,7 +181,7 @@ flowchart TB
     PRP[PipelineRetryPolicy\n- max_attempts\n- backoff_ms]
     PVI[PipelineValidationIssue]
     PVH[PipelineValidationHint]
-    PDE{{PipelineDslError\nYaml|Validation}}
+    PDE{{PipelineDslError\nYaml, Validation}}
 
     PD --> PS
     PS --> PST
@@ -192,7 +192,7 @@ flowchart TB
   end
 
   subgraph SCM[SCM]
-    SP{{ScmProvider\nGithub|Gitlab}}
+    SP{{ScmProvider\nGithub, Gitlab}}
     SPC[ScmPollingConfig\n- repository_url\n- interval_secs\n- branches\n- timestamps]
     WSC[WebhookSecurityConfig\n- repository_url\n- secret\n- allowed_ips\n- updated_at]
 
@@ -202,7 +202,7 @@ flowchart TB
 
   subgraph TECH[Technology]
     TP[TechnologyProfile\n- id\n- display_name\n- language\n- runtime\n- strategy]
-    TL{{TechnologyLanguage\nRust|Python|Java|Node|Go}}
+    TL{{TechnologyLanguage\nRust, Python, Java, Node, Go}}
     RM[RuntimeMetadata\n- image\n- shell?]
     BSM[BuildStrategyMetadata\n- install/build/test/package]
     TPV[TechnologyProfileValidationIssue]
