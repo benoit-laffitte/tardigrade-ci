@@ -6,6 +6,8 @@ use std::sync::{
 };
 use std::time::{SystemTime, UNIX_EPOCH};
 
+static TEST_MANIFEST_COUNTER: AtomicUsize = AtomicUsize::new(0);
+
 /// Test plugin tracking lifecycle hook invocation counts.
 struct TestPlugin {
     name: &'static str,
@@ -232,7 +234,8 @@ fn write_temp_manifest(contents: &str) -> PathBuf {
         .duration_since(UNIX_EPOCH)
         .expect("clock should be after unix epoch")
         .as_nanos();
-    let dir = std::env::temp_dir().join(format!("tardigrade-plugins-test-{unique}"));
+    let counter = TEST_MANIFEST_COUNTER.fetch_add(1, Ordering::SeqCst);
+    let dir = std::env::temp_dir().join(format!("tardigrade-plugins-test-{unique}-{counter}"));
     std::fs::create_dir_all(&dir).expect("temp dir should be created");
     let manifest_path = dir.join("plugins.toml");
     std::fs::write(&manifest_path, contents).expect("manifest should be written");

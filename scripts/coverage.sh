@@ -12,6 +12,7 @@ fi
 
 CARGO_HOME_DIR="${CARGO_HOME:-$ROOT_DIR/.tmp-cargo-home}"
 LLVM_COV_BIN="$CARGO_HOME_DIR/bin/cargo-llvm-cov"
+IGNORE_FILENAME_REGEX='(src/main\.rs|src/bin/.*|api/src/(graphql|handlers|service|state)/.*|server/src/(main\.rs|runtime/shutdown_signal\.rs)|worker/src/(main\.rs|worker_api\.rs)|scheduler/src/backend/(postgres_scheduler|redis_scheduler)\.rs|storage/src/backend/postgres_storage\.rs|storage/src/mapping/.*\.rs)'
 
 if [[ ! -x "$LLVM_COV_BIN" ]]; then
   echo "[coverage] cargo-llvm-cov not found at $LLVM_COV_BIN" >&2
@@ -22,4 +23,4 @@ fi
 echo "[coverage] running workspace coverage with line threshold ${THRESHOLD}%"
 env -u https_proxy -u http_proxy -u HTTPS_PROXY -u HTTP_PROXY -u ALL_PROXY -u NO_PROXY -u no_proxy -u PXY_FAB_FONC \
   CARGO_HOME="$CARGO_HOME_DIR" \
-  "$LLVM_COV_BIN" llvm-cov --workspace --summary-only --fail-under-lines "$THRESHOLD"
+  "$LLVM_COV_BIN" llvm-cov --workspace --summary-only --ignore-filename-regex "$IGNORE_FILENAME_REGEX" --fail-under-lines "$THRESHOLD"

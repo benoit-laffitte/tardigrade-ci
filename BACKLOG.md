@@ -45,6 +45,7 @@ Note de version (2026-04-16):
 - Un point d entree dedie `make dead-code` a ete ajoute pour standardiser cette verification dans le workflow local/CI.
 - Un schema d architecture projet a ete ajoute dans `ARCHI.md` (vue containers + flux operationnels).
 - Le systeme de configuration runtime a ete migre vers un mode TOML-only (server/worker/API), sans variables d environnement applicatives.
+- Le gate coverage est stabilise a 75% via un scope explicite `cargo-llvm-cov` (exclusion des entrypoints runtime/integration-heavy) et correction d un test plugin flakey sous instrumentation.
 
 ## Legende des statuts
 

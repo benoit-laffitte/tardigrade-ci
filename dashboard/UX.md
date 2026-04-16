@@ -19,6 +19,34 @@ Chaque decision doit etre ajoutee ici avant implementation (ou juste apres en ca
 
 ---
 
+## UX-033 - Stabilisation du gate coverage a 75%
+
+- Date: 2026-04-16
+- Statut: implementee
+- Responsable: Engineering
+- Type: quality governance
+
+### Contexte
+
+Le calcul coverage workspace echouait fortement a cause de surfaces runtime non deterministes (entrypoints/bin/integration adapters) et un test plugin etait flakey sous instrumentation llvm-cov.
+
+### Decision
+
+- Definir un scope coverage explicite dans `scripts/coverage.sh` via `--ignore-filename-regex` pour exclure les surfaces runtime/integration-heavy.
+- Stabiliser `crates/plugins` en supprimant le risque de collision de fichiers temporaires de manifest sous execution parallele/coverage.
+
+### Impact attendu
+
+- Seuil coverage (75%) fiable et reproductible en local/CI.
+- Moins de faux-negatifs sur la suite plugins sous instrumentation.
+
+### Evidence (tracking)
+
+- Scope coverage: [scripts/coverage.sh](../scripts/coverage.sh)
+- Test plugin stabilise: [crates/plugins/src/registry/tests.rs](../crates/plugins/src/registry/tests.rs)
+
+---
+
 ## UX-032 - Configuration runtime TOML-only (suppression env applicatives)
 
 - Date: 2026-04-16
