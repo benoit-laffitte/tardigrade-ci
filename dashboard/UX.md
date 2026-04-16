@@ -19,6 +19,35 @@ Chaque decision doit etre ajoutee ici avant implementation (ou juste apres en ca
 
 ---
 
+## UX-025 - Gouvernance proactive des dependances avec Dependabot
+
+- Date: 2026-04-16
+- Statut: implementee
+- Responsable: Engineering
+- Type: delivery governance
+
+### Contexte
+
+Le projet combine un workspace Rust, un dashboard Node et des workflows GitHub Actions. Sans automatisation des mises a jour de dependances, le risque de retard de patch securite et de dette de maintenance augmente.
+
+### Decision
+
+- Activer Dependabot au niveau du depot.
+- Couvrir trois ecosystemes: `cargo` (racine workspace), `npm` (`/dashboard`) et `github-actions`.
+- Planifier une execution hebdomadaire et regrouper les mises a jour mineures/patch pour limiter le bruit PR.
+
+### Impact attendu
+
+- Reduction du temps moyen de mise a jour des dependances.
+- Amelioration de la posture securite sur la chaine CI et l'interface admin.
+- Volume de PR mieux maitrise grace au regroupement des updates mineures/patch.
+
+### Evidence (tracking)
+
+- Configuration active: [.github/dependabot.yml](../.github/dependabot.yml)
+
+---
+
 ## UX-022 - Strategie transport agent d execution: HTTP/2 d'abord, gRPC en option
 
 - Date: 2026-04-16

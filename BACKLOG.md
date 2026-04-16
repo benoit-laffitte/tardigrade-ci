@@ -70,6 +70,7 @@ Decisions d affinage:
 - [x] `INDUS-214` Move dashboard frontend sources to repository root (`dashboard/`) and update xtask/CI/docs paths accordingly.
 - [x] `INDUS-215` Remove `crates/xtask` and switch dashboard automation to direct Make+npm workflow.
 - [x] `INDUS-216` Switch dashboard build output to `target/public` and enforce strict runtime + packaging consumption without legacy fallback.
+- [x] `INDUS-217` Add Dependabot automation for Cargo workspace, dashboard npm, and GitHub Actions with weekly update cadence.
 
 Definition de termine:
 
