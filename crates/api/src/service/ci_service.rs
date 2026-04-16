@@ -5,7 +5,6 @@ use std::{
     sync::{Arc, Mutex},
 };
 use tardigrade_core::{BuildRecord, JobDefinition, PipelineDefinition};
-use tardigrade_executor::WorkerExecutor;
 use tardigrade_scheduler::Scheduler;
 use tardigrade_storage::Storage;
 use tokio::sync::broadcast;
@@ -537,33 +536,6 @@ impl CiService {
         );
 
         Ok(build)
-    }
-
-    /// Embedded-worker loop: claim next build, execute it, and ack queue ownership.
-    pub(crate) async fn process_next_build(&self) -> Result<(), ApiError> {
-        let Some(build) = self.claim_build_for_worker("embedded-worker").await? else {
-            return Ok(());
-        };
-
-        let build_id = build.id;
-        let executed = match WorkerExecutor::run(build).await {
-            Ok(done) => done,
-            Err(_) => {
-                self.scheduler
-                    .requeue(build_id)
-                    .map_err(|_| ApiError::Internal)?;
-                return Err(ApiError::Internal);
-            }
-        };
-
-        self.storage
-            .save_build(executed)
-            .await
-            .map_err(|_| ApiError::Internal)?;
-        self.scheduler
-            .ack(build_id)
-            .map_err(|_| ApiError::Internal)?;
-        Ok(())
     }
 
     /// Claims one build for worker and transitions state to running when possible.

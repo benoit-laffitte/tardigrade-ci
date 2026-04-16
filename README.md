@@ -115,7 +115,6 @@ Cloud-friendly runtime env vars:
 - TARDIGRADE_CONFIG_FILE (optional config file path, default: config/example.toml)
 - TARDIGRADE_BIND_ADDR (default: 0.0.0.0:8080)
 - TARDIGRADE_SERVICE_NAME (default: tardigrade-ci)
-- TARDIGRADE_EMBEDDED_WORKER (default: true)
 - TARDIGRADE_DATABASE_URL (optional PostgreSQL URL for jobs/builds persistence)
 - TARDIGRADE_SCHEDULER_BACKEND (optional explicit scheduler backend: in-memory, file, redis, postgres)
 - TARDIGRADE_SCHEDULER_DATABASE_URL (optional PostgreSQL URL dedicated to scheduler, falls back to TARDIGRADE_DATABASE_URL)

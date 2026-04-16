@@ -33,7 +33,6 @@ pub struct ApiState {
     pub(crate) plugin_registry: Arc<Mutex<PluginRegistry>>,
     /// Plugin policy store maps execution context to granted capabilities.
     pub(crate) plugin_policy_store: Arc<Mutex<BTreeMap<String, Vec<PluginCapability>>>>,
-    pub(crate) run_embedded_worker: bool,
 }
 
 impl ApiState {
@@ -64,31 +63,19 @@ impl ApiState {
         storage: Arc<dyn Storage + Send + Sync>,
         scheduler: Arc<dyn Scheduler + Send + Sync>,
     ) -> Self {
-        Self::with_components_and_mode(service_name, storage, scheduler, true)
-    }
-
-    /// Builds API state and configures whether embedded worker loop is enabled.
-    pub fn with_components_and_mode(
-        service_name: impl Into<String>,
-        storage: Arc<dyn Storage + Send + Sync>,
-        scheduler: Arc<dyn Scheduler + Send + Sync>,
-        run_embedded_worker: bool,
-    ) -> Self {
-        Self::with_components_and_mode_and_settings(
+        Self::with_components_and_settings(
             service_name,
             storage,
             scheduler,
-            run_embedded_worker,
             ServiceSettings::from_env(),
         )
     }
 
     /// Builds API state with explicit reliability settings (useful for deterministic tests).
-    pub fn with_components_and_mode_and_settings(
+    pub fn with_components_and_settings(
         service_name: impl Into<String>,
         storage: Arc<dyn Storage + Send + Sync>,
         scheduler: Arc<dyn Scheduler + Send + Sync>,
-        run_embedded_worker: bool,
         settings: ServiceSettings,
     ) -> Self {
         Self {
@@ -96,7 +83,6 @@ impl ApiState {
             service: Arc::new(CiService::new(storage, scheduler, settings)),
             plugin_registry: Arc::new(Mutex::new(PluginRegistry::default())),
             plugin_policy_store: Arc::new(Mutex::new(BTreeMap::new())),
-            run_embedded_worker,
         }
     }
 

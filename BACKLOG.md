@@ -39,6 +39,7 @@ Note de version (2026-04-16):
 - REST artifacts were removed from `crates/api` source surface (legacy REST handlers and REST-specific HTTP model module).
 - Control-plane contract remains GraphQL-only (`POST /graphql`, `GET /graphql`), with native SCM webhook ingress preserved at server level (`/webhooks/scm`).
 - Le fichier d instructions Copilot du depot a ete integralement traduit en francais pour aligner la gouvernance documentaire avec la langue de l equipe.
+- Embedded executor mode was removed from server/API runtime to simplify operations; build execution now relies on dedicated worker processes only.
 
 ## Legende des statuts
 

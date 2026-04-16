@@ -19,6 +19,38 @@ Chaque decision doit etre ajoutee ici avant implementation (ou juste apres en ca
 
 ---
 
+## UX-028 - Simplification runtime: suppression du mode embedded executor
+
+- Date: 2026-04-16
+- Statut: implementee
+- Responsable: Engineering
+- Type: runtime simplification
+
+### Contexte
+
+Le serveur control-plane exposait encore un mode d execution embarque qui traitait les builds directement apres l enqueue. Ce mode ajoutait une branche de comportement supplementaire a maintenir cote API/server.
+
+### Decision
+
+- Supprimer le flag de runtime `TARDIGRADE_EMBEDDED_WORKER`.
+- Retirer le declenchement embedded depuis la mutation GraphQL `run_job`.
+- Conserver un flux unique d execution via workers dedies (claim/complete).
+
+### Impact attendu
+
+- Surface runtime plus simple et plus previsible.
+- Moins de divergence entre environnements locaux et production.
+- Reduction du couplage entre API et logique d execution.
+
+### Evidence (tracking)
+
+- Etat API simplifie: [crates/api/src/state/api_state.rs](../crates/api/src/state/api_state.rs)
+- Mutation `run_job` simplifiee: [crates/api/src/graphql/mutation_root.rs](../crates/api/src/graphql/mutation_root.rs)
+- Suppression du chemin embedded dans le service: [crates/api/src/service/ci_service.rs](../crates/api/src/service/ci_service.rs)
+- Configuration serveur simplifiee: [crates/server/src/main.rs](../crates/server/src/main.rs)
+
+---
+
 ## UX-027 - Francisation complete des instructions Copilot du depot
 
 - Date: 2026-04-16

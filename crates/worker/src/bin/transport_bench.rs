@@ -224,11 +224,10 @@ async fn spawn_mock_bench_server() -> Result<BenchServer> {
 async fn spawn_real_bench_server() -> Result<BenchServer> {
     let listener = TcpListener::bind("127.0.0.1:0").await?;
     let addr = listener.local_addr()?;
-    let state = ApiState::with_components_and_mode(
+    let state = ApiState::with_components(
         "transport-bench",
         Arc::new(InMemoryStorage::default()),
         Arc::new(InMemoryScheduler::default()),
-        false,
     );
     let app = build_router(state);
 

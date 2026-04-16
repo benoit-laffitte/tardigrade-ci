@@ -140,7 +140,6 @@ struct AppConfig {
     config_file: String,
     service_name: String,
     bind_address: String,
-    has_embedded_worker: bool,
     database_url: Option<String>,
     scm: ScmConfig,
     queue: QueueConfig,
@@ -158,13 +157,6 @@ impl AppConfig {
         let bind_address =
             std::env::var("TARDIGRADE_BIND_ADDR").unwrap_or_else(|_| "0.0.0.0:8080".to_string());
 
-        let has_embedded_worker = parse_env_bool(
-            "TARDIGRADE_EMBEDDED_WORKER",
-            true,
-            &["1", "true", "TRUE", "True"],
-            &["0", "false", "FALSE", "False"],
-        );
-
         let database_url = std::env::var("TARDIGRADE_DATABASE_URL").ok();
 
         let scm = ScmConfig::load();
@@ -174,7 +166,6 @@ impl AppConfig {
             config_file,
             service_name,
             bind_address,
-            has_embedded_worker,
             database_url,
             scm,
             queue,
@@ -325,7 +316,6 @@ async fn main() -> Result<()> {
         config_file,
         service_name,
         bind_address,
-        has_embedded_worker,
         database_url,
         scm,
         queue,
@@ -348,13 +338,7 @@ async fn main() -> Result<()> {
     let (scheduler, selected_scheduler_backend) =
         build_scheduler(runtime_mode, &queue, database_url.as_deref())?;
     log_queue_file_usage(queue.queue_file.as_deref(), selected_scheduler_backend);
-    let run_embedded_worker = has_embedded_worker;
-    let state = ApiState::with_components_and_mode(
-        service_name.clone(),
-        storage,
-        scheduler,
-        run_embedded_worker,
-    );
+    let state = ApiState::with_components(service_name.clone(), storage, scheduler);
     start_scm_polling_if_enabled(&state, &scm);
 
     let router = mount_dashboard_assets(mount_webhook_adapter(build_router(state.clone()), state));
@@ -362,7 +346,7 @@ async fn main() -> Result<()> {
     // Bind socket first, then hand listener to Axum for graceful shutdown support.
     let bind_addr = bind_address;
     let listener = TcpListener::bind(&bind_addr).await?;
-    info!(bind_addr = %bind_addr, run_embedded_worker, "server listening");
+    info!(bind_addr = %bind_addr, "server listening");
 
     axum::serve(listener, router)
         .with_graceful_shutdown(shutdown_signal())

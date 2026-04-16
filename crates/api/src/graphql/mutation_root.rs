@@ -47,13 +47,6 @@ impl MutationRoot {
             .await
             .map_err(gql_err_from_api)?;
 
-        if state.run_embedded_worker {
-            let service = state.service.clone();
-            tokio::spawn(async move {
-                let _ = service.process_next_build().await;
-            });
-        }
-
         Ok(build.into())
     }
 
