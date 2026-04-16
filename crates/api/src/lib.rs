@@ -17,5 +17,4 @@ pub use models::{
 };
 pub use routing::build_router;
 pub(crate) use service::ApiError;
-pub use settings::ServiceSettings;
-pub use state::ApiState;
+pub use {settings::ServiceSettings, state::ApiState};
