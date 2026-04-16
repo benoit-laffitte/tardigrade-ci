@@ -1,43 +1,43 @@
 ## Tardigrade CI - Copilot Instructions
 
 ### Contexte du projet
-- Tardigrade CI is a Rust workspace for an open-source CI/CD platform.
-- Main crates and roles:
-	- `crates/server`: Axum server entry point, static web console.
-	- `crates/api`: HTTP routes and API state.
-	- `crates/core`: domain entities (`JobDefinition`, `BuildRecord`, `JobStatus`).
-	- `crates/storage`: storage trait with in-memory implementation.
-	- `crates/scheduler`: scheduling trait with in-memory queue.
-	- `crates/executor`: agent d execution execution abstraction/simulation.
-	- `crates/plugins`: plugin contract and registry.
-	- `crates/auth`: authentication primitives.
+- Tardigrade CI est un workspace Rust pour une plateforme CI/CD open source.
+- Principales crates et roles :
+	- `crates/server` : point d entree du serveur Axum, console web statique.
+	- `crates/api` : routes HTTP et etat de l API.
+	- `crates/core` : entites du domaine (`JobDefinition`, `BuildRecord`, `JobStatus`).
+	- `crates/storage` : trait de stockage avec implementation en memoire.
+	- `crates/scheduler` : trait d ordonnancement avec file en memoire.
+	- `crates/executor` : abstraction/simulation d execution des agents.
+	- `crates/plugins` : contrat et registre des plugins.
+	- `crates/auth` : primitives d authentification.
 
 ### Surface API actuelle
 - `POST /graphql`
 - `GET /graphql`
-- Native SCM webhook ingress remains exposed by `crates/server` on `/webhooks/scm`.
+- Le point d entree natif des webhooks SCM reste expose par `crates/server` sur `/webhooks/scm`.
 
 ### Construire, tester et executer
-- Always use proxy-safe commands in this repository:
+- Utiliser systematiquement des commandes compatibles avec le proxy dans ce depot :
 	- `env -u https_proxy -u http_proxy -u PXY_FAB_FONC cargo test --workspace`
 	- `env -u https_proxy -u http_proxy -u PXY_FAB_FONC cargo run -p tardigrade-server`
-- Respect local Cargo registry overrides from `.cargo/config.toml` (workspace uses `cargo-public`).
+- Respecter les surcharges locales du registre Cargo definies dans `.cargo/config.toml` (le workspace utilise `cargo-public`).
 
 ### Exigences de codage
-- Keep changes minimal, focused, and aligned with the current modular architecture.
-- Preserve existing public APIs unless a change request requires otherwise.
-- Add or update tests when behavior changes.
-- Keep tests out of production source files: do not place inline `mod tests { ... }` blocks in main implementation files.
-- Prefer dedicated test files (for example `src/tests.rs`) or crate-level integration tests in `tests/`.
-- Keep documentation and examples in sync with implementation changes.
-- Code must be correctly commented:
-	- Add clear comments for non-obvious logic, decisions, edge cases, and invariants.
-	- Prefer intent-focused comments over line-by-line narration.
-	- Avoid redundant comments that repeat self-explanatory code.
-- each function, structure and test must be commented
+- Garder les changements minimaux, cibles et alignes avec l architecture modulaire actuelle.
+- Preserver les API publiques existantes sauf si une demande de changement impose autre chose.
+- Ajouter ou mettre a jour les tests lorsque le comportement change.
+- Garder les tests hors des fichiers source de production : ne pas placer de blocs inline `mod tests { ... }` dans les fichiers d implementation principaux.
+- Preferer des fichiers de test dedies (par exemple `src/tests.rs`) ou des tests d integration au niveau de la crate dans `tests/`.
+- Maintenir la documentation et les exemples synchronises avec les changements d implementation.
+- Le code doit etre correctement commente :
+	- Ajouter des commentaires clairs pour la logique non evidente, les decisions, les cas limites et les invariants.
+	- Privilegier des commentaires centres sur l intention plutot qu une narration ligne par ligne.
+	- Eviter les commentaires redondants qui repetent un code deja explicite.
+- Chaque fonction, structure et test doit etre commente.
 
 ### Lignes directrices de collaboration
-- Work through tasks systematically and report progress concisely.
-- Follow Rust and Axum best practices for error handling, async code, and type safety.
-- Keep this instructions file updated over time with major project directions and any development rules the team formally adopts.
-- track all actions on BACKLOG.md and UX.md 
+- Traiter les taches de maniere systematique et rendre compte des progres de facon concise.
+- Suivre les bonnes pratiques Rust et Axum pour la gestion des erreurs, le code asynchrone et la surete de typage.
+- Maintenir ce fichier d instructions a jour au fil du temps avec les orientations majeures du projet et toute regle de developpement adoptee formellement par l equipe.
+- Tracer toutes les actions dans BACKLOG.md et UX.md.

@@ -19,6 +19,33 @@ Chaque decision doit etre ajoutee ici avant implementation (ou juste apres en ca
 
 ---
 
+## UX-027 - Francisation complete des instructions Copilot du depot
+
+- Date: 2026-04-16
+- Statut: implementee
+- Responsable: Engineering
+- Type: documentation governance
+
+### Contexte
+
+Le fichier `.github/copilot-instructions.md` etait partiellement en anglais, ce qui introduisait une incoherence de langage avec le reste de la gouvernance projet et les journaux de suivi.
+
+### Decision
+
+- Traduire integralement les instructions Copilot du depot en francais.
+- Conserver les commandes, noms de crates, endpoints et identifiants techniques inchanges.
+
+### Impact attendu
+
+- Regles de contribution plus lisibles pour l equipe francophone.
+- Gouvernance documentaire homogenisee avec le backlog et le journal UX.
+
+### Evidence (tracking)
+
+- Instructions mises a jour: [.github/copilot-instructions.md](../.github/copilot-instructions.md)
+
+---
+
 ## UX-025 - Gouvernance proactive des dependances avec Dependabot
 
 - Date: 2026-04-16
