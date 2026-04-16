@@ -5,7 +5,7 @@ This workspace is a starting point for building an enterprise-grade open-source 
 ## Architecture actuelle
 
 - crates/server: executable entry point and HTTP server bootstrap.
-- crates/api: HTTP routes and API state.
+- crates/api: GraphQL schema/router and API state.
 - crates/core: domain model for jobs, pipeline runs, and statuses.
 - crates/scheduler: queueing and scheduling abstractions.
 - crates/executor: agent d execution execution logic abstraction.
@@ -16,8 +16,7 @@ This workspace is a starting point for building an enterprise-grade open-source 
 ## Implemente actuellement
 
 - Workspace and crate structure.
-- Health check endpoint at GET /health.
-- Job lifecycle endpoints: create, list, run, cancel.
+- GraphQL control-plane endpoint at `/graphql`.
 - Initial domain and subsystem skeletons.
 - API now delegates job/build lifecycle to a service layer backed by the storage crate.
 - Build transitions are exposed on the domain model to enforce status invariants.
@@ -199,61 +198,13 @@ env -u https_proxy -u http_proxy -u PXY_FAB_FONC cargo test --workspace postgres
 
 - POST /graphql (GraphQL endpoint)
 - GET /graphql (GraphQL Playground UI)
-- GET /health
-- GET /live
-- GET /ready
-- GET /events (SSE stream for live dashboard updates)
-- GET /metrics
-- GET /dead-letter-builds
-- POST /jobs
-- GET /jobs
-- POST /jobs/{id}/run
-- POST /builds/{id}/cancel
-- GET /builds
-- GET /agents d execution
-- GET /plugins
-- POST /plugins
-- GET /plugins/policies
-- POST /plugins/policies
 - POST /webhooks/scm
-- POST /scm/webhook-security/configs
-- GET /scm/webhook-security/rejections
-- POST /scm/polling/configs
-- POST /scm/polling/tick
-- POST /agents d execution/{worker_id}/claim
-- POST /agents d execution/{worker_id}/builds/{id}/complete
-- POST /plugins/{name}/init
-- POST /plugins/{name}/execute
-- POST /plugins/{name}/unload
-- POST /plugins/{name}/authorize-check
 
 GraphQL snapshot example (single request for dashboard panels):
 
 curl -X POST http://127.0.0.1:8080/graphql \
 	-H 'content-type: application/json' \
 	-d '{"query":"query { dashboard_snapshot { jobs { id name } builds { id status } agents d execution { id status active_builds } metrics { reclaimed_total retry_requeued_total ownership_conflicts_total dead_letter_total } dead_letter_builds { id status } } }"}'
-
-Worker claim example:
-
-curl -X POST http://127.0.0.1:8080/agents d execution/agent d execution-a/claim
-
-Worker completion example:
-
-curl -X POST http://127.0.0.1:8080/agents d execution/agent d execution-a/builds/<build-id>/complete \
-	-H 'content-type: application/json' \
-	-d '{"status":"success","log_line":"Build completed by external agent d execution"}'
-
-Create a job:
-
-curl -X POST http://127.0.0.1:8080/jobs \
-	-H 'content-type: application/json' \
-	-d '{"name":"build-api","repository_url":"https://example.com/api.git","pipeline_path":"pipelines/api.yml"}'
-
-Create a job with inline pipeline YAML validation (optional `pipeline_yaml`):
-
-curl -X POST http://127.0.0.1:8080/jobs \
-	-H 'content-type: application/json' \
-	-d '{"name":"build-api-inline","repository_url":"https://example.com/api.git","pipeline_path":"pipelines/api.yml","pipeline_yaml":"version: 1\nstages:\n  - name: build\n    steps:\n      - name: cargo-build\n        image: \"rust:1.94\"\n        command:\n          - cargo\n          - build"}'
 
 Pipeline DSL reference and examples:
 
@@ -265,13 +216,8 @@ Pipeline DSL reference and examples:
 
 Invalid pipeline behavior:
 
-- REST `POST /jobs` returns `422 Unprocessable Entity` with `code=invalid_pipeline` for invalid YAML/schema.
 - GraphQL `create_job` returns an error with `extensions.code=invalid_pipeline` and optional `extensions.details`.
 - Blank `pipeline_yaml` is rejected as a bad request.
-
-List jobs:
-
-curl http://127.0.0.1:8080/jobs
 
 ## Cloud/Container Track Status
 

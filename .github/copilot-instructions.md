@@ -13,12 +13,9 @@
 	- `crates/auth`: authentication primitives.
 
 ### Surface API actuelle
-- `GET /health`
-- `POST /jobs`
-- `GET /jobs`
-- `POST /jobs/{id}/run`
-- `POST /builds/{id}/cancel`
-- `GET /builds`
+- `POST /graphql`
+- `GET /graphql`
+- Native SCM webhook ingress remains exposed by `crates/server` on `/webhooks/scm`.
 
 ### Construire, tester et executer
 - Always use proxy-safe commands in this repository:

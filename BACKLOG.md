@@ -34,6 +34,11 @@ Note de version (2026-04-02):
 - Docker/container delivery artifacts and make module were intentionally removed from the active delivery surface.
 - Existing non-Docker Make entrypoints remain the canonical local/CI workflow while cloud scope is redesigned under Epic 5 (`CLOUD-*`).
 
+Note de version (2026-04-16):
+
+- REST artifacts were removed from `crates/api` source surface (legacy REST handlers and REST-specific HTTP model module).
+- Control-plane contract remains GraphQL-only (`POST /graphql`, `GET /graphql`), with native SCM webhook ingress preserved at server level (`/webhooks/scm`).
+
 ## Legende des statuts
 
 - `[ ]` not started

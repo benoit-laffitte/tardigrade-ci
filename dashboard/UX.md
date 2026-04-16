@@ -48,6 +48,35 @@ Le projet combine un workspace Rust, un dashboard Node et des workflows GitHub A
 
 ---
 
+## UX-026 - Finalisation GraphQL-only: suppression des artefacts REST dans `crates/api`
+
+- Date: 2026-04-16
+- Statut: implementee
+- Responsable: Engineering
+- Type: integration contract
+
+### Contexte
+
+La direction produit/API est d'eliminer durablement toute surface REST du control-plane Rust au profit de GraphQL uniquement.
+
+### Decision
+
+- Supprimer les handlers REST historiques encore presents en source dans `crates/api/src/handlers`.
+- Supprimer le module `http_models` REST-specifique de `crates/api`.
+- Conserver uniquement des modeles de donnees neutres pour les flux GraphQL/worker dans un module `models` dedie.
+
+### Impact attendu
+
+- Reduction de la dette technique et du risque de re-exposition accidentelle de routes REST.
+- Contrat d'integration simplifie: GraphQL pour le control-plane, webhook natif dedie cote serveur.
+
+### Evidence (tracking)
+
+- Re-export des modeles neutres: [crates/api/src/lib.rs](../crates/api/src/lib.rs)
+- Nouveau module de modeles: [crates/api/src/models/mod.rs](../crates/api/src/models/mod.rs)
+
+---
+
 ## UX-022 - Strategie transport agent d execution: HTTP/2 d'abord, gRPC en option
 
 - Date: 2026-04-16
