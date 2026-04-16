@@ -3,10 +3,10 @@ mod in_memory_scheduler;
 mod postgres_scheduler;
 mod redis_scheduler;
 
-pub use file_backed_scheduler::FileBackedScheduler;
-pub use in_memory_scheduler::InMemoryScheduler;
-pub use postgres_scheduler::PostgresScheduler;
-pub use redis_scheduler::RedisScheduler;
+pub use self::{
+    file_backed_scheduler::FileBackedScheduler, in_memory_scheduler::InMemoryScheduler,
+    postgres_scheduler::PostgresScheduler, redis_scheduler::RedisScheduler,
+};
 
 #[cfg(test)]
 mod tests;

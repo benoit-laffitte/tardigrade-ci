@@ -46,6 +46,7 @@ Note de version (2026-04-16):
 - Un schema d architecture projet a ete ajoute dans `ARCHI.md` (vue containers + flux operationnels).
 - Le systeme de configuration runtime a ete migre vers un mode TOML-only (server/worker/API), sans variables d environnement applicatives.
 - Le gate coverage est stabilise a 75% via un scope explicite `cargo-llvm-cov` (exclusion des entrypoints runtime/integration-heavy) et correction d un test plugin flakey sous instrumentation.
+- Les re-exports publics `pub use` ont ete harmonises au format inline groupe dans les modules de facade pour une surface API plus homogene.
 
 ## Legende des statuts
 

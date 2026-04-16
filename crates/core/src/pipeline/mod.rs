@@ -6,13 +6,11 @@ mod step;
 mod validation_hint;
 mod validation_issue;
 
-pub use definition::PipelineDefinition;
-pub use dsl_error::PipelineDslError;
-pub use retry_policy::PipelineRetryPolicy;
-pub use stage::PipelineStage;
-pub use step::PipelineStep;
-pub use validation_hint::PipelineValidationHint;
-pub use validation_issue::PipelineValidationIssue;
+pub use self::{
+    definition::PipelineDefinition, dsl_error::PipelineDslError, retry_policy::PipelineRetryPolicy,
+    stage::PipelineStage, step::PipelineStep, validation_hint::PipelineValidationHint,
+    validation_issue::PipelineValidationIssue,
+};
 
 #[cfg(test)]
 mod tests;

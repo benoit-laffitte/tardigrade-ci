@@ -19,6 +19,35 @@ Chaque decision doit etre ajoutee ici avant implementation (ou juste apres en ca
 
 ---
 
+## UX-034 - Harmonisation des re-exports publics (`pub use`) en format groupe
+
+- Date: 2026-04-16
+- Statut: implementee
+- Responsable: Engineering
+- Type: code style consistency
+
+### Contexte
+
+Les modules de facade exposaient un melange de styles (`pub use` unitaire vs groupe inline), ce qui augmentait le bruit en revue et la variance de presentation de l API publique.
+
+### Decision
+
+- Standardiser les re-exports publics sur un format groupe (`pub use self::{...};` ou `pub use module::{...};`) lorsque plusieurs symboles sont exposes ensemble.
+- Conserver les exports unitaires pour les cas ou un seul symbole est expose.
+
+### Impact attendu
+
+- API facade plus homogene entre crates.
+- Diffs plus lisibles lors d ajouts/suppressions d exports.
+- Regle de style plus simple a appliquer en revue.
+
+### Evidence (tracking)
+
+- Harmonisation scheduler facade: [crates/scheduler/src/lib.rs](../crates/scheduler/src/lib.rs)
+- Harmonisation model API facade: [crates/api/src/models/mod.rs](../crates/api/src/models/mod.rs)
+
+---
+
 ## UX-033 - Stabilisation du gate coverage a 75%
 
 - Date: 2026-04-16
