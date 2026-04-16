@@ -2,6 +2,10 @@
 
 This guide covers migration from legacy runtime fallback behavior to explicit scheduler backend selection.
 
+Note (2026-04-16): runtime application configuration is now TOML-only.
+Environment-variable examples below are legacy migration references.
+For current runtime behavior, prefer `config/*.toml` sections (`runtime`, `storage`, `queue`, `scm`, `service`, `worker`).
+
 ## Summary
 
 - Supported scheduler backends: `in-memory`, `file`, `redis`, `postgres`.
