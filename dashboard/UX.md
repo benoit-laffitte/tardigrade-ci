@@ -19,6 +19,36 @@ Chaque decision doit etre ajoutee ici avant implementation (ou juste apres en ca
 
 ---
 
+## UX-031 - Documentation architecture centralisee dans ARCHI.md
+
+- Date: 2026-04-16
+- Statut: implementee
+- Responsable: Engineering
+- Type: documentation architecture
+
+### Contexte
+
+L architecture etait decrite en fragments dans plusieurs fichiers (README, backlog, notes techniques), sans schema central unique.
+
+### Decision
+
+- Ajouter un fichier racine `ARCHI.md` avec un schema Mermaid de la vue globale.
+- Ajouter des flux operationnels explicites (run_job/worker claim-complete et webhook SCM).
+- Conserver la cartographie crate -> role dans le meme document.
+
+### Impact attendu
+
+- Onboarding plus rapide sur les boundaries entre crates.
+- Vision partagee control-plane/data-plane pour les evolutions futures.
+- Documentation plus simple a maintenir lors des changements d architecture.
+
+### Evidence (tracking)
+
+- Schema principal: [ARCHI.md](../ARCHI.md)
+- Trace backlog: [BACKLOG.md](../BACKLOG.md)
+
+---
+
 ## UX-030 - Regle quality gate: passe anti code mort obligatoire
 
 - Date: 2026-04-16

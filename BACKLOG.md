@@ -43,6 +43,7 @@ Note de version (2026-04-16):
 - Dead code cleanup removed orphan `crates/executor` crate from workspace membership after embedded-path retirement.
 - Une regle projet impose desormais une passe anti code mort (`cargo clippy --workspace --all-targets -- -W dead_code`) sur chaque evolution significative.
 - Un point d entree dedie `make dead-code` a ete ajoute pour standardiser cette verification dans le workflow local/CI.
+- Un schema d architecture projet a ete ajoute dans `ARCHI.md` (vue containers + flux operationnels).
 
 ## Legende des statuts
 
