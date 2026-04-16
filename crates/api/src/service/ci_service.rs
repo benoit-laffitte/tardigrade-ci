@@ -1,4 +1,5 @@
 use chrono::{DateTime, Duration as ChronoDuration, Utc};
+use std::cmp::Reverse;
 use std::time::Duration;
 use std::{
     collections::{HashMap, HashSet, VecDeque},
@@ -501,7 +502,7 @@ impl CiService {
             .list_jobs()
             .await
             .map_err(|_| ApiError::Internal)?;
-        jobs.sort_by(|a, b| a.created_at.cmp(&b.created_at));
+        jobs.sort_by_key(|a| a.created_at);
         Ok(jobs)
     }
 
@@ -763,7 +764,7 @@ impl CiService {
             }
         }
 
-        builds.sort_by(|a, b| b.queued_at.cmp(&a.queued_at));
+        builds.sort_by_key(|b| Reverse(b.queued_at));
         Ok(builds)
     }
 
@@ -794,7 +795,7 @@ impl CiService {
             })
             .collect::<Vec<_>>();
 
-        workers.sort_by(|a, b| b.last_seen_at.cmp(&a.last_seen_at));
+        workers.sort_by_key(|b| Reverse(b.last_seen_at));
         Ok(workers)
     }
 
@@ -816,7 +817,7 @@ impl CiService {
             .list_builds()
             .await
             .map_err(|_| ApiError::Internal)?;
-        builds.sort_by(|a, b| b.queued_at.cmp(&a.queued_at));
+        builds.sort_by_key(|b| Reverse(b.queued_at));
         Ok(builds)
     }
 
