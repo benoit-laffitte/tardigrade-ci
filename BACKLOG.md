@@ -40,6 +40,9 @@ Note de version (2026-04-16):
 - Control-plane contract remains GraphQL-only (`POST /graphql`, `GET /graphql`), with native SCM webhook ingress preserved at server level (`/webhooks/scm`).
 - Le fichier d instructions Copilot du depot a ete integralement traduit en francais pour aligner la gouvernance documentaire avec la langue de l equipe.
 - Embedded executor mode was removed from server/API runtime to simplify operations; build execution now relies on dedicated worker processes only.
+- Dead code cleanup removed orphan `crates/executor` crate from workspace membership after embedded-path retirement.
+- Une regle projet impose desormais une passe anti code mort (`cargo clippy --workspace --all-targets -- -W dead_code`) sur chaque evolution significative.
+- Un point d entree dedie `make dead-code` a ete ajoute pour standardiser cette verification dans le workflow local/CI.
 
 ## Legende des statuts
 

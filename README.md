@@ -8,10 +8,10 @@ This workspace is a starting point for building an enterprise-grade open-source 
 - crates/api: GraphQL schema/router and API state.
 - crates/core: domain model for jobs, pipeline runs, and statuses.
 - crates/scheduler: queueing and scheduling abstractions.
-- crates/executor: agent d execution execution logic abstraction.
 - crates/storage: persistence abstractions with in-memory and PostgreSQL implementations.
 - crates/plugins: plugin contract and registry.
 - crates/auth: authentication primitives.
+- crates/worker: dedicated external worker process for build execution.
 
 ## Implemente actuellement
 
@@ -159,6 +159,7 @@ Unified automation entrypoints from repository root:
 - `make help` (list available targets)
 - `make bootstrap` (Rust dependencies prefetch)
 - `make lint` (Rust fmt + clippy)
+- `make dead-code` (Rust dead-code focused clippy pass)
 - `make test-fast` (Rust unit tests only)
 - `make test-all` (full Rust workspace tests)
 - `make dashboard-install` (frontend dependencies via npm)

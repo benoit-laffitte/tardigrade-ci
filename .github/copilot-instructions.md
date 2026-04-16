@@ -8,9 +8,9 @@
 	- `crates/core` : entites du domaine (`JobDefinition`, `BuildRecord`, `JobStatus`).
 	- `crates/storage` : trait de stockage avec implementation en memoire.
 	- `crates/scheduler` : trait d ordonnancement avec file en memoire.
-	- `crates/executor` : abstraction/simulation d execution des agents.
 	- `crates/plugins` : contrat et registre des plugins.
 	- `crates/auth` : primitives d authentification.
+	- `crates/worker` : agent d execution externe (claim/complete) pour traiter les builds.
 
 ### Surface API actuelle
 - `POST /graphql`
@@ -27,6 +27,7 @@
 - Garder les changements minimaux, cibles et alignes avec l architecture modulaire actuelle.
 - Preserver les API publiques existantes sauf si une demande de changement impose autre chose.
 - Ajouter ou mettre a jour les tests lorsque le comportement change.
+- Appliquer une passe anti code mort sur chaque evolution significative (au minimum `cargo clippy --workspace --all-targets -- -W dead_code`) et supprimer les composants orphelins detectes.
 - Garder les tests hors des fichiers source de production : ne pas placer de blocs inline `mod tests { ... }` dans les fichiers d implementation principaux.
 - Preferer des fichiers de test dedies (par exemple `src/tests.rs`) ou des tests d integration au niveau de la crate dans `tests/`.
 - Maintenir la documentation et les exemples synchronises avec les changements d implementation.
@@ -35,6 +36,7 @@
 	- Privilegier des commentaires centres sur l intention plutot qu une narration ligne par ligne.
 	- Eviter les commentaires redondants qui repetent un code deja explicite.
 - Chaque fonction, structure et test doit etre commente.
+- Toujours valider avec un make ci
 
 ### Lignes directrices de collaboration
 - Traiter les taches de maniere systematique et rendre compte des progres de facon concise.

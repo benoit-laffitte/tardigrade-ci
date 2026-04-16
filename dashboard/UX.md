@@ -19,6 +19,68 @@ Chaque decision doit etre ajoutee ici avant implementation (ou juste apres en ca
 
 ---
 
+## UX-030 - Regle quality gate: passe anti code mort obligatoire
+
+- Date: 2026-04-16
+- Statut: implementee
+- Responsable: Engineering
+- Type: quality governance
+
+### Contexte
+
+Le projet simplifie sa surface et veut eviter la reintroduction de composants orphelins ou de branches d execution non utilisees.
+
+### Decision
+
+- Rendre obligatoire une passe anti code mort sur chaque evolution significative.
+- Utiliser au minimum `cargo clippy --workspace --all-targets -- -W dead_code` comme controle standard.
+- Supprimer les composants orphelins detectes dans la meme evolution.
+- Exposer ce controle via une commande ergonomique `make dead-code`.
+
+### Impact attendu
+
+- Reduction continue de la dette technique.
+- Surface runtime plus lisible pour l equipe.
+- Moins de regressions dues a du code inactif conserve trop longtemps.
+
+### Evidence (tracking)
+
+- Regle ajoutee: [.github/copilot-instructions.md](../.github/copilot-instructions.md)
+- Trace backlog: [BACKLOG.md](../BACKLOG.md)
+- Commande dediee: [mk/rust.mk](../mk/rust.mk)
+
+---
+
+## UX-029 - Nettoyage code mort: suppression de la crate executor orpheline
+
+- Date: 2026-04-16
+- Statut: implementee
+- Responsable: Engineering
+- Type: maintenance
+
+### Contexte
+
+Apres suppression du mode embedded, la crate `crates/executor` n etait plus referencee par les crates runtime et ne portait plus de flux de production.
+
+### Decision
+
+- Retirer `crates/executor` de la liste des membres du workspace Cargo.
+- Aligner la documentation architecture et les instructions de contribution sur la topologie reelle (`worker` dedie).
+
+### Impact attendu
+
+- Surface code reduite et plus lisible.
+- Moins de maintenance sur des composants sans usage runtime.
+- Architecture execution clarifiee autour du worker externe.
+
+### Evidence (tracking)
+
+- Workspace members: [Cargo.toml](../Cargo.toml)
+- Architecture README: [README.md](../README.md)
+- Instructions depot: [.github/copilot-instructions.md](../.github/copilot-instructions.md)
+
+---
+
 ## UX-028 - Simplification runtime: suppression du mode embedded executor
 
 - Date: 2026-04-16
