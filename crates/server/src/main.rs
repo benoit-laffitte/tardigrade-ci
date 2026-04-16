@@ -1,4 +1,5 @@
-use anyhow::{Result, anyhow};
+use anyhow::{Context, Result, anyhow};
+use std::fs;
 use std::sync::Arc;
 use std::time::Duration;
 use tardigrade_api::{ApiState, build_router};
@@ -18,69 +19,18 @@ mod webhook_adapter;
 #[cfg(test)]
 mod webhook_adapter_tests;
 
-use config::{RuntimeMode, load_runtime_mode_from_config};
-use dashboard::{WEB_ROOT_ENV_VAR, mount_dashboard_assets, resolve_web_root};
+use config::{RuntimeMode, ServerConfigFile};
+use dashboard::{mount_dashboard_assets, resolve_web_root};
 use runtime::shutdown_signal;
 use webhook_adapter::mount_webhook_adapter;
 
-/// Parses an environment variable as bool and warns when the value is invalid.
-fn parse_env_bool(
-    var_name: &str,
-    default: bool,
-    true_values: &[&str],
-    false_values: &[&str],
-) -> bool {
-    match std::env::var(var_name) {
-        Ok(raw) if true_values.contains(&raw.as_str()) => true,
-        Ok(raw) if false_values.contains(&raw.as_str()) => false,
-        Ok(raw) => {
-            warn!(env_var = var_name, value = %raw, default, "invalid boolean env value; using default");
-            default
-        }
-        Err(_) => default,
-    }
-}
-
-/// Parses an environment variable as u64 and warns when parsing fails.
-fn parse_env_u64(var_name: &str, default: u64) -> u64 {
-    match std::env::var(var_name) {
-        Ok(raw) => match raw.parse::<u64>() {
-            Ok(value) => value,
-            Err(_) => {
-                warn!(env_var = var_name, value = %raw, default, "invalid u64 env value; using default");
-                default
-            }
-        },
-        Err(_) => default,
-    }
-}
-
-/// Holds SCM polling-related configuration derived from environment variables.
+/// Holds SCM polling-related configuration loaded from TOML.
 struct ScmConfig {
     is_polling_enabled: bool,    // true or false
     polling_check_interval: u64, // in seconds
 }
 
-impl ScmConfig {
-    /// Loads SCM polling settings with defaults suitable for local runs.
-    fn load() -> Self {
-        let is_polling_enabled = parse_env_bool(
-            "TARDIGRADE_SCM_POLLING_ENABLED",
-            false,
-            &["1", "true", "TRUE", "True"],
-            &["0", "false", "FALSE", "False"],
-        );
-
-        let polling_check_interval = parse_env_u64("TARDIGRADE_SCM_POLLING_CHECK_SECS", 5);
-
-        Self {
-            is_polling_enabled,
-            polling_check_interval,
-        }
-    }
-}
-
-/// Holds queue and scheduler-related configuration derived from environment variables.
+/// Holds queue and scheduler-related configuration loaded from TOML.
 struct QueueConfig {
     redis_url: Option<String>,
     redis_prefix: String,
@@ -88,29 +38,6 @@ struct QueueConfig {
     scheduler_backend: Option<String>,
     scheduler_database_url: Option<String>,
     scheduler_namespace: String,
-}
-
-impl QueueConfig {
-    /// Loads queue settings while keeping optional Redis/file-backed inputs explicit.
-    fn load() -> Self {
-        let redis_prefix =
-            std::env::var("TARDIGRADE_REDIS_PREFIX").unwrap_or_else(|_| "tardigrade".to_string());
-        let redis_url = std::env::var("TARDIGRADE_REDIS_URL").ok();
-        let queue_file = std::env::var("TARDIGRADE_QUEUE_FILE").ok();
-        let scheduler_backend = std::env::var("TARDIGRADE_SCHEDULER_BACKEND").ok();
-        let scheduler_database_url = std::env::var("TARDIGRADE_SCHEDULER_DATABASE_URL").ok();
-        let scheduler_namespace = std::env::var("TARDIGRADE_SCHEDULER_NAMESPACE")
-            .unwrap_or_else(|_| "tardigrade".to_string());
-
-        Self {
-            redis_url,
-            redis_prefix,
-            queue_file,
-            scheduler_backend,
-            scheduler_database_url,
-            scheduler_namespace,
-        }
-    }
 }
 
 /// Enumerates supported scheduler backend implementations.
@@ -138,35 +65,61 @@ impl SchedulerBackend {
 /// Aggregates all runtime configuration needed to boot the server process.
 struct AppConfig {
     config_file: String,
+    runtime_mode: RuntimeMode,
     service_name: String,
     bind_address: String,
     database_url: Option<String>,
+    service_settings: tardigrade_api::ServiceSettings,
+    web_root: std::path::PathBuf,
     scm: ScmConfig,
     queue: QueueConfig,
 }
 
 impl AppConfig {
-    /// Loads the full server configuration from environment variables and defaults.
+    /// Loads the full server configuration from one TOML file.
     fn load() -> Result<Self> {
-        let service_name = std::env::var("TARDIGRADE_SERVICE_NAME")
-            .unwrap_or_else(|_| "tardigrade-ci".to_string());
+        let config_file = std::env::args()
+            .nth(1)
+            .unwrap_or_else(|| "config/example.toml".to_string());
+        let raw = fs::read_to_string(&config_file)
+            .with_context(|| format!("read config file at {config_file}"))?;
+        let parsed: ServerConfigFile =
+            toml::from_str(&raw).with_context(|| format!("parse TOML from {config_file}"))?;
 
-        let config_file = std::env::var("TARDIGRADE_CONFIG_FILE")
-            .unwrap_or_else(|_| "config/example.toml".to_string());
+        let runtime_mode = parsed.runtime.mode;
+        let service_name = parsed.server.service_name;
+        let bind_address = parsed.server.bind;
+        let database_url = parsed.storage.database_url;
+        let service_settings = tardigrade_api::ServiceSettings {
+            worker_lease_timeout_secs: parsed.service.worker_lease_timeout_secs,
+            max_retries: parsed.service.max_retries,
+            retry_backoff_ms: parsed.service.retry_backoff_ms,
+            webhook_dedup_ttl_secs: parsed.service.webhook_dedup_ttl_secs,
+        };
+        let web_root = resolve_web_root(parsed.dashboard.web_root.as_deref());
 
-        let bind_address =
-            std::env::var("TARDIGRADE_BIND_ADDR").unwrap_or_else(|_| "0.0.0.0:8080".to_string());
+        let scm = ScmConfig {
+            is_polling_enabled: parsed.scm.polling_enabled,
+            polling_check_interval: parsed.scm.polling_check_secs,
+        };
 
-        let database_url = std::env::var("TARDIGRADE_DATABASE_URL").ok();
-
-        let scm = ScmConfig::load();
-        let queue = QueueConfig::load();
+        let queue = QueueConfig {
+            redis_url: parsed.queue.redis_url,
+            redis_prefix: parsed.queue.redis_prefix,
+            queue_file: parsed.queue.file_path,
+            scheduler_backend: parsed.queue.backend,
+            scheduler_database_url: parsed.queue.scheduler_database_url,
+            scheduler_namespace: parsed.queue.scheduler_namespace,
+        };
 
         Ok(Self {
             config_file,
+            runtime_mode,
             service_name,
             bind_address,
             database_url,
+            service_settings,
+            web_root,
             scm,
             queue,
         })
@@ -181,7 +134,7 @@ async fn build_storage(
     let storage: Arc<dyn Storage + Send + Sync> = match runtime_mode {
         RuntimeMode::Prod => {
             let database_url = database_url
-                .ok_or_else(|| anyhow!("prod mode requires TARDIGRADE_DATABASE_URL"))?;
+                .ok_or_else(|| anyhow!("prod mode requires storage.database_url in TOML"))?;
             info!("using postgres-backed storage (prod mode)");
             Arc::new(PostgresStorage::connect(database_url).await?)
         }
@@ -213,7 +166,7 @@ fn build_scheduler(
         .map(|raw| {
             SchedulerBackend::parse(raw).ok_or_else(|| {
                 anyhow!(
-                    "invalid TARDIGRADE_SCHEDULER_BACKEND value: {raw} (expected one of: in-memory, file, redis, postgres)"
+                    "invalid queue.backend value: {raw} (expected one of: in-memory, file, redis, postgres)"
                 )
             })
         })
@@ -242,7 +195,7 @@ fn build_scheduler(
             let queue_file = queue
                 .queue_file
                 .as_deref()
-                .ok_or_else(|| anyhow!("file scheduler requires TARDIGRADE_QUEUE_FILE"))?;
+                .ok_or_else(|| anyhow!("file scheduler requires queue.file_path"))?;
             info!(queue_file = %queue_file, "using file-backed scheduler");
             Arc::new(FileBackedScheduler::open(queue_file)?)
         }
@@ -250,7 +203,7 @@ fn build_scheduler(
             let redis_url = queue
                 .redis_url
                 .as_deref()
-                .ok_or_else(|| anyhow!("redis scheduler requires TARDIGRADE_REDIS_URL"))?;
+                .ok_or_else(|| anyhow!("redis scheduler requires queue.redis_url"))?;
             let redis_prefix = queue.redis_prefix.as_str();
             info!(redis_prefix = %redis_prefix, "using redis-backed scheduler");
             Arc::new(RedisScheduler::open(redis_url, redis_prefix)?)
@@ -262,7 +215,7 @@ fn build_scheduler(
                     .or(storage_database_url)
                     .ok_or_else(|| {
                         anyhow!(
-                            "postgres scheduler requires TARDIGRADE_SCHEDULER_DATABASE_URL or TARDIGRADE_DATABASE_URL"
+                            "postgres scheduler requires queue.scheduler_database_url or storage.database_url"
                         )
                     })?;
             let namespace = queue.scheduler_namespace.as_str();
@@ -283,7 +236,7 @@ fn log_queue_file_usage(queue_file: Option<&str>, selected_backend: SchedulerBac
             warn!(
                 queue_file = %path,
                 selected_backend = ?selected_backend,
-                "TARDIGRADE_QUEUE_FILE is set but only used by file scheduler backend"
+                "queue.file_path is configured but only used by file scheduler backend"
             );
         }
     };
@@ -303,33 +256,27 @@ fn start_scm_polling_if_enabled(state: &ApiState, scm: &ScmConfig) {
 /// Boots API server, selects configured backends, and serves HTTP routes.
 #[tokio::main]
 async fn main() -> Result<()> {
-    // Initialize structured logs and let RUST_LOG override defaults.
+    // Initialize structured logs with a deterministic default level.
     tracing_subscriber::fmt()
-        .with_env_filter(
-            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
-        )
+        .with_env_filter(EnvFilter::new("info"))
         .init();
 
-    // Read runtime configuration from environment with safe defaults for local runs.
+    // Read runtime configuration from one TOML file.
     let app_config = AppConfig::load()?;
     let AppConfig {
         config_file,
+        runtime_mode,
         service_name,
         bind_address,
         database_url,
+        service_settings,
+        web_root,
         scm,
         queue,
     } = app_config;
 
-    let runtime_mode = load_runtime_mode_from_config(&config_file)?;
-    let web_root = resolve_web_root();
-
     info!(config_file = %config_file, runtime_mode = ?runtime_mode, "runtime mode loaded");
-    info!(
-        web_root = %web_root.display(),
-        web_root_env_var = WEB_ROOT_ENV_VAR,
-        "dashboard web asset root resolved"
-    );
+    info!(web_root = %web_root.display(), "dashboard web asset root resolved");
 
     // Share one storage backend across request handlers through an Arc trait object.
     let storage = build_storage(runtime_mode, database_url.as_deref()).await?;
@@ -338,10 +285,18 @@ async fn main() -> Result<()> {
     let (scheduler, selected_scheduler_backend) =
         build_scheduler(runtime_mode, &queue, database_url.as_deref())?;
     log_queue_file_usage(queue.queue_file.as_deref(), selected_scheduler_backend);
-    let state = ApiState::with_components(service_name.clone(), storage, scheduler);
+    let state = ApiState::with_components_and_settings(
+        service_name.clone(),
+        storage,
+        scheduler,
+        service_settings,
+    );
     start_scm_polling_if_enabled(&state, &scm);
 
-    let router = mount_dashboard_assets(mount_webhook_adapter(build_router(state.clone()), state));
+    let router = mount_dashboard_assets(
+        mount_webhook_adapter(build_router(state.clone()), state),
+        web_root,
+    );
 
     // Bind socket first, then hand listener to Axum for graceful shutdown support.
     let bind_addr = bind_address;

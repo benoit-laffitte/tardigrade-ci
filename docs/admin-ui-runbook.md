@@ -38,7 +38,7 @@ Sensitive actions must be executed as `admin` and are recorded in the `Admin Act
 
 ## Prerequis environnementaux
 
-- Server running: `env -u https_proxy -u http_proxy -u PXY_FAB_FONC cargo run -p tardigrade-server`
+- Server running: `env -u https_proxy -u http_proxy -u PXY_FAB_FONC cargo run -p tardigrade-server -- config/runtime-dev.toml`
 - Dashboard reachable: `http://127.0.0.1:8080/`
 - Staging data seeded with representative jobs/builds/agents d execution/plugins before drill exercises.
 

@@ -19,6 +19,38 @@ Chaque decision doit etre ajoutee ici avant implementation (ou juste apres en ca
 
 ---
 
+## UX-032 - Configuration runtime TOML-only (suppression env applicatives)
+
+- Date: 2026-04-16
+- Statut: implementee
+- Responsable: Engineering
+- Type: runtime simplification
+
+### Contexte
+
+La configuration runtime etait dispersee entre fichier TOML et nombreuses variables d environnement, ce qui rendait les deploiements moins deterministes.
+
+### Decision
+
+- Basculer server/worker/API vers un chargement de configuration TOML-only.
+- Retirer les points de lecture `std::env::var` applicatifs des crates runtime.
+- Passer le chemin de config en argument CLI (par defaut `config/example.toml`).
+
+### Impact attendu
+
+- Configuration plus explicite et versionnable.
+- Moins de derives entre environnements (local, CI, prod).
+- Bootstrap plus predictable via fichiers config uniques.
+
+### Evidence (tracking)
+
+- Server bootstrap TOML-only: [crates/server/src/main.rs](../crates/server/src/main.rs)
+- API settings par defaults/TOML injection: [crates/api/src/settings/service_settings.rs](../crates/api/src/settings/service_settings.rs)
+- Worker config TOML-only: [crates/worker/src/worker_config.rs](../crates/worker/src/worker_config.rs)
+- Config files enrichis: [config/example.toml](../config/example.toml)
+
+---
+
 ## UX-031 - Documentation architecture centralisee dans ARCHI.md
 
 - Date: 2026-04-16

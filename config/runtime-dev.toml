@@ -1,2 +1,39 @@
 [runtime]
 mode = "dev"
+
+[server]
+service_name = "tardigrade-ci"
+bind = "127.0.0.1:8080"
+
+[dashboard]
+web_root = "target/public"
+
+[storage]
+# Dev mode defaults to in-memory when database_url is omitted.
+# database_url = "postgres://tardigrade:tardigrade@127.0.0.1:5432/tardigrade"
+
+[queue]
+backend = "in-memory"
+redis_prefix = "tardigrade"
+scheduler_namespace = "tardigrade"
+
+[scm]
+polling_enabled = false
+polling_check_secs = 5
+
+[service]
+worker_lease_timeout_secs = 30
+max_retries = 2
+retry_backoff_ms = 1000
+webhook_dedup_ttl_secs = 3600
+
+[worker]
+server_url = "http://127.0.0.1:8080"
+worker_id = "worker-local"
+poll_ms = 250
+http2_enabled = true
+http2_prior_knowledge = false
+request_timeout_secs = 30
+pool_idle_timeout_secs = 90
+pool_max_idle_per_host = 32
+http2_keep_alive_secs = 30

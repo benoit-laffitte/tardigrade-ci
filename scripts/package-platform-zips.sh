@@ -77,8 +77,8 @@ write_package_readme() {
 - Start server (Windows PowerShell):
   .\\bin\\start-server.ps1
 
-The launcher scripts set TARDIGRADE_WEB_ROOT to ./dashboard, so dashboard assets are served
-from the package root (outside internal source crate paths).
+The launcher scripts start server with config/runtime-prod.toml and dashboard.web_root=dashboard,
+so dashboard assets are served from the package root.
 
 Dashboard URL after startup:
 
@@ -90,18 +90,21 @@ For detailed product documentation, see docs/.
 EOF
 }
 
-# This function writes launcher scripts that normalize dashboard access from package root.
+# This function writes launcher scripts that run server with packaged TOML configuration.
 write_launchers() {
 	local package_dir="$1"
 	cat >"$package_dir/bin/start-server.sh" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Resolve package root from script location and force dashboard assets outside crate paths.
+# Resolve package root from script location and run with packaged runtime config.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PACKAGE_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-export TARDIGRADE_WEB_ROOT="$PACKAGE_ROOT/dashboard"
+cd "$PACKAGE_ROOT"
+if [[ $# -eq 0 ]]; then
+	exec "$SCRIPT_DIR/tardigrade-server" "$PACKAGE_ROOT/config/runtime-prod.toml"
+fi
 exec "$SCRIPT_DIR/tardigrade-server" "$@"
 EOF
 	chmod +x "$package_dir/bin/start-server.sh"
@@ -110,17 +113,37 @@ EOF
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $PackageRoot = Split-Path -Parent $ScriptDir
 
-$env:TARDIGRADE_WEB_ROOT = Join-Path $PackageRoot "dashboard"
-& (Join-Path $ScriptDir "tardigrade-server.exe") @args
+Set-Location $PackageRoot
+if ($args.Length -eq 0) {
+	& (Join-Path $ScriptDir "tardigrade-server.exe") (Join-Path $PackageRoot "config/runtime-prod.toml")
+} else {
+	& (Join-Path $ScriptDir "tardigrade-server.exe") @args
+}
 EOF
 
 	cat >"$package_dir/bin/start-server.cmd" <<'EOF'
 @echo off
 set SCRIPT_DIR=%~dp0
 set PACKAGE_ROOT=%SCRIPT_DIR%..
-set TARDIGRADE_WEB_ROOT=%PACKAGE_ROOT%\dashboard
-"%SCRIPT_DIR%tardigrade-server.exe" %*
+cd /d "%PACKAGE_ROOT%"
+if "%~1"=="" (
+	"%SCRIPT_DIR%tardigrade-server.exe" "%PACKAGE_ROOT%\config\runtime-prod.toml"
+) else (
+	"%SCRIPT_DIR%tardigrade-server.exe" %*
+)
 EOF
+}
+
+# This function rewrites packaged runtime configs to serve dashboard assets from package root.
+rewrite_packaged_dashboard_root() {
+	local package_dir="$1"
+	local config_file=""
+
+	for config_file in "$package_dir"/config/*.toml; do
+		[[ -f "$config_file" ]] || continue
+		sed -i.bak 's#^web_root = ".*"#web_root = "dashboard"#' "$config_file"
+		rm -f "${config_file}.bak"
+	done
 }
 
 # This function copies dashboard static files into a top-level package directory.
@@ -286,6 +309,7 @@ main() {
 
 		copy_platform_binaries "$root_dir" "$platform" "$target" "$package_dir/bin"
 		cp -R "$root_dir/config/." "$package_dir/config/"
+		rewrite_packaged_dashboard_root "$package_dir"
 		cp -R "$root_dir/docs/." "$package_dir/docs/"
 		copy_dashboard_assets "$root_dir" "$package_dir/dashboard"
 		write_launchers "$package_dir"

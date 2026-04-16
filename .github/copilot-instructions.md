@@ -28,6 +28,7 @@
 - Preserver les API publiques existantes sauf si une demande de changement impose autre chose.
 - Ajouter ou mettre a jour les tests lorsque le comportement change.
 - Appliquer une passe anti code mort sur chaque evolution significative (au minimum `cargo clippy --workspace --all-targets -- -W dead_code`) et supprimer les composants orphelins detectes.
+- Configuration runtime: utiliser exclusivement les fichiers TOML (pas de variables d environnement applicatives pour server/worker/API).
 - Garder les tests hors des fichiers source de production : ne pas placer de blocs inline `mod tests { ... }` dans les fichiers d implementation principaux.
 - Preferer des fichiers de test dedies (par exemple `src/tests.rs`) ou des tests d integration au niveau de la crate dans `tests/`.
 - Maintenir la documentation et les exemples synchronises avec les changements d implementation.

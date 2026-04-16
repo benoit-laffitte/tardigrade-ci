@@ -1,5 +1,10 @@
-/// Worker runtime configuration resolved from environment variables.
-#[derive(Debug, Clone)]
+use anyhow::{Context, Result};
+use serde::Deserialize;
+use std::fs;
+
+/// Worker runtime configuration resolved from TOML file.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default)]
 pub(crate) struct WorkerConfig {
     /// Base URL of the API server to poll.
     pub(crate) server_url: String,
@@ -21,84 +26,60 @@ pub(crate) struct WorkerConfig {
     pub(crate) http2_keep_alive_secs: u64,
 }
 
-/// Resolves server URL with default fallback.
-pub(crate) fn resolve_server_url(raw: Option<&str>) -> String {
-    raw.unwrap_or("http://127.0.0.1:8080").to_string()
-}
-
-/// Resolves worker identifier with default fallback.
-pub(crate) fn resolve_worker_id(raw: Option<&str>) -> String {
-    raw.unwrap_or("worker-local").to_string()
-}
-
-/// Parses polling interval with safe default when input is invalid.
-pub(crate) fn parse_poll_ms(raw: Option<&str>) -> u64 {
-    raw.and_then(|v| v.parse::<u64>().ok()).unwrap_or(250)
-}
-
-/// Parses a boolean environment value with tolerant true/false aliases.
-pub(crate) fn parse_bool(raw: Option<&str>, default: bool) -> bool {
-    match raw.map(str::trim).map(str::to_ascii_lowercase) {
-        Some(value) if matches!(value.as_str(), "1" | "true" | "yes" | "on") => true,
-        Some(value) if matches!(value.as_str(), "0" | "false" | "no" | "off") => false,
-        Some(_) => default,
-        None => default,
+impl Default for WorkerConfig {
+    /// Provides stable defaults for local worker runs when TOML omits explicit values.
+    fn default() -> Self {
+        Self {
+            server_url: "http://127.0.0.1:8080".to_string(),
+            worker_id: "worker-local".to_string(),
+            poll_ms: 250,
+            http2_enabled: true,
+            http2_prior_knowledge: false,
+            request_timeout_secs: 30,
+            pool_idle_timeout_secs: 90,
+            pool_max_idle_per_host: 32,
+            http2_keep_alive_secs: 30,
+        }
     }
 }
 
-/// Parses an unsigned integer environment value with fallback default.
-pub(crate) fn parse_u64(raw: Option<&str>, default: u64) -> u64 {
-    raw.and_then(|v| v.parse::<u64>().ok()).unwrap_or(default)
+/// Top-level worker config file shape.
+#[derive(Debug, Deserialize, Default)]
+#[serde(default)]
+struct WorkerConfigFile {
+    worker: WorkerConfig,
 }
 
-/// Parses a usize environment value with fallback default.
-pub(crate) fn parse_usize(raw: Option<&str>, default: usize) -> usize {
-    raw.and_then(|v| v.parse::<usize>().ok()).unwrap_or(default)
-}
+/// Loads worker configuration from one TOML file path.
+pub(crate) fn load_worker_config(path: &str) -> Result<WorkerConfig> {
+    let raw = fs::read_to_string(path).with_context(|| format!("read config file at {path}"))?;
+    let parsed: WorkerConfigFile =
+        toml::from_str(&raw).with_context(|| format!("parse TOML from {path}"))?;
 
-/// Loads worker configuration from process environment.
-pub(crate) fn load_worker_config() -> WorkerConfig {
-    WorkerConfig {
-        server_url: resolve_server_url(std::env::var("TARDIGRADE_SERVER_URL").ok().as_deref()),
-        worker_id: resolve_worker_id(std::env::var("TARDIGRADE_WORKER_ID").ok().as_deref()),
-        poll_ms: parse_poll_ms(std::env::var("TARDIGRADE_WORKER_POLL_MS").ok().as_deref()),
-        http2_enabled: parse_bool(
-            std::env::var("TARDIGRADE_WORKER_HTTP2_ENABLED")
-                .ok()
-                .as_deref(),
-            true,
-        ),
-        http2_prior_knowledge: parse_bool(
-            std::env::var("TARDIGRADE_WORKER_HTTP2_PRIOR_KNOWLEDGE")
-                .ok()
-                .as_deref(),
-            false,
-        ),
-        request_timeout_secs: parse_u64(
-            std::env::var("TARDIGRADE_WORKER_REQUEST_TIMEOUT_SECS")
-                .ok()
-                .as_deref(),
-            30,
-        ),
-        pool_idle_timeout_secs: parse_u64(
-            std::env::var("TARDIGRADE_WORKER_POOL_IDLE_TIMEOUT_SECS")
-                .ok()
-                .as_deref(),
-            90,
-        ),
-        pool_max_idle_per_host: parse_usize(
-            std::env::var("TARDIGRADE_WORKER_POOL_MAX_IDLE_PER_HOST")
-                .ok()
-                .as_deref(),
-            32,
-        ),
-        http2_keep_alive_secs: parse_u64(
-            std::env::var("TARDIGRADE_WORKER_HTTP2_KEEP_ALIVE_SECS")
-                .ok()
-                .as_deref(),
-            30,
-        ),
+    let mut worker = parsed.worker;
+    if worker.server_url.trim().is_empty() {
+        worker.server_url = WorkerConfig::default().server_url;
     }
+    if worker.worker_id.trim().is_empty() {
+        worker.worker_id = WorkerConfig::default().worker_id;
+    }
+    if worker.poll_ms == 0 {
+        worker.poll_ms = WorkerConfig::default().poll_ms;
+    }
+    if worker.request_timeout_secs == 0 {
+        worker.request_timeout_secs = WorkerConfig::default().request_timeout_secs;
+    }
+    if worker.pool_idle_timeout_secs == 0 {
+        worker.pool_idle_timeout_secs = WorkerConfig::default().pool_idle_timeout_secs;
+    }
+    if worker.pool_max_idle_per_host == 0 {
+        worker.pool_max_idle_per_host = WorkerConfig::default().pool_max_idle_per_host;
+    }
+    if worker.http2_keep_alive_secs == 0 {
+        worker.http2_keep_alive_secs = WorkerConfig::default().http2_keep_alive_secs;
+    }
+
+    Ok(worker)
 }
 
 #[cfg(test)]

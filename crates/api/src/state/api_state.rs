@@ -67,7 +67,7 @@ impl ApiState {
             service_name,
             storage,
             scheduler,
-            ServiceSettings::from_env(),
+            ServiceSettings::default(),
         )
     }
 

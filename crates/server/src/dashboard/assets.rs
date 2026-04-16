@@ -1,11 +1,8 @@
 use std::path::PathBuf;
 
-/// Environment variable used to override the dashboard asset root.
-pub const WEB_ROOT_ENV_VAR: &str = "TARDIGRADE_WEB_ROOT";
-
-/// Resolves the dashboard asset root from env or uses the canonical target/public location.
-pub fn resolve_web_root() -> PathBuf {
-    if let Ok(explicit_root) = std::env::var(WEB_ROOT_ENV_VAR) {
+/// Resolves the dashboard asset root from TOML config or canonical target/public location.
+pub fn resolve_web_root(configured_root: Option<&str>) -> PathBuf {
+    if let Some(explicit_root) = configured_root {
         return PathBuf::from(explicit_root);
     }
 

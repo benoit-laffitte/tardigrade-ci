@@ -7,7 +7,7 @@ use std::path::PathBuf;
 use std::sync::Once;
 use tower::ServiceExt;
 
-use super::mount_dashboard_assets;
+use super::{mount_dashboard_assets, resolve_web_root};
 
 /// Ensures canonical target/public assets exist for handler tests.
 fn ensure_dashboard_test_assets() {
@@ -50,7 +50,7 @@ fn ensure_dashboard_test_assets() {
 
 /// Builds a router exposing dashboard assets through the mounted directory service.
 fn dashboard_test_router() -> axum::Router {
-    mount_dashboard_assets(axum::Router::new())
+    mount_dashboard_assets(axum::Router::new(), resolve_web_root(None))
 }
 
 /// Verifies dashboard root path returns an HTML payload.

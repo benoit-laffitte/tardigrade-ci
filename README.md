@@ -77,68 +77,25 @@ Build dashboard assets served by Rust server:
 The Vite build outputs to `target/public` (`index.html`, `app.js`, `styles.css`) and the Axum server serves them dynamically at runtime.
 If `target/public` is missing, dashboard routes return runtime errors until `make dashboard-build` is executed.
 
-Run server in dev mode from config file (default fallback is Redis when configured, otherwise in-memory):
+Run server in dev mode from TOML config file:
 
-TARDIGRADE_CONFIG_FILE=config/runtime-dev.toml \
-env -u https_proxy -u http_proxy -u PXY_FAB_FONC cargo run -p tardigrade-server
+env -u https_proxy -u http_proxy -u PXY_FAB_FONC cargo run -p tardigrade-server -- config/runtime-dev.toml
 
-Run server with Redis-backed queue:
+Run server in prod mode from TOML config file:
 
-TARDIGRADE_REDIS_URL=redis://127.0.0.1:6379 \
-TARDIGRADE_REDIS_PREFIX=tardigrade \
-env -u https_proxy -u http_proxy -u PXY_FAB_FONC cargo run -p tardigrade-server
+env -u https_proxy -u http_proxy -u PXY_FAB_FONC cargo run -p tardigrade-server -- config/runtime-prod.toml
 
-Run server with PostgreSQL storage + Redis queue:
+Run a dedicated external agent d execution from the same TOML file base:
 
-TARDIGRADE_CONFIG_FILE=config/runtime-prod.toml \
-TARDIGRADE_DATABASE_URL=postgres://tardigrade:tardigrade@127.0.0.1:5432/tardigrade \
-TARDIGRADE_REDIS_URL=redis://127.0.0.1:6379 \
-TARDIGRADE_REDIS_PREFIX=tardigrade \
-env -u https_proxy -u http_proxy -u PXY_FAB_FONC cargo run -p tardigrade-server
-
-Run server with PostgreSQL storage + PostgreSQL scheduler:
-
-TARDIGRADE_CONFIG_FILE=config/runtime-prod.toml \
-TARDIGRADE_DATABASE_URL=postgres://tardigrade:tardigrade@127.0.0.1:5432/tardigrade \
-TARDIGRADE_SCHEDULER_BACKEND=postgres \
-TARDIGRADE_SCHEDULER_NAMESPACE=tardigrade \
-env -u https_proxy -u http_proxy -u PXY_FAB_FONC cargo run -p tardigrade-server
-
-Run a dedicated external agent d execution:
-
-TARDIGRADE_SERVER_URL=http://127.0.0.1:8080 \
-TARDIGRADE_WORKER_ID=agent d execution-a \
-env -u https_proxy -u http_proxy -u PXY_FAB_FONC cargo run -p tardigrade-agent d execution
-
-Cloud-friendly runtime env vars:
-
-- TARDIGRADE_CONFIG_FILE (optional config file path, default: config/example.toml)
-- TARDIGRADE_BIND_ADDR (default: 0.0.0.0:8080)
-- TARDIGRADE_SERVICE_NAME (default: tardigrade-ci)
-- TARDIGRADE_DATABASE_URL (optional PostgreSQL URL for jobs/builds persistence)
-- TARDIGRADE_SCHEDULER_BACKEND (optional explicit scheduler backend: in-memory, file, redis, postgres)
-- TARDIGRADE_SCHEDULER_DATABASE_URL (optional PostgreSQL URL dedicated to scheduler, falls back to TARDIGRADE_DATABASE_URL)
-- TARDIGRADE_SCHEDULER_NAMESPACE (optional scheduler namespace for Redis keys / PostgreSQL rows, default: tardigrade)
-- TARDIGRADE_REDIS_URL (optional Redis URL for distributed queue backend)
-- TARDIGRADE_REDIS_PREFIX (optional Redis key prefix, default: tardigrade)
-- TARDIGRADE_QUEUE_FILE (queue state file path used by file scheduler backend)
-- TARDIGRADE_SERVER_URL (agent d execution -> controller URL)
-- TARDIGRADE_WORKER_ID (agent d execution identity)
-- TARDIGRADE_WORKER_POLL_MS (agent d execution polling interval)
-- TARDIGRADE_WORKER_HTTP2_ENABLED (default: true)
-- TARDIGRADE_WORKER_HTTP2_PRIOR_KNOWLEDGE (default: false, enables h2c prior knowledge)
-- TARDIGRADE_WORKER_REQUEST_TIMEOUT_SECS (default: 30)
-- TARDIGRADE_WORKER_POOL_IDLE_TIMEOUT_SECS (default: 90)
-- TARDIGRADE_WORKER_POOL_MAX_IDLE_PER_HOST (default: 32)
-- TARDIGRADE_WORKER_HTTP2_KEEP_ALIVE_SECS (default: 30)
+env -u https_proxy -u http_proxy -u PXY_FAB_FONC cargo run -p tardigrade-worker -- config/runtime-dev.toml
 
 Runtime mode is read from config file under `[runtime]`:
 
 - `mode = "dev"`: scheduler uses Redis when configured, otherwise in-memory fallback.
 - `mode = "prod"`: scheduler defaults to Redis and fails fast when Redis is missing.
-- `TARDIGRADE_SCHEDULER_BACKEND` overrides runtime defaults to one of in-memory/file/redis/postgres.
+- `queue.backend` overrides runtime defaults to one of in-memory/file/redis/postgres.
 
-`TARDIGRADE_QUEUE_FILE` is used only when `TARDIGRADE_SCHEDULER_BACKEND=file`.
+`queue.file_path` is used only when `queue.backend=file`.
 
 Migration notes for scheduler backend selection:
 
@@ -175,7 +132,7 @@ Platform zip packaging details:
 
 - Each archive includes `bin/`, `config/`, `docs/`, `dashboard/`, `README.md`, and `LICENSE.txt`.
 - Dashboard assets are exported from `target/public` to a top-level `dashboard/` folder in each zip.
-- Launchers in `bin/` (`start-server.sh`, `start-server.ps1`, `start-server.cmd`) set `TARDIGRADE_WEB_ROOT` automatically.
+- Launchers in `bin/` (`start-server.sh`, `start-server.ps1`, `start-server.cmd`) start server with `config/runtime-prod.toml` by default.
 
 Current note:
 

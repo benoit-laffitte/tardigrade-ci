@@ -2,7 +2,11 @@
 mode = "dev"
 
 [server]
+service_name = "tardigrade-ci"
 bind = "127.0.0.1:8080"
+
+[dashboard]
+web_root = "target/public"
 
 [security]
 api_key = "change-me"
@@ -11,10 +15,34 @@ api_key = "change-me"
 concurrency = 2
 
 [storage]
-backend = "postgres"
-database_url = "postgres://tardigrade:tardigrade@127.0.0.1:5432/tardigrade"
+# Leave unset for in-memory storage in dev mode.
+# database_url = "postgres://tardigrade:tardigrade@127.0.0.1:5432/tardigrade"
 
 [queue]
 backend = "redis"
 redis_url = "redis://127.0.0.1:6379"
 redis_prefix = "tardigrade"
+# file_path = "tmp/queue-state.json"
+# scheduler_database_url = "postgres://tardigrade:tardigrade@127.0.0.1:5432/tardigrade"
+scheduler_namespace = "tardigrade"
+
+[scm]
+polling_enabled = false
+polling_check_secs = 5
+
+[service]
+worker_lease_timeout_secs = 30
+max_retries = 2
+retry_backoff_ms = 1000
+webhook_dedup_ttl_secs = 3600
+
+[worker]
+server_url = "http://127.0.0.1:8080"
+worker_id = "worker-local"
+poll_ms = 250
+http2_enabled = true
+http2_prior_knowledge = false
+request_timeout_secs = 30
+pool_idle_timeout_secs = 90
+pool_max_idle_per_host = 32
+http2_keep_alive_secs = 30
