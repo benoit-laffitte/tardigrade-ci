@@ -80,7 +80,7 @@ impl AppConfig {
     fn load() -> Result<Self> {
         let config_file = std::env::args()
             .nth(1)
-            .unwrap_or_else(|| "config/example.toml".to_string());
+            .unwrap_or_else(|| "config/tardigrade-ci.toml".to_string());
         let raw = fs::read_to_string(&config_file)
             .with_context(|| format!("read config file at {config_file}"))?;
         let parsed: ServerConfigFile =

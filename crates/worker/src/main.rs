@@ -21,7 +21,7 @@ async fn main() -> Result<()> {
 
     let config_path = std::env::args()
         .nth(1)
-        .unwrap_or_else(|| "config/example.toml".to_string());
+        .unwrap_or_else(|| "config/tardigrade-ci.toml".to_string());
     let config = load_worker_config(&config_path)?;
     let api = HttpWorkerApi::from_config(&config)?;
     let server_url = config.server_url;
