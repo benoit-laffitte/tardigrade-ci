@@ -7,6 +7,7 @@ use std::sync::{
 };
 use std::time::{Duration, Instant};
 use tardigrade_api::{ApiState, build_router};
+use tardigrade_core::{CompleteBuildRequest, WorkerBuildStatus};
 use tardigrade_scheduler::InMemoryScheduler;
 use tardigrade_storage::InMemoryStorage;
 use tokio::net::TcpListener;
@@ -401,8 +402,8 @@ async fn run_cycle(api: &HttpWorkerApi, graphql_url: &str, worker_id: &str) -> R
         graphql_url,
         worker_id,
         build.id,
-        &tardigrade_api::CompleteBuildRequest {
-            status: tardigrade_api::WorkerBuildStatus::Success,
+        &CompleteBuildRequest {
+            status: WorkerBuildStatus::Success,
             log_line: Some("benchmark completion".to_string()),
         },
     )

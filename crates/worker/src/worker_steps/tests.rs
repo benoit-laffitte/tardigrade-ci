@@ -4,8 +4,7 @@ use anyhow::{Result, anyhow};
 use async_trait::async_trait;
 use std::collections::VecDeque;
 use std::sync::Mutex;
-use tardigrade_api::WorkerBuildStatus;
-use tardigrade_core::BuildRecord;
+use tardigrade_core::{BuildRecord, CompleteBuildRequest, WorkerBuildStatus};
 use uuid::Uuid;
 
 /// Captures one completion API call for assertion in tests.
@@ -66,7 +65,7 @@ impl WorkerApi for MockWorkerApi {
         graphql_url: &str,
         _worker_id: &str,
         _build_id: Uuid,
-        body: &tardigrade_api::CompleteBuildRequest,
+        body: &CompleteBuildRequest,
     ) -> Result<()> {
         self.complete_calls
             .lock()

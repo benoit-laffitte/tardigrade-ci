@@ -1,5 +1,5 @@
 use super::completion_body;
-use tardigrade_api::WorkerBuildStatus;
+use tardigrade_core::WorkerBuildStatus;
 
 /// Confirms completion payload defaults to success status with log line.
 #[test]

@@ -2,6 +2,7 @@ mod job;
 mod pipeline;
 mod scm;
 mod technology;
+mod worker;
 
 pub use {
     job::{BuildRecord, JobDefinition, JobStatus},
@@ -14,4 +15,5 @@ pub use {
         BuildStrategyMetadata, RuntimeMetadata, TechnologyLanguage, TechnologyProfile,
         TechnologyProfileValidationIssue, built_in_technology_profiles,
     },
+    worker::{CompleteBuildRequest, WorkerBuildStatus},
 };

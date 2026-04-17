@@ -1,5 +1,4 @@
-use tardigrade_api::CompleteBuildRequest;
-use tardigrade_core::BuildRecord;
+use tardigrade_core::{BuildRecord, CompleteBuildRequest};
 use tracing::error;
 use uuid::Uuid;
 

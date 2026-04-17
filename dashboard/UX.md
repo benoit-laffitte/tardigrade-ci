@@ -19,6 +19,51 @@ Chaque decision doit etre ajoutee ici avant implementation (ou juste apres en ca
 
 ---
 
+## UX-035 - Convergence architecture hexagonale en 2 phases (pragmatique puis stricte)
+
+- Date: 2026-04-17
+- Statut: acceptee
+- Responsable: Engineering
+- Type: architecture governance
+
+### Contexte
+
+Le projet vise une architecture hexagonale stricte, mais le code actuel contient encore des couplages pragmatiques (notamment entre worker et API, et entre orchestration applicative et types transport HTTP).
+
+### Decision
+
+- Executer une convergence en deux temps:
+  - Phase A pragmatique: supprimer les inversions majeures et isoler les mappings transport sans casser les livraisons en cours.
+  - Phase B stricte: imposer des frontieres de crates (domain/application/adapters) verifiables a la compilation.
+- Decouper explicitement le plan crate par crate dans le backlog pour permettre des PR incrementales et testables.
+
+### Impact attendu
+
+- Reduction immediate du couplage le plus riske sans ralentir la roadmap produit.
+- Chemin clair vers un modele hexagonal strict avec garde-fous CI contre les regressions d architecture.
+- Visibilite de livraison amelioree grace au suivi par crate et par phase.
+
+### Evidence (tracking)
+
+- Plan de convergence et decoupage crate par crate: [BACKLOG.md](../BACKLOG.md)
+
+### Mise a jour implementation (2026-04-17)
+
+- Les DTO worker de completion ont ete deplaces vers `crates/core` pour servir de contrat neutre partage.
+- La crate API conserve des re-exports de compatibilite pour eviter une rupture de surface publique immediate.
+- Le runtime worker n importe plus les DTO depuis la crate API.
+- La dependance `tardigrade-api` cote worker est maintenant optionnelle et reservee au benchmark transport.
+
+Evidence technique:
+
+- Contrat neutre worker: [crates/core/src/worker/mod.rs](../crates/core/src/worker/mod.rs)
+- DTO completion: [crates/core/src/worker/complete_build_request.rs](../crates/core/src/worker/complete_build_request.rs)
+- DTO status: [crates/core/src/worker/worker_build_status.rs](../crates/core/src/worker/worker_build_status.rs)
+- Worker bascule vers core: [crates/worker/src/worker_api.rs](../crates/worker/src/worker_api.rs)
+- Feature gate benchmark: [crates/worker/Cargo.toml](../crates/worker/Cargo.toml)
+
+---
+
 ## UX-034 - Harmonisation des re-exports publics (`pub use`) en format groupe
 
 - Date: 2026-04-16

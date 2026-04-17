@@ -17,10 +17,11 @@ This file is the delivery backlog derived from the current roadmap.
 3. Epic 3 (`PLUG-*`) for extension safety model.
 4. Epic 7 (`UIADM-*`) for product administration IHM coverage.
 5. Epic 6 (`REFAC-*`) for Rust source maintainability refactor.
-6. Reliability follow-ups (`REL-*`) as hardening milestones.
-7. Epic 0 (`INDUS-*`) hardening follow-ups.
-8. Epic 5 (`CLOUD-*`) cloud/container delivery track (deferred).
-9. Epic 8 (`UXREAL-*`) mockup-to-real-dashboard rollout.
+6. Epic 10 (`HEXA-*`) for hexagonal architecture convergence (pragmatic then strict).
+7. Reliability follow-ups (`REL-*`) as hardening milestones.
+8. Epic 0 (`INDUS-*`) hardening follow-ups.
+9. Epic 5 (`CLOUD-*`) cloud/container delivery track (deferred).
+10. Epic 8 (`UXREAL-*`) mockup-to-real-dashboard rollout.
 
 Mise a jour du contexte:
 
@@ -611,6 +612,92 @@ Definition de termine:
 - Reliability and security telemetry needed for operations are durable and queryable after restarts.
 - Multi-instance resilience tests pass for supported production backends.
 
+### Epic 10: Hexagonal architecture convergence (pragmatic to strict)
+
+Objectif: converge the current crate topology toward a strict hexagonal architecture without destabilizing current delivery, by executing a pragmatic decoupling phase first and a strict-boundary phase second.
+
+Resultat d affinage for Phase A (pragmatic baseline, 2026-04-17):
+
+- Keep public runtime behavior unchanged while reducing the biggest dependency inversions.
+- Prioritize compile-time dependency cleanup before folder-level reorganization.
+- Introduce neutral contracts incrementally (DTO/ports) where coupling is currently highest.
+- Preserve GraphQL as control-plane contract during this phase.
+
+Resultat d affinage for Phase B (strict logical boundaries, 2026-04-17):
+
+- Enforce inward dependency direction: adapters -> application -> domain, never the reverse.
+- Isolate transport-specific and persistence-specific models from use-case orchestration.
+- Split crates when needed to make architectural boundaries enforceable at compile time.
+- Add architectural guard tests/checks to prevent regression.
+
+Resultat d execution for `HEXA-01` (2026-04-17):
+
+- Worker completion DTOs (`CompleteBuildRequest`, `WorkerBuildStatus`) moved to neutral core contract.
+- API model keeps backward-compatible re-exports to avoid public contract break.
+- Worker runtime path no longer imports API DTOs.
+- `tardigrade-api` dependency in worker was reduced to optional and gated for benchmark-only binary (`transport_bench`).
+- Validation: `make ci` green after migration.
+
+Plan de convergence crate par crate:
+
+- `crates/core`
+  - Goal: keep domain model framework-agnostic and free of transport/storage concerns.
+  - Scope: verify domain invariants remain independent from GraphQL/Axum/Postgres representations.
+  - Status: `[ ]` not started.
+  - Acceptance criteria: no dependency from `core` to API/server/storage/scheduler concrete adapters; domain transitions tested through domain-level tests only.
+- `crates/api`
+  - Goal: convert API to pure inbound adapter + application orchestration boundary.
+  - Scope: move Axum/GraphQL-specific request/response mapping out of service orchestration paths.
+  - Status: `[ ]` not started.
+  - Acceptance criteria: use-case entrypoints accept transport-neutral command/query inputs; no Axum `HeaderMap` in application service signatures.
+- `crates/server`
+  - Goal: keep server as composition root and inbound adapter host only.
+  - Scope: centralize wiring of storage/scheduler/plugin adapters and API schema/router mounting.
+  - Status: `[ ]` not started.
+  - Acceptance criteria: server owns runtime assembly only; no business decision logic beyond adapter/bootstrap concerns.
+- `crates/worker`
+  - Goal: remove dependency inversion by decoupling worker from API crate internals.
+  - Scope: replace `tardigrade-api` type imports with neutral worker contract DTOs.
+  - Status: `[-]` in progress.
+  - Acceptance criteria: worker runtime no longer depends on API DTOs; remaining API coupling is isolated to benchmark feature path until strict split.
+- `crates/storage`
+  - Goal: preserve storage as outbound adapter package behind port contract.
+  - Scope: separate storage contract visibility from concrete backend exports in preparation for strict phase.
+  - Status: `[ ]` not started.
+  - Acceptance criteria: application code depends on storage port only; concrete postgres/in-memory adapters resolved at composition root.
+- `crates/scheduler`
+  - Goal: preserve scheduler as outbound adapter package behind queue port contract.
+  - Scope: tighten scheduler contract usage and avoid leaking backend-specific concerns upward.
+  - Status: `[ ]` not started.
+  - Acceptance criteria: application code depends on scheduler port only; backend selection remains runtime composition concern.
+- `crates/plugins`
+  - Goal: clarify plugin registry role as secondary adapter with explicit policy boundary.
+  - Scope: keep lifecycle/capability model behind use-case-facing abstractions.
+  - Status: `[ ]` not started.
+  - Acceptance criteria: plugin lifecycle operations are invoked through application-facing contracts, not transport-facing types.
+- `crates/auth`
+  - Goal: keep auth primitives as reusable policy component independent of delivery adapters.
+  - Scope: align auth checks with application boundary instead of transport handlers.
+  - Status: `[ ]` not started.
+  - Acceptance criteria: auth decisions can be consumed by GraphQL/HTTP adapters without embedding transport types in auth primitives.
+
+- [-] `HEXA-01` Phase A: remove worker -> api inversion by introducing neutral worker contract DTOs and dropping `tardigrade-api` dependency from worker.
+- [ ] `HEXA-02` Phase A: introduce transport-neutral webhook command model and move Axum header handling to API/server adapters.
+- [ ] `HEXA-03` Phase A: split API orchestration into explicit use-case layer and adapter mapping layer without behavior change.
+- [ ] `HEXA-04` Phase A: make storage/scheduler contract-first consumption explicit in API and server wiring tests.
+- [ ] `HEXA-05` Phase A: document pragmatic target dependency graph in `ARCHI.md` and contribution guidance.
+- [ ] `HEXA-06` Phase B: enforce strict crate boundaries (ports vs adapters) with compile-time dependency constraints.
+- [ ] `HEXA-07` Phase B: extract dedicated application crate for CI use cases and move orchestration out of adapter crates.
+- [ ] `HEXA-08` Phase B: add architecture regression checks (dependency policy tests/CI guard) to block forbidden edges.
+- [ ] `HEXA-09` Phase B: align plugins/auth integration through application ports and remove residual adapter leakage.
+
+Definition de termine:
+
+- Pragmatic phase removes major inversions while preserving current behavior and delivery cadence.
+- Strict phase enforces compile-time architectural boundaries between domain, application, and adapters.
+- Worker/API/storage/scheduler interactions are driven by explicit ports and transport-neutral contracts.
+- `make ci` remains green after each incremental ticket.
+
 ## Queue reliability follow-ups
 
 ### Termine
@@ -651,7 +738,8 @@ Resultat d affinage for transport strategy (2026-04-16):
 3. Epic 3 (`PLUG-*`) for extension safety model.
 4. Epic 7 (`UIADM-*`) for product administration IHM coverage.
 5. Epic 6 (`REFAC-*`) for Rust source maintainability refactor.
-6. Reliability follow-ups (`REL-*`) as hardening milestones.
-7. Epic 0 (`INDUS-*`) hardening follow-ups.
-8. Epic 5 (`CLOUD-*`) cloud/container delivery track (deferred).
-9. Epic 8 (`UXREAL-*`) mockup-to-real-dashboard rollout.
+6. Epic 10 (`HEXA-*`) for hexagonal architecture convergence (pragmatic then strict).
+7. Reliability follow-ups (`REL-*`) as hardening milestones.
+8. Epic 0 (`INDUS-*`) hardening follow-ups.
+9. Epic 5 (`CLOUD-*`) cloud/container delivery track (deferred).
+10. Epic 8 (`UXREAL-*`) mockup-to-real-dashboard rollout.

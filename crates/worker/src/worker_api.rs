@@ -4,8 +4,7 @@ use chrono::{DateTime, Utc};
 use reqwest::{Client, ClientBuilder};
 use serde::Deserialize;
 use serde_json::json;
-use tardigrade_api::CompleteBuildRequest;
-use tardigrade_core::{BuildRecord, JobStatus};
+use tardigrade_core::{BuildRecord, CompleteBuildRequest, JobStatus, WorkerBuildStatus};
 use uuid::Uuid;
 
 use crate::worker_config::WorkerConfig;
@@ -102,8 +101,8 @@ impl WorkerApi for HttpWorkerApi {
         body: &CompleteBuildRequest,
     ) -> Result<()> {
         let status = match body.status {
-            tardigrade_api::WorkerBuildStatus::Success => "SUCCESS",
-            tardigrade_api::WorkerBuildStatus::Failed => "FAILED",
+            WorkerBuildStatus::Success => "SUCCESS",
+            WorkerBuildStatus::Failed => "FAILED",
         };
 
         let payload: GraphqlEnvelope<CompleteMutationData> = self

@@ -3,6 +3,14 @@ name = "tardigrade-worker"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+default = []
+transport-bench = [
+	"dep:tardigrade-api",
+	"dep:tardigrade-storage",
+	"dep:tardigrade-scheduler",
+]
+
 [dependencies]
 anyhow.workspace = true
 axum.workspace = true
@@ -17,6 +25,11 @@ uuid.workspace = true
 async-trait.workspace = true
 toml = "0.8"
 tardigrade-core = { path = "../core" }
-tardigrade-api = { path = "../api" }
-tardigrade-storage = { path = "../storage" }
-tardigrade-scheduler = { path = "../scheduler" }
+tardigrade-api = { path = "../api", optional = true }
+tardigrade-storage = { path = "../storage", optional = true }
+tardigrade-scheduler = { path = "../scheduler", optional = true }
+
+[[bin]]
+name = "transport_bench"
+path = "src/bin/transport_bench.rs"
+required-features = ["transport-bench"]

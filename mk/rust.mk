@@ -34,4 +34,4 @@ package-platform-zips: dashboard-build ## Build and package zip archives for mac
 	./scripts/package-platform-zips.sh
 
 worker-transport-bench: ## Run local worker transport benchmark (HTTP/1 vs HTTP/2)
-	$(NO_PROXY_ENV) $(CARGO) run -p tardigrade-worker --bin transport_bench -- --iterations 200
+	$(NO_PROXY_ENV) $(CARGO) run -p tardigrade-worker --features transport-bench --bin transport_bench -- --iterations 200

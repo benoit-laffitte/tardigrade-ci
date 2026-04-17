@@ -1,4 +1,4 @@
-use tardigrade_api::{CompleteBuildRequest, WorkerBuildStatus};
+use tardigrade_core::{CompleteBuildRequest, WorkerBuildStatus};
 
 /// Builds default completion payload used by simulated worker execution.
 pub(crate) fn completion_body() -> CompleteBuildRequest {

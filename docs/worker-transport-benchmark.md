@@ -24,7 +24,7 @@ Equivalent direct command:
 
 ```bash
 env -u https_proxy -u http_proxy -u PXY_FAB_FONC \
-cargo run -p tardigrade-agent d execution --bin transport_bench -- --iterations 200
+cargo run -p tardigrade-worker --features transport-bench --bin transport_bench -- --iterations 200
 ```
 
 ## Method
