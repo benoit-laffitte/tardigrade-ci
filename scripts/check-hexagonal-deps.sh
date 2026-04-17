@@ -51,7 +51,7 @@ is_allowed_edge() {
             ;;
         application)
             case "$to" in
-                core|storage|scheduler)
+                core|storage|scheduler|plugins|auth)
                     return 0
                     ;;
                 *)

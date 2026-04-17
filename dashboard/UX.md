@@ -99,6 +99,22 @@ Le projet vise une architecture hexagonale stricte, mais le code actuel contient
 - Le script de policy accepte maintenant un chemin de repository cible, permettant de tester la policy sur des fixtures synthetiques isolees.
 - Le workflow lint/CI execute desormais ces scenarios via `make arch-guard-test` en plus du check de policy nominal.
 
+### Mise a jour implementation (2026-04-17, HEXA-09)
+
+- Les operations plugin/policy ont ete alignees sur la couche application via une facade dediee (`PluginUseCases`).
+- `ApiState` ne porte plus l orchestration plugin (registre/capabilities/policy); il delegue vers la couche application.
+- Les modeles de reponse plugin sont maintenant definis dans `crates/application` et re-exportes par `crates/api` pour conserver la compatibilite de surface.
+- La policy de dependances et la documentation d architecture ont ete alignees avec cette frontiere (`application -> plugins|auth`).
+
+Evidence technique:
+
+- Facade plugin application: [crates/application/src/plugins/plugin_use_cases.rs](../crates/application/src/plugins/plugin_use_cases.rs)
+- Exports application plugin: [crates/application/src/lib.rs](../crates/application/src/lib.rs)
+- Rewiring state adapter: [crates/api/src/state/api_state.rs](../crates/api/src/state/api_state.rs)
+- Re-export modeles plugin API: [crates/api/src/models/mod.rs](../crates/api/src/models/mod.rs)
+- Policy dependances mise a jour: [scripts/check-hexagonal-deps.sh](../scripts/check-hexagonal-deps.sh)
+- Regle architecture mise a jour: [ARCHI.md](../ARCHI.md)
+
 Evidence technique:
 
 - Regression scenarios: [scripts/test-hexagonal-deps-guard.sh](../scripts/test-hexagonal-deps-guard.sh)

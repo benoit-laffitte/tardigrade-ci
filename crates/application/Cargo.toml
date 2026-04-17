@@ -16,3 +16,4 @@ hex = "0.4"
 tardigrade-core = { path = "../core" }
 tardigrade-storage = { path = "../storage" }
 tardigrade-scheduler = { path = "../scheduler" }
+tardigrade-plugins = { path = "../plugins" }

@@ -160,7 +160,7 @@ flowchart TD
 ### Regles de dependance (phase pragmatique)
 
 - Regle 1: les adaptateurs entrants (`server`, `graphql`, `handlers`, `state`) appellent la couche use-case (`application`) et ne contiennent pas d orchestration metier longue.
-- Regle 2: la couche application (`crates/application`) depend du domaine (`core`) et des ports (`Storage`, `Scheduler`), jamais d un backend concret.
+- Regle 2: la couche application (`crates/application`) depend du domaine (`core`), des ports (`Storage`, `Scheduler`) et des composants de policy (`plugins`, `auth`), jamais d un backend concret.
 - Regle 3: les backends concrets (`storage`, `scheduler`) sont choisis au bootstrap (`server`) et passes sous forme de trait objects.
 - Regle 4: `worker` consomme des contrats neutres depuis `core` pour les DTO partages; tout couplage restant a `api` doit etre explicite et confine.
 

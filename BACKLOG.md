@@ -692,6 +692,14 @@ Resultat d execution for `HEXA-08` (2026-04-17):
 - Updated command documentation to expose the new target and make architecture policy verification discoverable.
 - Validation: `make ci` green after migration.
 
+Resultat d execution for `HEXA-09` (2026-04-17):
+
+- Introduced application-layer plugin facade (`PluginUseCases`) in `crates/application` and moved plugin lifecycle/policy orchestration out of `ApiState` adapter logic.
+- Rewired API state methods to delegate plugin operations to application use-cases while preserving GraphQL behavior and response contracts.
+- Moved plugin administration response models (`PluginInfo`, `PluginPolicyResponse`, `PluginAuthorizationCheckResponse`) to `crates/application` and kept API compatibility via re-exports.
+- Updated dependency policy and architecture documentation to allow application-layer policy components (`application -> plugins|auth`) as part of strict convergence.
+- Validation: `make ci` green after migration.
+
 Plan de convergence crate par crate:
 
 - `crates/core`
@@ -748,7 +756,7 @@ Plan de convergence crate par crate:
 - [-] `HEXA-06` Phase B: enforce strict crate boundaries (ports vs adapters) with compile-time dependency constraints.
 - [-] `HEXA-07` Phase B: extract dedicated application crate for CI use cases and move orchestration out of adapter crates.
 - [-] `HEXA-08` Phase B: add architecture regression checks (dependency policy tests/CI guard) to block forbidden edges.
-- [ ] `HEXA-09` Phase B: align plugins/auth integration through application ports and remove residual adapter leakage.
+- [-] `HEXA-09` Phase B: align plugins/auth integration through application ports and remove residual adapter leakage.
 
 Definition de termine:
 
