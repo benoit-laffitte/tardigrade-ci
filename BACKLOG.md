@@ -689,6 +689,7 @@ Resultat d execution complementaire for strict ports/adapters separation (2026-0
 - Introduced explicit `ports` and `adapters` public namespaces in `crates/storage` and `crates/scheduler` to separate contract visibility from concrete backend implementations.
 - Rewired composition-root imports to adapter namespaces (`server`) while keeping application consumption on port traits.
 - Rewired API state defaults and integration tests to explicit in-memory adapter imports, preserving behavior.
+- Rewired internal trait imports to explicit `ports::Storage` / `ports::Scheduler` namespaces in application, API, server, and integration tests.
 - Validation: `make ci` green after migration.
 
 Resultat d execution for `HEXA-07` (2026-04-17):

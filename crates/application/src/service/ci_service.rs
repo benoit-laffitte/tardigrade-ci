@@ -6,8 +6,8 @@ use std::{
     sync::{Arc, Mutex},
 };
 use tardigrade_core::{BuildRecord, JobDefinition, PipelineDefinition};
-use tardigrade_scheduler::Scheduler;
-use tardigrade_storage::Storage;
+use tardigrade_scheduler::ports::Scheduler;
+use tardigrade_storage::ports::Storage;
 use tokio::sync::broadcast;
 use uuid::Uuid;
 

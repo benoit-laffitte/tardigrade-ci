@@ -5,8 +5,8 @@ use axum::{
 use serde_json::json;
 use std::sync::Arc;
 use tardigrade_api::{ApiState, build_router};
-use tardigrade_scheduler::{Scheduler, adapters::InMemoryScheduler};
-use tardigrade_storage::{Storage, adapters::InMemoryStorage};
+use tardigrade_scheduler::{adapters::InMemoryScheduler, ports::Scheduler};
+use tardigrade_storage::{adapters::InMemoryStorage, ports::Storage};
 use tower::ServiceExt;
 
 use crate::webhook_adapter::mount_webhook_adapter;

@@ -4,12 +4,12 @@ use std::sync::Arc;
 use std::time::Duration;
 use tardigrade_api::{ApiState, build_router};
 use tardigrade_scheduler::{
-    Scheduler,
     adapters::{FileBackedScheduler, InMemoryScheduler, PostgresScheduler, RedisScheduler},
+    ports::Scheduler,
 };
 use tardigrade_storage::{
-    Storage,
     adapters::{InMemoryStorage, PostgresStorage},
+    ports::Storage,
 };
 use tokio::net::TcpListener;
 use tracing::{info, warn};

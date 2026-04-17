@@ -4,8 +4,8 @@ use axum::{
 };
 use serde_json::{Value, json};
 use std::sync::Arc;
-use tardigrade_scheduler::{Scheduler, adapters::InMemoryScheduler};
-use tardigrade_storage::{Storage, adapters::InMemoryStorage};
+use tardigrade_scheduler::{adapters::InMemoryScheduler, ports::Scheduler};
+use tardigrade_storage::{adapters::InMemoryStorage, ports::Storage};
 use tower::ServiceExt;
 
 fn graphql_request(query: &str, variables: Value) -> Request<Body> {
