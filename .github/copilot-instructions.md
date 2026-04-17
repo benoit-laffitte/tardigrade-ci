@@ -51,3 +51,4 @@
 - La couche application/service doit consommer les ports (`Storage`, `Scheduler`) via trait objects, jamais des backends concrets.
 - Le domaine (`crates/core`) ne doit jamais dependre de crates d adaptateurs ou d infrastructure.
 - Tout couplage residuel temporaire accepte pour la phase pragmatique doit etre isole, documente dans `BACKLOG.md`, et planifie pour suppression en phase stricte.
+- Un garde-fou de dependances est execute via `make arch-guard` (integre dans `make lint`/`make ci`) et doit rester vert.

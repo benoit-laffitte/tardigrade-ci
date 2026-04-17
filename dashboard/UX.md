@@ -80,6 +80,19 @@ Le projet vise une architecture hexagonale stricte, mais le code actuel contient
 - Les regles de dependances autorisees/interdites sont maintenant explicites pour guider les prochaines PR.
 - Les instructions de contribution du depot incluent des regles hexagonales pragmatiques operables.
 
+### Mise a jour implementation (2026-04-17, HEXA-06)
+
+- Un garde-fou de dependances internes a ete introduit pour faire respecter le graphe hexagonal pragmatique.
+- Ce check est desormais integre au workflow standard via `make arch-guard` et execute dans `make lint`/`make ci`.
+- Une exception temporaire explicite est maintenue pour le chemin benchmark worker, uniquement si les dependances concernes restent `optional`.
+
+Evidence technique:
+
+- Script de policy: [scripts/check-hexagonal-deps.sh](../scripts/check-hexagonal-deps.sh)
+- Integration Make: [mk/rust.mk](../mk/rust.mk)
+- Documentation commande: [README.md](../README.md)
+- Regle contribution: [.github/copilot-instructions.md](../.github/copilot-instructions.md)
+
 Evidence technique:
 
 - Graphe cible et regles pragmatiques: [ARCHI.md](../ARCHI.md)

@@ -668,6 +668,14 @@ Resultat d execution for `HEXA-05` (2026-04-17):
 - Added repository contribution rules for pragmatic hexagonal dependencies in `.github/copilot-instructions.md`.
 - Validation: `make ci` green after migration.
 
+Resultat d execution for `HEXA-06` (2026-04-17):
+
+- Added compile-time dependency guard script (`scripts/check-hexagonal-deps.sh`) enforcing pragmatic allowed edges between workspace crates.
+- Integrated guard in Make workflow via `make arch-guard`, now part of `make lint` and therefore `make ci`.
+- Documented guard target in README and repository contribution instructions.
+- Preserved temporary benchmark-only worker coupling by allowing `worker -> {api,storage,scheduler}` only when dependencies remain optional.
+- Validation: `make ci` green after migration.
+
 Plan de convergence crate par crate:
 
 - `crates/core`
@@ -716,7 +724,7 @@ Plan de convergence crate par crate:
 - [-] `HEXA-03` Phase A: split API orchestration into explicit use-case layer and adapter mapping layer without behavior change.
 - [-] `HEXA-04` Phase A: make storage/scheduler contract-first consumption explicit in API and server wiring tests.
 - [-] `HEXA-05` Phase A: document pragmatic target dependency graph in `ARCHI.md` and contribution guidance.
-- [ ] `HEXA-06` Phase B: enforce strict crate boundaries (ports vs adapters) with compile-time dependency constraints.
+- [-] `HEXA-06` Phase B: enforce strict crate boundaries (ports vs adapters) with compile-time dependency constraints.
 - [ ] `HEXA-07` Phase B: extract dedicated application crate for CI use cases and move orchestration out of adapter crates.
 - [ ] `HEXA-08` Phase B: add architecture regression checks (dependency policy tests/CI guard) to block forbidden edges.
 - [ ] `HEXA-09` Phase B: align plugins/auth integration through application ports and remove residual adapter leakage.

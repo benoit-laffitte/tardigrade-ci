@@ -1,6 +1,6 @@
 # Rust-centric targets.
 
-.PHONY: bootstrap fmt-check clippy dead-code lint test-fast test-all test build-rust build-rust-release-images package-platform-zips worker-transport-bench
+.PHONY: bootstrap fmt-check clippy dead-code arch-guard lint test-fast test-all test build-rust build-rust-release-images package-platform-zips worker-transport-bench
 
 bootstrap: ## Prefetch Rust dependencies for local development
 	$(NO_PROXY_ENV) $(CARGO) fetch
@@ -14,7 +14,10 @@ clippy: ## Run clippy on all Rust targets
 dead-code: ## Run dead-code focused lint pass on all Rust targets
 	$(NO_PROXY_ENV) $(CARGO) clippy --workspace --all-targets -- -W dead_code
 
-lint: fmt-check clippy ## Run Rust lint pipeline
+arch-guard: ## Enforce pragmatic hexagonal internal dependency policy
+	bash ./scripts/check-hexagonal-deps.sh
+
+lint: fmt-check clippy arch-guard ## Run Rust lint pipeline
 
 test-fast: ## Run Rust unit tests only (lib + bins)
 	$(NO_PROXY_ENV) $(CARGO) test --workspace --lib --bins

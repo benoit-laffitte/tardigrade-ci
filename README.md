@@ -117,6 +117,7 @@ Unified automation entrypoints from repository root:
 - `make bootstrap` (Rust dependencies prefetch)
 - `make lint` (Rust fmt + clippy)
 - `make dead-code` (Rust dead-code focused clippy pass)
+- `make arch-guard` (hexagonal dependency policy check)
 - `make test-fast` (Rust unit tests only)
 - `make test-all` (full Rust workspace tests)
 - `make dashboard-install` (frontend dependencies via npm)
