@@ -654,6 +654,13 @@ Resultat d execution for `HEXA-03` (2026-04-17):
 - Kept behavior unchanged while making adapter mapping and application orchestration boundaries explicit.
 - Validation: `make ci` green after migration.
 
+Resultat d execution for `HEXA-04` (2026-04-17):
+
+- Added explicit API wiring test building `ApiState` with `Arc<dyn Storage + Send + Sync>` and `Arc<dyn Scheduler + Send + Sync>` to validate contract-first composition.
+- Added explicit server wiring test mounting webhook adapter with trait-object storage/scheduler components and validating GraphQL readiness path.
+- Kept runtime behavior unchanged while making adapter composition intent executable through tests.
+- Validation: `make ci` green after migration.
+
 Plan de convergence crate par crate:
 
 - `crates/core`
@@ -700,7 +707,7 @@ Plan de convergence crate par crate:
 - [-] `HEXA-01` Phase A: remove worker -> api inversion by introducing neutral worker contract DTOs and dropping `tardigrade-api` dependency from worker.
 - [-] `HEXA-02` Phase A: introduce transport-neutral webhook command model and move Axum header handling to API/server adapters.
 - [-] `HEXA-03` Phase A: split API orchestration into explicit use-case layer and adapter mapping layer without behavior change.
-- [ ] `HEXA-04` Phase A: make storage/scheduler contract-first consumption explicit in API and server wiring tests.
+- [-] `HEXA-04` Phase A: make storage/scheduler contract-first consumption explicit in API and server wiring tests.
 - [ ] `HEXA-05` Phase A: document pragmatic target dependency graph in `ARCHI.md` and contribution guidance.
 - [ ] `HEXA-06` Phase B: enforce strict crate boundaries (ports vs adapters) with compile-time dependency constraints.
 - [ ] `HEXA-07` Phase B: extract dedicated application crate for CI use cases and move orchestration out of adapter crates.

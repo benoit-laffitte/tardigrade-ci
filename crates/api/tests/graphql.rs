@@ -3,6 +3,9 @@ use axum::{
     http::{Request, StatusCode, header},
 };
 use serde_json::{Value, json};
+use std::sync::Arc;
+use tardigrade_scheduler::{InMemoryScheduler, Scheduler};
+use tardigrade_storage::{InMemoryStorage, Storage};
 use tower::ServiceExt;
 
 fn graphql_request(query: &str, variables: Value) -> Request<Body> {
@@ -56,6 +59,35 @@ async fn graphql_router_does_not_expose_legacy_rest_endpoints() {
 
     assert_eq!(health_response.status(), StatusCode::NOT_FOUND);
     assert_eq!(jobs_response.status(), StatusCode::NOT_FOUND);
+}
+
+/// Verifies API wiring accepts explicit storage/scheduler port trait objects.
+#[tokio::test]
+async fn graphql_router_accepts_port_trait_object_components() {
+    let storage: Arc<dyn Storage + Send + Sync> = Arc::new(InMemoryStorage::default());
+    let scheduler: Arc<dyn Scheduler + Send + Sync> = Arc::new(InMemoryScheduler::default());
+    let app = tardigrade_api::build_router(tardigrade_api::ApiState::with_components(
+        "tardigrade-ci-test",
+        storage,
+        scheduler,
+    ));
+
+    let response = app
+        .oneshot(graphql_request(
+            r#"
+            query Ready {
+              ready { status }
+            }
+            "#,
+            json!({}),
+        ))
+        .await
+        .expect("graphql response");
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let payload = read_json(response).await;
+    assert!(payload.get("errors").is_none(), "graphql errors: {payload}");
+    assert_eq!(payload["data"]["ready"]["status"], "ready");
 }
 
 #[tokio::test]

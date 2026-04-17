@@ -68,6 +68,18 @@ Le projet vise une architecture hexagonale stricte, mais le code actuel contient
 - Les chemins API state (webhook/polling) passent egalement par la couche use-case.
 - Le comportement fonctionnel est conserve avec une separation plus nette entre mapping d entrees et orchestration metier.
 
+### Mise a jour implementation (2026-04-17, HEXA-04)
+
+- Des tests de wiring contract-first ont ete ajoutes cote API et cote server.
+- Ces tests construisent explicitement `ApiState` avec `Storage`/`Scheduler` en trait objects (`Arc<dyn ...>`) et valident le chemin GraphQL ready.
+- L intention architecturale de composition par ports est maintenant verifiee en test de regression.
+
+Evidence technique:
+
+- Test API wiring ports: [crates/api/tests/graphql.rs](../crates/api/tests/graphql.rs)
+- Test server wiring ports: [crates/server/src/webhook_adapter_tests.rs](../crates/server/src/webhook_adapter_tests.rs)
+- Dev dependency test server: [crates/server/Cargo.toml](../crates/server/Cargo.toml)
+
 Evidence technique:
 
 - Couche use-case API: [crates/api/src/application/ci_use_cases.rs](../crates/api/src/application/ci_use_cases.rs)
