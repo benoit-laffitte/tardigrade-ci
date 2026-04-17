@@ -133,6 +133,7 @@ Evidence technique:
 - Le bootstrap server selectionne les implementations concretes via les namespaces `adapters` au lieu des re-exports crate racine.
 - Les chemins API de construction par defaut (in-memory) et les tests d integration utilisent des imports explicites vers `adapters` tout en gardant les traits `Storage`/`Scheduler` comme ports.
 - Les imports de traits dans les consommateurs internes utilisent maintenant explicitement `ports::Storage` et `ports::Scheduler`.
+- Un garde-fou source-level bloque la reintroduction d imports `adapters::` hors allowlist explicite (composition root, point de transition API state, et modules de test source-level).
 
 Evidence technique:
 
@@ -142,6 +143,8 @@ Evidence technique:
 - API state in-memory adapters: [crates/api/src/state/api_state.rs](../crates/api/src/state/api_state.rs)
 - API wiring tests: [crates/api/tests/graphql.rs](../crates/api/tests/graphql.rs)
 - Server wiring tests: [crates/server/src/webhook_adapter_tests.rs](../crates/server/src/webhook_adapter_tests.rs)
+- Import guard script: [scripts/check-hexagonal-imports.sh](../scripts/check-hexagonal-imports.sh)
+- Make integration: [mk/rust.mk](../mk/rust.mk)
 
 Evidence technique:
 

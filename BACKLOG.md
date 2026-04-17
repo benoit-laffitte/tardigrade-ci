@@ -690,6 +690,7 @@ Resultat d execution complementaire for strict ports/adapters separation (2026-0
 - Rewired composition-root imports to adapter namespaces (`server`) while keeping application consumption on port traits.
 - Rewired API state defaults and integration tests to explicit in-memory adapter imports, preserving behavior.
 - Rewired internal trait imports to explicit `ports::Storage` / `ports::Scheduler` namespaces in application, API, server, and integration tests.
+- Added source-level adapter import guard (`scripts/check-hexagonal-imports.sh`) integrated in `make lint`/`make ci` to block reintroduction outside allowlist.
 - Validation: `make ci` green after migration.
 
 Resultat d execution for `HEXA-07` (2026-04-17):

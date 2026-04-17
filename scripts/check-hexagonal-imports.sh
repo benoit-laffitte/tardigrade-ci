@@ -8,17 +8,19 @@ if [[ ! -d "$repo_root/crates" ]]; then
     exit 1
 fi
 
-if ! command -v rg >/dev/null 2>&1; then
-    echo "[hex-import-guard] Missing required tool: rg" >&2
-    exit 1
-fi
-
 # Only inspect Rust production source files under crates/*/src.
-mapfile -t matches < <(
-    rg --no-heading --line-number --color never \
-        'tardigrade_(storage|scheduler)::.*adapters::' \
-        "$repo_root/crates" --glob '*/src/**/*.rs' || true
-)
+if command -v rg >/dev/null 2>&1; then
+    mapfile -t matches < <(
+        rg --no-heading --line-number --color never \
+            'tardigrade_(storage|scheduler)::.*adapters::' \
+            "$repo_root/crates" --glob '*/src/**/*.rs' || true
+    )
+else
+    mapfile -t matches < <(
+        grep -RInE 'tardigrade_(storage|scheduler)::.*adapters::' "$repo_root/crates" \
+            --include='*.rs' | grep '/src/' || true
+    )
+fi
 
 is_allowed_file() {
     local abs_file="$1"

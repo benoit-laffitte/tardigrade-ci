@@ -119,6 +119,7 @@ Unified automation entrypoints from repository root:
 - `make dead-code` (Rust dead-code focused clippy pass)
 - `make arch-guard` (hexagonal dependency policy check)
 - `make arch-guard-test` (hexagonal dependency guard regression scenarios)
+- `make arch-import-guard` (adapter import policy check outside composition root allowlist)
 - `make test-fast` (Rust unit tests only)
 - `make test-all` (full Rust workspace tests)
 - `make dashboard-install` (frontend dependencies via npm)
