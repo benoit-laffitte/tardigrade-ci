@@ -6,10 +6,11 @@ mod state;
 
 pub(crate) use graphql::CiGraphQLSchema;
 pub use models::{
-    ApiErrorResponse, CompleteBuildRequest, CreateJobRequest, PluginAuthorizationCheckResponse,
-    PluginInfo, PluginPolicyResponse, RuntimeMetricsResponse, ScmPollingTickResponse,
-    ScmWebhookAcceptedResponse, ScmWebhookRejectionEntry, UpsertScmPollingConfigRequest,
-    UpsertWebhookSecurityConfigRequest, WorkerBuildStatus, WorkerInfo,
+    ApiAuthContext, ApiAuthStatus, ApiErrorResponse, CompleteBuildRequest, CreateJobRequest,
+    PluginAuthorizationCheckResponse, PluginInfo, PluginPolicyResponse, RuntimeMetricsResponse,
+    ScmPollingTickResponse, ScmWebhookAcceptedResponse, ScmWebhookRejectionEntry,
+    UpsertScmPollingConfigRequest, UpsertWebhookSecurityConfigRequest, WorkerBuildStatus,
+    WorkerInfo,
 };
 pub use routing::build_router;
 pub(crate) use tardigrade_application::ApiError;

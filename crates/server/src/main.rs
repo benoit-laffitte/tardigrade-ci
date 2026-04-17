@@ -15,11 +15,13 @@ use tokio::net::TcpListener;
 use tracing::{info, warn};
 use tracing_subscriber::EnvFilter;
 
+mod auth_middleware;
 mod config;
 mod dashboard;
 mod runtime;
 mod webhook_adapter;
 
+use auth_middleware::mount_api_key_auth;
 use config::{RuntimeMode, ServerConfigFile};
 use dashboard::{mount_dashboard_assets, resolve_web_root};
 use runtime::shutdown_signal;
@@ -39,6 +41,11 @@ struct QueueConfig {
     scheduler_backend: Option<String>,
     scheduler_database_url: Option<String>,
     scheduler_namespace: String,
+}
+
+/// Holds API key authentication configuration loaded from TOML.
+struct SecurityConfig {
+    api_key: Option<String>,
 }
 
 /// Enumerates supported scheduler backend implementations.
@@ -74,6 +81,7 @@ struct AppConfig {
     web_root: std::path::PathBuf,
     scm: ScmConfig,
     queue: QueueConfig,
+    security: SecurityConfig,
 }
 
 impl AppConfig {
@@ -104,6 +112,10 @@ impl AppConfig {
             polling_check_interval: parsed.scm.polling_check_secs,
         };
 
+        let security = SecurityConfig {
+            api_key: parsed.security.api_key,
+        };
+
         let queue = QueueConfig {
             redis_url: parsed.queue.redis_url,
             redis_prefix: parsed.queue.redis_prefix,
@@ -123,6 +135,7 @@ impl AppConfig {
             web_root,
             scm,
             queue,
+            security,
         })
     }
 }
@@ -271,6 +284,7 @@ async fn main() -> Result<()> {
         web_root,
         scm,
         queue,
+        security,
     } = app_config;
 
     info!(config_file = %config_file, runtime_mode = ?runtime_mode, "runtime mode loaded");
@@ -291,10 +305,9 @@ async fn main() -> Result<()> {
     );
     start_scm_polling_if_enabled(&state, &scm);
 
-    let router = mount_dashboard_assets(
-        mount_webhook_adapter(build_router(state.clone()), state),
-        web_root,
-    );
+    let control_plane_router = mount_webhook_adapter(build_router(state.clone()), state);
+    let authenticated_router = mount_api_key_auth(control_plane_router, security.api_key);
+    let router = mount_dashboard_assets(authenticated_router, web_root);
 
     // Bind socket first, then hand listener to Axum for graceful shutdown support.
     let bind_addr = bind_address;

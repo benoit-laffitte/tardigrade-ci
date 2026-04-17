@@ -11,6 +11,7 @@ pub struct ServerConfigFile {
     pub storage: StorageSection,
     pub queue: QueueSection,
     pub scm: ScmSection,
+    pub security: SecuritySection,
     pub dashboard: DashboardSection,
     pub service: ServiceSection,
 }
@@ -82,6 +83,13 @@ impl Default for ScmSection {
             polling_check_secs: 5,
         }
     }
+}
+
+/// API key security settings used for control-plane authentication.
+#[derive(Debug, Deserialize, Default)]
+#[serde(default)]
+pub struct SecuritySection {
+    pub api_key: Option<String>,
 }
 
 /// Dashboard static asset settings.

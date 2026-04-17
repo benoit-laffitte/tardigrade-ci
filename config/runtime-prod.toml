@@ -8,6 +8,9 @@ bind = "0.0.0.0:8080"
 [dashboard]
 web_root = "target/public"
 
+[security]
+api_key = "change-me"
+
 [storage]
 database_url = "postgres://tardigrade:tardigrade@127.0.0.1:5432/tardigrade"
 

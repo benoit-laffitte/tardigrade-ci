@@ -94,6 +94,7 @@ Runtime mode is read from config file under `[runtime]`:
 - `mode = "dev"`: scheduler uses Redis when configured, otherwise in-memory fallback.
 - `mode = "prod"`: scheduler defaults to Redis and fails fast when Redis is missing.
 - `queue.backend` overrides runtime defaults to one of in-memory/file/redis/postgres.
+- `[security].api_key` configures API key verification middleware for control-plane routes.
 
 `queue.file_path` is used only when `queue.backend=file`.
 

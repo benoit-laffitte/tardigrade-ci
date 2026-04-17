@@ -42,3 +42,16 @@ Conclusion: pas de surface orpheline a quarantaine immediate sur ce scope; `CORE
 
 - Toute exposition accidentelle d une route hors contrat doit casser les tests de surface (voir `CORECI-01d`).
 - Test de regression de surface runtime: `crates/server/tests/webhook_adapter.rs::server_route_surface_matches_canonical_contract`.
+
+## Matrice de policy auth GraphQL (CORECI-02a)
+
+| Surface | Operations | Politique cible |
+| --- | --- | --- |
+| GraphQL Query | `health`, `live`, `ready`, `jobs`, `builds`, `workers`, `plugins`, `plugin_policy`, `plugin_authorization_check`, `metrics`, `scm_webhook_rejections`, `dead_letter_builds`, `dashboard_snapshot` | Lecture: pas d API key requise |
+| GraphQL Mutation | `create_job`, `run_job`, `cancel_build`, `load_plugin`, `init_plugin`, `execute_plugin`, `unload_plugin`, `upsert_plugin_policy`, `upsert_webhook_security_config`, `upsert_scm_polling_config`, `run_scm_polling_tick`, `ingest_scm_webhook`, `worker_claim_build`, `worker_complete_build` | Ecriture: API key requise |
+| Webhook natif | `POST /webhooks/scm` | Hors policy API key (auth provider par signature/token SCM) |
+
+Note de phase:
+
+- `CORECI-02b` ajoute extraction/verification API key au niveau middleware server et publie un contexte de requete.
+- `CORECI-02c` applique l enforcement sur les operations d ecriture GraphQL: `missing` -> `unauthorized`, `invalid` -> `forbidden`.

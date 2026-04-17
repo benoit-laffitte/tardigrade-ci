@@ -570,10 +570,10 @@ Sprint planning breakdown (CORECI foundation slice: `CORECI-01` to `CORECI-04`):
 
 `CORECI-02` (8 SP, ~4d) - Authentication enforcement for ecriture operations
 
-- [ ] `CORECI-02a` Define auth policy matrix for read vs ecriture GraphQL operations (`SP:1`, `~0.5d`).
-- [ ] `CORECI-02b` Add API key extraction/verification middleware layer in server routing (`SP:2`, `~1d`).
-- [ ] `CORECI-02c` Enforce auth guard on mutating GraphQL operations and webhook admin ecritures (`SP:3`, `~1.5d`).
-- [ ] `CORECI-02d` Add unauthorized/forbidden integration tests and operator-facing error mapping (`SP:2`, `~1d`).
+- [x] `CORECI-02a` Define auth policy matrix for read vs ecriture GraphQL operations (`SP:1`, `~0.5d`).
+- [x] `CORECI-02b` Add API key extraction/verification middleware layer in server routing (`SP:2`, `~1d`).
+- [x] `CORECI-02c` Enforce auth guard on mutating GraphQL operations and webhook admin ecritures (`SP:3`, `~1.5d`).
+- [x] `CORECI-02d` Add unauthorized/forbidden integration tests and operator-facing error mapping (`SP:2`, `~1d`).
 - Exit criteria: all ecriture operations reject missing/invalid API key and existing lecture seule behavior remains intact.
 
 `CORECI-03` (5 SP, ~3d) - Correct cancel semantics with scheduler cleanup
@@ -671,6 +671,33 @@ Evidence technique:
 - Handler inventory basis: [crates/api/src/handlers/mod.rs](crates/api/src/handlers/mod.rs)
 - Runtime API mount: [crates/api/src/routing/mod.rs](crates/api/src/routing/mod.rs)
 - Runtime server composition: [crates/server/src/main.rs](crates/server/src/main.rs)
+
+Resultat d execution for `CORECI-02a` / `CORECI-02b` (2026-04-18):
+
+- Defined explicit GraphQL auth policy matrix (queries read-only vs mutations write) in canonical contract docs.
+- Added server middleware layer that extracts/verifies API key candidates (`x-api-key` or `Authorization: Bearer ...`) on control-plane routes and injects request auth context.
+- Added integration tests for middleware context outcomes (`verified`, `missing`, `invalid`, `disabled`) to lock extraction/verification behavior before enforcement phase.
+
+Evidence technique:
+
+- Auth policy matrix: [docs/api-contract.md](docs/api-contract.md)
+- Middleware implementation: [crates/server/src/auth_middleware.rs](crates/server/src/auth_middleware.rs)
+- Server wiring: [crates/server/src/main.rs](crates/server/src/main.rs)
+- Middleware integration tests: [crates/server/tests/api_key_auth_middleware.rs](crates/server/tests/api_key_auth_middleware.rs)
+- TOML security parsing: [crates/server/src/config/server_config_file.rs](crates/server/src/config/server_config_file.rs)
+
+Resultat d execution for `CORECI-02c` / `CORECI-02d` (2026-04-18):
+
+- Enforced auth guard on all GraphQL mutations using request auth context injected by server middleware.
+- Added explicit error mapping for write auth failures: missing API key -> `unauthorized`, invalid API key -> `forbidden`.
+- Added integration tests validating query access remains open while mutations require valid API key under middleware.
+
+Evidence technique:
+
+- Mutation auth enforcement: [crates/api/src/graphql/mutation_root.rs](crates/api/src/graphql/mutation_root.rs)
+- GraphQL auth context injection: [crates/api/src/handlers/graphql.rs](crates/api/src/handlers/graphql.rs)
+- Shared auth context model: [crates/api/src/models/api_auth_context.rs](crates/api/src/models/api_auth_context.rs)
+- Middleware integration + unauthorized/forbidden tests: [crates/server/tests/api_key_auth_middleware.rs](crates/server/tests/api_key_auth_middleware.rs)
 
 Resultat d execution for `HEXA-02` (2026-04-17):
 

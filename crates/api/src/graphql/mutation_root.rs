@@ -9,8 +9,8 @@ use super::{
     GqlWebhookHeaderInput, GqlWorkerBuildStatus, gql_err_from_api, parse_id_as_uuid,
 };
 use crate::{
-    ApiState, CreateJobRequest, UpsertScmPollingConfigRequest, UpsertWebhookSecurityConfigRequest,
-    WorkerBuildStatus,
+    ApiAuthContext, ApiAuthStatus, ApiState, CreateJobRequest, UpsertScmPollingConfigRequest,
+    UpsertWebhookSecurityConfigRequest, WorkerBuildStatus,
 };
 
 /// GraphQL mutation root exposing write-oriented CI operations.
@@ -24,6 +24,7 @@ impl MutationRoot {
         ctx: &Context<'_>,
         input: GqlCreateJobInput,
     ) -> Result<GqlJobDefinition, GraphQLError> {
+        ensure_write_auth(ctx)?;
         let state = ctx.data_unchecked::<ApiState>();
         let job = state
             .use_cases
@@ -40,6 +41,7 @@ impl MutationRoot {
 
     /// Enqueues one build for the specified job id.
     async fn run_job(&self, ctx: &Context<'_>, job_id: ID) -> Result<GqlBuildRecord, GraphQLError> {
+        ensure_write_auth(ctx)?;
         let state = ctx.data_unchecked::<ApiState>();
         let job_uuid = parse_id_as_uuid(&job_id)?;
         let build = state
@@ -57,6 +59,7 @@ impl MutationRoot {
         ctx: &Context<'_>,
         build_id: ID,
     ) -> Result<GqlBuildRecord, GraphQLError> {
+        ensure_write_auth(ctx)?;
         let state = ctx.data_unchecked::<ApiState>();
         let build_uuid = parse_id_as_uuid(&build_id)?;
         let build = state
@@ -73,6 +76,7 @@ impl MutationRoot {
         ctx: &Context<'_>,
         name: String,
     ) -> Result<GqlPluginInfo, GraphQLError> {
+        ensure_write_auth(ctx)?;
         let state = ctx.data_unchecked::<ApiState>();
         let plugin = state
             .load_plugin(name.trim())
@@ -86,6 +90,7 @@ impl MutationRoot {
         ctx: &Context<'_>,
         name: String,
     ) -> Result<GqlPluginInfo, GraphQLError> {
+        ensure_write_auth(ctx)?;
         let state = ctx.data_unchecked::<ApiState>();
         let plugin = state
             .init_plugin(name.trim())
@@ -99,6 +104,7 @@ impl MutationRoot {
         ctx: &Context<'_>,
         name: String,
     ) -> Result<GqlPluginInfo, GraphQLError> {
+        ensure_write_auth(ctx)?;
         let state = ctx.data_unchecked::<ApiState>();
         let plugin = state
             .execute_plugin(name.trim())
@@ -112,6 +118,7 @@ impl MutationRoot {
         ctx: &Context<'_>,
         name: String,
     ) -> Result<GqlPluginInfo, GraphQLError> {
+        ensure_write_auth(ctx)?;
         let state = ctx.data_unchecked::<ApiState>();
         let plugin = state
             .unload_plugin(name.trim())
@@ -126,6 +133,7 @@ impl MutationRoot {
         context: Option<String>,
         granted_capabilities: Vec<String>,
     ) -> Result<GqlPluginPolicyResponse, GraphQLError> {
+        ensure_write_auth(ctx)?;
         let state = ctx.data_unchecked::<ApiState>();
         let policy = state
             .upsert_plugin_policy(context.as_deref(), granted_capabilities)
@@ -139,6 +147,7 @@ impl MutationRoot {
         ctx: &Context<'_>,
         input: GqlUpsertWebhookSecurityConfigInput,
     ) -> Result<bool, GraphQLError> {
+        ensure_write_auth(ctx)?;
         let state = ctx.data_unchecked::<ApiState>();
         state
             .upsert_webhook_security_config(UpsertWebhookSecurityConfigRequest {
@@ -158,6 +167,7 @@ impl MutationRoot {
         ctx: &Context<'_>,
         input: GqlUpsertScmPollingConfigInput,
     ) -> Result<bool, GraphQLError> {
+        ensure_write_auth(ctx)?;
         let state = ctx.data_unchecked::<ApiState>();
         let interval_secs = u64::try_from(input.interval_secs)
             .map_err(|_| GraphQLError::new("interval_secs must be a non-negative integer"))?;
@@ -180,6 +190,7 @@ impl MutationRoot {
         &self,
         ctx: &Context<'_>,
     ) -> Result<GqlScmPollingTickResponse, GraphQLError> {
+        ensure_write_auth(ctx)?;
         let state = ctx.data_unchecked::<ApiState>();
         let result = state
             .use_cases
@@ -196,6 +207,7 @@ impl MutationRoot {
         headers: Vec<GqlWebhookHeaderInput>,
         body: String,
     ) -> Result<bool, GraphQLError> {
+        ensure_write_auth(ctx)?;
         let state = ctx.data_unchecked::<ApiState>();
         let request = webhook_request_from_graphql_inputs(&headers, body.as_bytes())?;
         match state.use_cases.ingest_scm_webhook_observed(&request).await {
@@ -217,6 +229,7 @@ impl MutationRoot {
         ctx: &Context<'_>,
         worker_id: String,
     ) -> Result<Option<GqlBuildRecord>, GraphQLError> {
+        ensure_write_auth(ctx)?;
         let state = ctx.data_unchecked::<ApiState>();
         let build = state
             .use_cases
@@ -235,6 +248,7 @@ impl MutationRoot {
         status: GqlWorkerBuildStatus,
         log_line: Option<String>,
     ) -> Result<GqlBuildRecord, GraphQLError> {
+        ensure_write_auth(ctx)?;
         let state = ctx.data_unchecked::<ApiState>();
         let build_uuid = parse_id_as_uuid(&build_id)?;
         let status = match status {
@@ -248,6 +262,28 @@ impl MutationRoot {
             .await
             .map_err(gql_err_from_api)?;
         Ok(build.into())
+    }
+}
+
+/// Enforces API key authorization on write-oriented GraphQL operations.
+fn ensure_write_auth(ctx: &Context<'_>) -> Result<(), GraphQLError> {
+    let auth = ctx
+        .data_opt::<ApiAuthContext>()
+        .cloned()
+        .unwrap_or_default();
+
+    match auth.status {
+        ApiAuthStatus::Disabled | ApiAuthStatus::Verified => Ok(()),
+        ApiAuthStatus::Missing => Err(GraphQLError::new("api key is required for this operation")
+            .extend_with(|_, ext| {
+                ext.set("code", "unauthorized");
+                ext.set("http_status", 401);
+            })),
+        ApiAuthStatus::Invalid => Err(GraphQLError::new("provided api key is invalid")
+            .extend_with(|_, ext| {
+                ext.set("code", "forbidden");
+                ext.set("http_status", 403);
+            })),
     }
 }
 

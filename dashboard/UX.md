@@ -182,6 +182,32 @@ Evidence technique:
 - Montage runtime API: [crates/api/src/routing/mod.rs](../crates/api/src/routing/mod.rs)
 - Composition runtime server: [crates/server/src/main.rs](../crates/server/src/main.rs)
 
+### Mise a jour implementation (2026-04-18, CORECI-02a/02b)
+
+- Une matrice de policy auth GraphQL lecture/ecriture a ete formalisee dans le contrat canonique.
+- Un middleware serveur d extraction/verification API key est monte sur les routes control-plane et injecte un contexte de requete (`verified`, `missing`, `invalid`, `disabled`).
+- Cette etape ne force pas encore le rejet des ecritures: l enforcement est reserve a `CORECI-02c`.
+
+Evidence technique:
+
+- Matrice policy auth: [docs/api-contract.md](../docs/api-contract.md)
+- Middleware API key: [crates/server/src/auth_middleware.rs](../crates/server/src/auth_middleware.rs)
+- Wiring server: [crates/server/src/main.rs](../crates/server/src/main.rs)
+- Tests middleware: [crates/server/tests/api_key_auth_middleware.rs](../crates/server/tests/api_key_auth_middleware.rs)
+
+### Mise a jour implementation (2026-04-18, CORECI-02c/02d)
+
+- Les mutations GraphQL appliquent maintenant un guard auth base sur le contexte de verification middleware.
+- Mapping operateur explicite: API key manquante -> `unauthorized`; API key invalide -> `forbidden`.
+- Les tests d integration valident le comportement cible: queries autorisees sans cle, mutations bloquees sans cle/cle invalide.
+
+Evidence technique:
+
+- Enforcement mutations: [crates/api/src/graphql/mutation_root.rs](../crates/api/src/graphql/mutation_root.rs)
+- Injection contexte auth GraphQL: [crates/api/src/handlers/graphql.rs](../crates/api/src/handlers/graphql.rs)
+- Modele contexte auth partage: [crates/api/src/models/api_auth_context.rs](../crates/api/src/models/api_auth_context.rs)
+- Tests unauthorized/forbidden: [crates/server/tests/api_key_auth_middleware.rs](../crates/server/tests/api_key_auth_middleware.rs)
+
 Evidence technique:
 
 - Failure model application: [crates/application/src/models/scm_webhook_ingest_failure.rs](../crates/application/src/models/scm_webhook_ingest_failure.rs)
