@@ -9,8 +9,8 @@ use super::{
     GqlWebhookHeaderInput, GqlWorkerBuildStatus, gql_err_from_api, parse_id_as_uuid,
 };
 use crate::{
-    ApiError, ApiState, CreateJobRequest, UpsertScmPollingConfigRequest,
-    UpsertWebhookSecurityConfigRequest, WorkerBuildStatus,
+    ApiState, CreateJobRequest, UpsertScmPollingConfigRequest, UpsertWebhookSecurityConfigRequest,
+    WorkerBuildStatus,
 };
 
 /// GraphQL mutation root exposing write-oriented CI operations.
@@ -198,64 +198,15 @@ impl MutationRoot {
     ) -> Result<bool, GraphQLError> {
         let state = ctx.data_unchecked::<ApiState>();
         let request = webhook_request_from_graphql_inputs(&headers, body.as_bytes())?;
-        let provider = request
-            .header_value("x-scm-provider")
-            .map(ToString::to_string);
-        let repository_url = request
-            .header_value("x-scm-repository")
-            .map(ToString::to_string);
+        match state.use_cases.ingest_scm_webhook_observed(&request).await {
+            Ok(()) => Ok(true),
+            Err(failure) => {
+                if let Some(message) = failure.public_message {
+                    return Err(GraphQLError::new(message)
+                        .extend_with(|_, ext| ext.set("code", failure.reason_code)));
+                }
 
-        state.use_cases.record_scm_webhook_received();
-
-        match state.use_cases.ingest_scm_webhook(&request).await {
-            Ok(()) => {
-                state.use_cases.record_scm_webhook_accepted();
-                Ok(true)
-            }
-            Err(ApiError::BadRequest) => {
-                state.use_cases.record_scm_webhook_rejected();
-                state.use_cases.record_scm_webhook_rejection(
-                    "invalid_webhook_request",
-                    provider.as_deref(),
-                    repository_url.as_deref(),
-                );
-                Err(
-                    GraphQLError::new("webhook request is missing required headers")
-                        .extend_with(|_, ext| ext.set("code", "invalid_webhook_request")),
-                )
-            }
-            Err(ApiError::Unauthorized) => {
-                state.use_cases.record_scm_webhook_rejected();
-                state.use_cases.record_scm_webhook_rejection(
-                    "invalid_webhook_signature",
-                    provider.as_deref(),
-                    repository_url.as_deref(),
-                );
-                Err(
-                    GraphQLError::new("webhook signature is missing, invalid, or expired")
-                        .extend_with(|_, ext| ext.set("code", "invalid_webhook_signature")),
-                )
-            }
-            Err(ApiError::Forbidden) => {
-                state.use_cases.record_scm_webhook_rejected();
-                state.use_cases.record_scm_webhook_rejection(
-                    "webhook_forbidden",
-                    provider.as_deref(),
-                    repository_url.as_deref(),
-                );
-                Err(GraphQLError::new(
-                    "webhook provider, repository, or source IP is not authorized",
-                )
-                .extend_with(|_, ext| ext.set("code", "webhook_forbidden")))
-            }
-            Err(err) => {
-                state.use_cases.record_scm_webhook_rejected();
-                state.use_cases.record_scm_webhook_rejection(
-                    "webhook_internal_error",
-                    provider.as_deref(),
-                    repository_url.as_deref(),
-                );
-                Err(gql_err_from_api(err))
+                Err(gql_err_from_api(failure.api_error))
             }
         }
     }

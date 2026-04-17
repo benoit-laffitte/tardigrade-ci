@@ -106,6 +106,21 @@ Le projet vise une architecture hexagonale stricte, mais le code actuel contient
 - Les modeles de reponse plugin sont maintenant definis dans `crates/application` et re-exportes par `crates/api` pour conserver la compatibilite de surface.
 - La policy de dependances et la documentation d architecture ont ete alignees avec cette frontiere (`application -> plugins|auth`).
 
+### Mise a jour implementation (2026-04-17, HEXA-09 auth convergence)
+
+- Le flux auth/rejection des webhooks SCM est maintenant orchestre depuis la couche application (`CiUseCases`) via un point d entree observe unique.
+- Les adaptateurs HTTP et GraphQL ne portent plus la duplication de logique unauthorized/forbidden ni l ecriture des rejets de diagnostics.
+- Un descripteur de failure transport-neutre (`ScmWebhookIngestFailure`) formalise les reason codes et messages publics projetes en edge.
+- Un test d integration GraphQL couvre explicitement le cas signature invalide et verifie la coherence des metriques de rejet.
+
+Evidence technique:
+
+- Failure model application: [crates/application/src/models/scm_webhook_ingest_failure.rs](../crates/application/src/models/scm_webhook_ingest_failure.rs)
+- Facade use-case webhook observe: [crates/application/src/application/ci_use_cases.rs](../crates/application/src/application/ci_use_cases.rs)
+- Rewiring adaptateur HTTP: [crates/api/src/state/api_state.rs](../crates/api/src/state/api_state.rs)
+- Rewiring adaptateur GraphQL: [crates/api/src/graphql/mutation_root.rs](../crates/api/src/graphql/mutation_root.rs)
+- Regression test signature invalide: [crates/api/tests/graphql.rs](../crates/api/tests/graphql.rs)
+
 Evidence technique:
 
 - Facade plugin application: [crates/application/src/plugins/plugin_use_cases.rs](../crates/application/src/plugins/plugin_use_cases.rs)

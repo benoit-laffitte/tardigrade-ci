@@ -9,7 +9,8 @@ pub use application::CiUseCases;
 pub use events::LiveEvent;
 pub use models::{
     CreateJobRequest, PluginAuthorizationCheckResponse, PluginInfo, PluginPolicyResponse,
-    RuntimeMetricsResponse, ScmPollingTickResponse, ScmWebhookRejectionEntry, WorkerInfo,
+    RuntimeMetricsResponse, ScmPollingTickResponse, ScmWebhookIngestFailure,
+    ScmWebhookRejectionEntry, WorkerInfo,
 };
 pub use plugins::PluginUseCases;
 pub use service::{ApiError, CiService, ScmWebhookRequest};

@@ -525,3 +525,108 @@ async fn graphql_scm_flow_works_without_rest_endpoints() {
         1
     );
 }
+
+/// Ensures invalid webhook signatures still expose the expected GraphQL code and rejection metrics.
+#[tokio::test]
+async fn graphql_scm_webhook_invalid_signature_reports_auth_rejection() {
+    let app = tardigrade_api::build_router(tardigrade_api::ApiState::new("tardigrade-ci-test"));
+
+    let secret = "topsecret";
+    let body = r#"{"after":"abc123","ref":"refs/heads/main"}"#;
+    let timestamp = chrono::Utc::now().timestamp().to_string();
+
+    let config_response = app
+        .clone()
+        .oneshot(graphql_request(
+            r#"
+            mutation Configure($input: GqlUpsertWebhookSecurityConfigInput!) {
+              upsert_webhook_security_config(input: $input)
+            }
+            "#,
+            json!({
+                "input": {
+                    "repository_url": "https://example.com/repo.git",
+                    "provider": "GITHUB",
+                    "secret": secret,
+                    "allowed_ips": []
+                }
+            }),
+        ))
+        .await
+        .expect("config response");
+    assert_eq!(config_response.status(), StatusCode::OK);
+
+    let webhook_response = app
+        .clone()
+        .oneshot(graphql_request(
+            r#"
+            mutation Ingest($headers: [GqlWebhookHeaderInput!]!, $body: String!) {
+              ingest_scm_webhook(headers: $headers, body: $body)
+            }
+            "#,
+            json!({
+                "headers": [
+                    { "name": "x-scm-provider", "value": "github" },
+                    { "name": "x-scm-repository", "value": "https://example.com/repo.git" },
+                    { "name": "x-scm-timestamp", "value": timestamp },
+                    { "name": "x-hub-signature-256", "value": "sha256=deadbeef" },
+                    { "name": "x-github-event", "value": "push" },
+                    { "name": "x-github-delivery", "value": "delivery-2" }
+                ],
+                "body": body
+            }),
+        ))
+        .await
+        .expect("webhook response");
+    assert_eq!(webhook_response.status(), StatusCode::OK);
+
+    let webhook_payload = read_json(webhook_response).await;
+    let errors = webhook_payload["errors"]
+        .as_array()
+        .expect("graphql errors array");
+    assert!(!errors.is_empty());
+    assert_eq!(errors[0]["extensions"]["code"], "invalid_webhook_signature");
+
+    let diagnostics_response = app
+        .oneshot(graphql_request(
+            r#"
+            query Diagnostics {
+              scm_webhook_rejections { reason_code }
+              metrics { scm_webhook_received_total scm_webhook_rejected_total scm_webhook_accepted_total }
+            }
+            "#,
+            json!({}),
+        ))
+        .await
+        .expect("diagnostics response");
+    assert_eq!(diagnostics_response.status(), StatusCode::OK);
+
+    let diagnostics_payload = read_json(diagnostics_response).await;
+    assert!(
+        diagnostics_payload.get("errors").is_none(),
+        "graphql errors: {diagnostics_payload}"
+    );
+
+    assert_eq!(
+        diagnostics_payload["data"]["scm_webhook_rejections"]
+            .as_array()
+            .map(Vec::len),
+        Some(1)
+    );
+    assert_eq!(
+        diagnostics_payload["data"]["scm_webhook_rejections"][0]["reason_code"],
+        "invalid_webhook_signature"
+    );
+    assert_eq!(
+        diagnostics_payload["data"]["metrics"]["scm_webhook_received_total"],
+        1
+    );
+    assert_eq!(
+        diagnostics_payload["data"]["metrics"]["scm_webhook_rejected_total"],
+        1
+    );
+    assert_eq!(
+        diagnostics_payload["data"]["metrics"]["scm_webhook_accepted_total"],
+        0
+    );
+}

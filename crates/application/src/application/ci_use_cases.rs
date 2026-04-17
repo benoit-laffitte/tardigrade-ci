@@ -8,8 +8,8 @@ use uuid::Uuid;
 
 use crate::service::{ApiError, CiService, ScmWebhookRequest};
 use crate::{
-    CreateJobRequest, RuntimeMetricsResponse, ScmPollingTickResponse, ScmWebhookRejectionEntry,
-    WorkerInfo,
+    CreateJobRequest, RuntimeMetricsResponse, ScmPollingTickResponse, ScmWebhookIngestFailure,
+    ScmWebhookRejectionEntry, WorkerInfo,
 };
 
 /// Application use-case facade consumed by HTTP and GraphQL adapters.
@@ -68,6 +68,38 @@ impl CiUseCases {
     /// Ingests one normalized SCM webhook request.
     pub async fn ingest_scm_webhook(&self, request: &ScmWebhookRequest) -> Result<(), ApiError> {
         self.service.ingest_scm_webhook(request).await
+    }
+
+    /// Ingests one webhook request and records acceptance/rejection diagnostics in one place.
+    pub async fn ingest_scm_webhook_observed(
+        &self,
+        request: &ScmWebhookRequest,
+    ) -> Result<(), ScmWebhookIngestFailure> {
+        let provider = request
+            .header_value("x-scm-provider")
+            .map(ToString::to_string);
+        let repository_url = request
+            .header_value("x-scm-repository")
+            .map(ToString::to_string);
+
+        self.service.record_scm_webhook_received();
+
+        match self.service.ingest_scm_webhook(request).await {
+            Ok(()) => {
+                self.service.record_scm_webhook_accepted();
+                Ok(())
+            }
+            Err(api_error) => {
+                let failure = ScmWebhookIngestFailure::from_api_error(api_error);
+                self.service.record_scm_webhook_rejected();
+                self.service.record_scm_webhook_rejection(
+                    failure.reason_code,
+                    provider.as_deref(),
+                    repository_url.as_deref(),
+                );
+                Err(failure)
+            }
+        }
     }
 
     /// Records that one SCM webhook request was received.

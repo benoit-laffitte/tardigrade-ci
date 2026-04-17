@@ -7,7 +7,7 @@ use chrono::Utc;
 use std::sync::Arc;
 use std::time::Duration;
 use tardigrade_application::{
-    ApiError, CiService, CiUseCases, PluginUseCases, ScmWebhookRequest, ServiceSettings,
+    CiService, CiUseCases, PluginUseCases, ScmWebhookRequest, ServiceSettings,
 };
 use tardigrade_core::{ScmPollingConfig, WebhookSecurityConfig};
 use tardigrade_plugins::PluginLifecycleError;
@@ -162,85 +162,28 @@ impl ApiState {
     /// Accepts one native SCM webhook over HTTP without restoring the general REST API surface.
     pub async fn ingest_scm_webhook_http(&self, headers: HeaderMap, body: &[u8]) -> Response {
         let request = webhook_request_from_http_headers(&headers, body);
-        let provider = request
-            .header_value("x-scm-provider")
-            .map(ToString::to_string);
-        let repository_url = request
-            .header_value("x-scm-repository")
-            .map(ToString::to_string);
+        match self.use_cases.ingest_scm_webhook_observed(&request).await {
+            Ok(()) => (
+                StatusCode::ACCEPTED,
+                Json(ScmWebhookAcceptedResponse {
+                    status: "accepted".to_string(),
+                }),
+            )
+                .into_response(),
+            Err(failure) => {
+                if let Some(message) = failure.public_message {
+                    return (
+                        failure.api_error.status_code(),
+                        Json(ApiErrorResponse {
+                            code: failure.reason_code.to_string(),
+                            message: message.to_string(),
+                            details: None,
+                        }),
+                    )
+                        .into_response();
+                }
 
-        self.use_cases.record_scm_webhook_received();
-
-        match self.use_cases.ingest_scm_webhook(&request).await {
-            Ok(()) => {
-                self.use_cases.record_scm_webhook_accepted();
-                (
-                    StatusCode::ACCEPTED,
-                    Json(ScmWebhookAcceptedResponse {
-                        status: "accepted".to_string(),
-                    }),
-                )
-                    .into_response()
-            }
-            Err(ApiError::BadRequest) => {
-                self.use_cases.record_scm_webhook_rejected();
-                self.use_cases.record_scm_webhook_rejection(
-                    "invalid_webhook_request",
-                    provider.as_deref(),
-                    repository_url.as_deref(),
-                );
-                (
-                    StatusCode::BAD_REQUEST,
-                    Json(ApiErrorResponse {
-                        code: "invalid_webhook_request".to_string(),
-                        message: "webhook request is missing required headers".to_string(),
-                        details: None,
-                    }),
-                )
-                    .into_response()
-            }
-            Err(ApiError::Unauthorized) => {
-                self.use_cases.record_scm_webhook_rejected();
-                self.use_cases.record_scm_webhook_rejection(
-                    "invalid_webhook_signature",
-                    provider.as_deref(),
-                    repository_url.as_deref(),
-                );
-                (
-                    StatusCode::UNAUTHORIZED,
-                    Json(ApiErrorResponse {
-                        code: "invalid_webhook_signature".to_string(),
-                        message: "webhook signature is missing, invalid, or expired".to_string(),
-                        details: None,
-                    }),
-                )
-                    .into_response()
-            }
-            Err(ApiError::Forbidden) => {
-                self.use_cases.record_scm_webhook_rejected();
-                self.use_cases.record_scm_webhook_rejection(
-                    "webhook_forbidden",
-                    provider.as_deref(),
-                    repository_url.as_deref(),
-                );
-                (
-                    StatusCode::FORBIDDEN,
-                    Json(ApiErrorResponse {
-                        code: "webhook_forbidden".to_string(),
-                        message: "webhook provider/repository/ip is not authorized".to_string(),
-                        details: None,
-                    }),
-                )
-                    .into_response()
-            }
-            Err(err) => {
-                self.use_cases.record_scm_webhook_rejected();
-                self.use_cases.record_scm_webhook_rejection(
-                    "webhook_internal_error",
-                    provider.as_deref(),
-                    repository_url.as_deref(),
-                );
-                err.status_code().into_response()
+                failure.api_error.status_code().into_response()
             }
         }
     }

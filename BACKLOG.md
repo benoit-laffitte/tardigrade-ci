@@ -700,6 +700,14 @@ Resultat d execution for `HEXA-09` (2026-04-17):
 - Updated dependency policy and architecture documentation to allow application-layer policy components (`application -> plugins|auth`) as part of strict convergence.
 - Validation: `make ci` green after migration.
 
+Resultat d execution complementaire for `HEXA-09` (2026-04-17):
+
+- Centralized SCM webhook auth/rejection orchestration in `CiUseCases` via one observed ingestion entrypoint (`ingest_scm_webhook_observed`) so adapters no longer duplicate unauthorized/forbidden mapping and rejection telemetry writes.
+- Introduced a transport-neutral application failure descriptor (`ScmWebhookIngestFailure`) carrying stable rejection reason codes and public messages for adapter projection.
+- Rewired both inbound adapters (`ApiState` HTTP webhook path and GraphQL `ingest_scm_webhook` mutation) to delegate auth/rejection policy decisions to the application layer.
+- Added integration regression coverage for invalid webhook signature behavior (`invalid_webhook_signature`) and webhook rejection metrics consistency.
+- Validation: `make ci` green after migration.
+
 Plan de convergence crate par crate:
 
 - `crates/core`
@@ -756,7 +764,7 @@ Plan de convergence crate par crate:
 - [-] `HEXA-06` Phase B: enforce strict crate boundaries (ports vs adapters) with compile-time dependency constraints.
 - [-] `HEXA-07` Phase B: extract dedicated application crate for CI use cases and move orchestration out of adapter crates.
 - [-] `HEXA-08` Phase B: add architecture regression checks (dependency policy tests/CI guard) to block forbidden edges.
-- [-] `HEXA-09` Phase B: align plugins/auth integration through application ports and remove residual adapter leakage.
+- [x] `HEXA-09` Phase B: align plugins/auth integration through application ports and remove residual adapter leakage.
 
 Definition de termine:
 
