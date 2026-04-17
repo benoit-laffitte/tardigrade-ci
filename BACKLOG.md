@@ -676,6 +676,14 @@ Resultat d execution for `HEXA-06` (2026-04-17):
 - Preserved temporary benchmark-only worker coupling by allowing `worker -> {api,storage,scheduler}` only when dependencies remain optional.
 - Validation: `make ci` green after migration.
 
+Resultat d execution for `HEXA-07` (2026-04-17):
+
+- Extracted a dedicated `crates/application` crate and moved CI use-case and orchestration modules (`CiUseCases`, `CiService`, webhook orchestration helpers) out of `crates/api`.
+- Rewired `crates/api` as inbound adapter consuming `tardigrade-application` for use-cases, service error model, webhook command model, settings, and shared DTOs.
+- Preserved API public surface compatibility by keeping model re-exports from `crates/api` while sourcing moved transport-neutral types from `tardigrade-application`.
+- Updated dependency guard policy to include `application` edges (`api -> application`, `application -> {core,storage,scheduler}`) and allowed composition-root access from server.
+- Validation: `make ci` green after migration.
+
 Plan de convergence crate par crate:
 
 - `crates/core`
@@ -684,10 +692,15 @@ Plan de convergence crate par crate:
   - Status: `[ ]` not started.
   - Acceptance criteria: no dependency from `core` to API/server/storage/scheduler concrete adapters; domain transitions tested through domain-level tests only.
 - `crates/api`
-  - Goal: convert API to pure inbound adapter + application orchestration boundary.
-  - Scope: move Axum/GraphQL-specific request/response mapping out of service orchestration paths.
+  - Goal: keep API as pure inbound adapter over GraphQL/native webhook edges.
+  - Scope: consume use-case orchestration from dedicated application crate and confine transport mappings to adapters.
   - Status: `[-]` in progress.
-  - Acceptance criteria: use-case entrypoints accept transport-neutral command/query inputs; no Axum `HeaderMap` in application service signatures.
+  - Acceptance criteria: API crate does not host CI orchestration service implementation; use-case entrypoints remain transport-neutral.
+- `crates/application`
+  - Goal: host CI use-cases and orchestration in one dedicated application boundary crate.
+  - Scope: expose transport-neutral command/query models and consume `Storage`/`Scheduler` ports via trait objects.
+  - Status: `[-]` in progress.
+  - Acceptance criteria: application crate owns `CiUseCases`/`CiService`; no adapter framework concern leaks into orchestration signatures.
 - `crates/server`
   - Goal: keep server as composition root and inbound adapter host only.
   - Scope: centralize wiring of storage/scheduler/plugin adapters and API schema/router mounting.
@@ -725,7 +738,7 @@ Plan de convergence crate par crate:
 - [-] `HEXA-04` Phase A: make storage/scheduler contract-first consumption explicit in API and server wiring tests.
 - [-] `HEXA-05` Phase A: document pragmatic target dependency graph in `ARCHI.md` and contribution guidance.
 - [-] `HEXA-06` Phase B: enforce strict crate boundaries (ports vs adapters) with compile-time dependency constraints.
-- [ ] `HEXA-07` Phase B: extract dedicated application crate for CI use cases and move orchestration out of adapter crates.
+- [-] `HEXA-07` Phase B: extract dedicated application crate for CI use cases and move orchestration out of adapter crates.
 - [ ] `HEXA-08` Phase B: add architecture regression checks (dependency policy tests/CI guard) to block forbidden edges.
 - [ ] `HEXA-09` Phase B: align plugins/auth integration through application ports and remove residual adapter leakage.
 

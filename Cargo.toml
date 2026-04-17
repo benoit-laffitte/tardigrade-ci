@@ -2,6 +2,7 @@
 members = [
     "crates/server",
     "crates/api",
+    "crates/application",
     "crates/core",
     "crates/scheduler",
     "crates/storage",

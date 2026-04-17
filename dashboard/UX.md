@@ -86,6 +86,23 @@ Le projet vise une architecture hexagonale stricte, mais le code actuel contient
 - Ce check est desormais integre au workflow standard via `make arch-guard` et execute dans `make lint`/`make ci`.
 - Une exception temporaire explicite est maintenue pour le chemin benchmark worker, uniquement si les dependances concernes restent `optional`.
 
+### Mise a jour implementation (2026-04-17, HEXA-07)
+
+- Une crate application dediee (`crates/application`) a ete introduite pour porter `CiUseCases` et `CiService` hors de la crate `api`.
+- La crate API est recablee en adaptateur entrant: elle consomme desormais les use-cases, les commandes webhook, les settings et les DTO transport-neutres depuis `tardigrade-application`.
+- Les re-exports de compatibilite de la surface API sont conserves pour eviter une rupture immediate des imports existants.
+- Le garde-fou d architecture a ete etendu pour inclure le nouveau flux de dependances autour de `application`.
+
+Evidence technique:
+
+- Nouvelle crate application: [crates/application/Cargo.toml](../crates/application/Cargo.toml)
+- Facade use-case extraite: [crates/application/src/application/ci_use_cases.rs](../crates/application/src/application/ci_use_cases.rs)
+- Service orchestration extrait: [crates/application/src/service/ci_service.rs](../crates/application/src/service/ci_service.rs)
+- Rewiring API facade: [crates/api/src/lib.rs](../crates/api/src/lib.rs)
+- Rewiring state adapter: [crates/api/src/state/api_state.rs](../crates/api/src/state/api_state.rs)
+- Rewiring mutation adapter: [crates/api/src/graphql/mutation_root.rs](../crates/api/src/graphql/mutation_root.rs)
+- Garde-fou dependances mis a jour: [scripts/check-hexagonal-deps.sh](../scripts/check-hexagonal-deps.sh)
+
 Evidence technique:
 
 - Script de policy: [scripts/check-hexagonal-deps.sh](../scripts/check-hexagonal-deps.sh)

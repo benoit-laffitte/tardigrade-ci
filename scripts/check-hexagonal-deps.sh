@@ -1,7 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+repo_root="${1:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+
+if [[ ! -d "$repo_root/crates" ]]; then
+    echo "[hex-guard] Invalid repository root: missing crates/ under '$repo_root'." >&2
+    exit 1
+fi
 
 # Collect workspace crate names from crates/* folders.
 declare -A workspace_crates=()
@@ -36,7 +41,17 @@ is_allowed_edge() {
             ;;
         api)
             case "$to" in
-                core|storage|scheduler|plugins|auth)
+                application|core|storage|scheduler|plugins|auth)
+                    return 0
+                    ;;
+                *)
+                    return 1
+                    ;;
+            esac
+            ;;
+        application)
+            case "$to" in
+                core|storage|scheduler)
                     return 0
                     ;;
                 *)
@@ -46,7 +61,7 @@ is_allowed_edge() {
             ;;
         server)
             case "$to" in
-                api|storage|scheduler)
+                api|application|storage|scheduler)
                     return 0
                     ;;
                 *)

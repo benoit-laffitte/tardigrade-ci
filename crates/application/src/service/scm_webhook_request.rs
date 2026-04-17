@@ -2,14 +2,14 @@ use std::collections::HashMap;
 
 /// Transport-neutral webhook command consumed by CI service orchestration.
 #[derive(Debug, Clone)]
-pub(crate) struct ScmWebhookRequest {
+pub struct ScmWebhookRequest {
     headers: HashMap<String, String>,
     body: Vec<u8>,
 }
 
 impl ScmWebhookRequest {
     /// Builds webhook command from raw header pairs and body bytes.
-    pub(crate) fn from_parts<I>(headers: I, body: Vec<u8>) -> Self
+    pub fn from_parts<I>(headers: I, body: Vec<u8>) -> Self
     where
         I: IntoIterator<Item = (String, String)>,
     {
@@ -35,7 +35,7 @@ impl ScmWebhookRequest {
     }
 
     /// Returns one optional normalized header value when present and non-empty.
-    pub(crate) fn header_value(&self, key: &str) -> Option<&str> {
+    pub fn header_value(&self, key: &str) -> Option<&str> {
         self.headers
             .get(&key.to_ascii_lowercase())
             .map(String::as_str)
@@ -44,7 +44,7 @@ impl ScmWebhookRequest {
     }
 
     /// Returns webhook payload body bytes.
-    pub(crate) fn body(&self) -> &[u8] {
+    pub fn body(&self) -> &[u8] {
         &self.body
     }
 }

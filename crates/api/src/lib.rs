@@ -1,14 +1,9 @@
-mod application;
-mod events;
 mod graphql;
 mod handlers;
 mod models;
 mod routing;
-mod service;
-mod settings;
 mod state;
 
-pub use events::LiveEvent;
 pub(crate) use graphql::CiGraphQLSchema;
 pub use models::{
     ApiErrorResponse, CompleteBuildRequest, CreateJobRequest, PluginAuthorizationCheckResponse,
@@ -17,5 +12,7 @@ pub use models::{
     UpsertWebhookSecurityConfigRequest, WorkerBuildStatus, WorkerInfo,
 };
 pub use routing::build_router;
-pub(crate) use service::ApiError;
-pub use {settings::ServiceSettings, state::ApiState};
+pub(crate) use tardigrade_application::ApiError;
+pub use {
+    state::ApiState, tardigrade_application::LiveEvent, tardigrade_application::ServiceSettings,
+};

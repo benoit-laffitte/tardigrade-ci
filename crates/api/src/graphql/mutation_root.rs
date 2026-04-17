@@ -1,5 +1,6 @@
 use async_graphql::{Context, Error as GraphQLError, ErrorExtensions, ID, Object};
 use axum::http::{HeaderName, HeaderValue, StatusCode};
+use tardigrade_application::ScmWebhookRequest;
 use tardigrade_plugins::PluginLifecycleError;
 
 use super::{
@@ -7,7 +8,6 @@ use super::{
     GqlScmPollingTickResponse, GqlUpsertScmPollingConfigInput, GqlUpsertWebhookSecurityConfigInput,
     GqlWebhookHeaderInput, GqlWorkerBuildStatus, gql_err_from_api, parse_id_as_uuid,
 };
-use crate::service::ScmWebhookRequest;
 use crate::{
     ApiError, ApiState, CreateJobRequest, UpsertScmPollingConfigRequest,
     UpsertWebhookSecurityConfigRequest, WorkerBuildStatus,

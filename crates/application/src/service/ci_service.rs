@@ -34,31 +34,31 @@ struct WebhookRejectionRecord {
 
 /// Service owns all domain orchestration (storage, scheduler, metrics, events).
 #[derive(Clone)]
-pub(crate) struct CiService {
-    pub(crate) storage: Arc<dyn Storage + Send + Sync>,
-    pub(crate) scheduler: Arc<dyn Scheduler + Send + Sync>,
+pub struct CiService {
+    pub storage: Arc<dyn Storage + Send + Sync>,
+    pub scheduler: Arc<dyn Scheduler + Send + Sync>,
     /// last_seen map allows the dashboard to expose active/idle workers.
-    pub(crate) worker_registry: Arc<Mutex<HashMap<String, DateTime<Utc>>>>,
-    pub(crate) worker_lease_timeout: Duration,
-    pub(crate) max_retries: u32,
-    pub(crate) retry_backoff_ms: u64,
+    pub worker_registry: Arc<Mutex<HashMap<String, DateTime<Utc>>>>,
+    pub worker_lease_timeout: Duration,
+    pub max_retries: u32,
+    pub retry_backoff_ms: u64,
     /// retry_state tracks attempt count per build until terminal state.
-    pub(crate) retry_state: Arc<Mutex<HashMap<Uuid, u32>>>,
-    pub(crate) metrics: Arc<Mutex<RuntimeMetrics>>,
+    pub retry_state: Arc<Mutex<HashMap<Uuid, u32>>>,
+    pub metrics: Arc<Mutex<RuntimeMetrics>>,
     /// dead_letter_builds provides a focused operational view over failed terminal retries.
-    pub(crate) dead_letter_builds: Arc<Mutex<HashSet<Uuid>>>,
+    pub dead_letter_builds: Arc<Mutex<HashSet<Uuid>>>,
     /// seen_webhook_events stores recent dedup keys to enforce idempotent ingestion.
-    pub(crate) seen_webhook_events: Arc<Mutex<HashMap<String, DateTime<Utc>>>>,
-    pub(crate) webhook_dedup_ttl: Duration,
+    pub seen_webhook_events: Arc<Mutex<HashMap<String, DateTime<Utc>>>>,
+    pub webhook_dedup_ttl: Duration,
     /// webhook_rejections stores recent rejection diagnostics for operator troubleshooting.
     webhook_rejections: Arc<Mutex<VecDeque<WebhookRejectionRecord>>>,
     /// Internal broadcast bus feeding the SSE /events endpoint.
-    pub(crate) event_tx: broadcast::Sender<LiveEvent>,
+    pub event_tx: broadcast::Sender<LiveEvent>,
 }
 
 impl CiService {
     /// Creates orchestrator service from persistence, queue backend, and runtime settings.
-    pub(crate) fn new(
+    pub fn new(
         storage: Arc<dyn Storage + Send + Sync>,
         scheduler: Arc<dyn Scheduler + Send + Sync>,
         settings: ServiceSettings,
@@ -148,7 +148,7 @@ impl CiService {
     }
 
     /// Returns a consistent snapshot of runtime counters.
-    pub(crate) fn metrics_snapshot(&self) -> RuntimeMetricsResponse {
+    pub fn metrics_snapshot(&self) -> RuntimeMetricsResponse {
         let metrics = self.metrics.lock().expect("metrics poisoned");
         RuntimeMetricsResponse {
             reclaimed_total: metrics.reclaimed_total,
@@ -167,28 +167,28 @@ impl CiService {
     }
 
     /// Records one received SCM webhook request before validation outcome is known.
-    pub(crate) fn record_scm_webhook_received(&self) {
+    pub fn record_scm_webhook_received(&self) {
         if let Ok(mut metrics) = self.metrics.lock() {
             metrics.scm_webhook_received_total += 1;
         }
     }
 
     /// Records one accepted SCM webhook request (`202`) after ingestion succeeded.
-    pub(crate) fn record_scm_webhook_accepted(&self) {
+    pub fn record_scm_webhook_accepted(&self) {
         if let Ok(mut metrics) = self.metrics.lock() {
             metrics.scm_webhook_accepted_total += 1;
         }
     }
 
     /// Records one rejected SCM webhook request after validation or processing error.
-    pub(crate) fn record_scm_webhook_rejected(&self) {
+    pub fn record_scm_webhook_rejected(&self) {
         if let Ok(mut metrics) = self.metrics.lock() {
             metrics.scm_webhook_rejected_total += 1;
         }
     }
 
     /// Stores one rejected webhook diagnostic entry for UI troubleshooting filters.
-    pub(crate) fn record_scm_webhook_rejection(
+    pub fn record_scm_webhook_rejection(
         &self,
         reason_code: &str,
         provider: Option<&str>,
@@ -211,7 +211,7 @@ impl CiService {
     }
 
     /// Lists recent rejection diagnostics, optionally filtered by provider/repository and limit.
-    pub(crate) fn list_scm_webhook_rejections(
+    pub fn list_scm_webhook_rejections(
         &self,
         provider: Option<&str>,
         repository_url: Option<&str>,
@@ -277,10 +277,7 @@ impl CiService {
     }
 
     /// Validates and persists a new job definition.
-    pub(crate) async fn create_job(
-        &self,
-        payload: CreateJobRequest,
-    ) -> Result<JobDefinition, ApiError> {
+    pub async fn create_job(&self, payload: CreateJobRequest) -> Result<JobDefinition, ApiError> {
         if payload.name.trim().is_empty()
             || payload.repository_url.trim().is_empty()
             || payload.pipeline_path.trim().is_empty()
@@ -315,10 +312,7 @@ impl CiService {
     }
 
     /// Validates and accepts one SCM webhook after signature, replay, and allowlist checks.
-    pub(crate) async fn ingest_scm_webhook(
-        &self,
-        request: &ScmWebhookRequest,
-    ) -> Result<(), ApiError> {
+    pub async fn ingest_scm_webhook(&self, request: &ScmWebhookRequest) -> Result<(), ApiError> {
         let provider = parse_scm_provider_header(request)?;
         let repository_url = header_value(request, "x-scm-repository")?;
         let config = self
@@ -434,7 +428,7 @@ impl CiService {
     }
 
     /// Runs one SCM polling tick and enqueues builds for due repository configs.
-    pub(crate) async fn run_scm_polling_tick(&self) -> Result<ScmPollingTickResponse, ApiError> {
+    pub async fn run_scm_polling_tick(&self) -> Result<ScmPollingTickResponse, ApiError> {
         let now = Utc::now();
         if let Ok(mut metrics) = self.metrics.lock() {
             metrics.scm_polling_ticks_total += 1;
@@ -495,7 +489,7 @@ impl CiService {
     }
 
     /// Lists jobs sorted chronologically by creation time.
-    pub(crate) async fn list_jobs(&self) -> Result<Vec<JobDefinition>, ApiError> {
+    pub async fn list_jobs(&self) -> Result<Vec<JobDefinition>, ApiError> {
         let mut jobs = self
             .storage
             .list_jobs()
@@ -506,7 +500,7 @@ impl CiService {
     }
 
     /// Creates and enqueues a build for a known job.
-    pub(crate) async fn run_job(&self, job_id: Uuid) -> Result<BuildRecord, ApiError> {
+    pub async fn run_job(&self, job_id: Uuid) -> Result<BuildRecord, ApiError> {
         let Some(_) = self
             .storage
             .get_job(job_id)
@@ -539,7 +533,7 @@ impl CiService {
     }
 
     /// Claims one build for worker and transitions state to running when possible.
-    pub(crate) async fn claim_build_for_worker(
+    pub async fn claim_build_for_worker(
         &self,
         worker_id: &str,
     ) -> Result<Option<BuildRecord>, ApiError> {
@@ -588,7 +582,7 @@ impl CiService {
     }
 
     /// Finalizes one claimed build with ownership checks, retry policy, and dead-letter handling.
-    pub(crate) async fn complete_build_for_worker(
+    pub async fn complete_build_for_worker(
         &self,
         worker_id: &str,
         build_id: Uuid,
@@ -742,7 +736,7 @@ impl CiService {
     }
 
     /// Materializes dead-letter builds for operator-focused API/dashboard views.
-    pub(crate) async fn list_dead_letter_builds(&self) -> Result<Vec<BuildRecord>, ApiError> {
+    pub async fn list_dead_letter_builds(&self) -> Result<Vec<BuildRecord>, ApiError> {
         let dead_letter_ids = self
             .dead_letter_builds
             .lock()
@@ -768,7 +762,7 @@ impl CiService {
     }
 
     /// Lists known workers enriched with active build counts.
-    pub(crate) fn list_workers(&self) -> Result<Vec<WorkerInfo>, ApiError> {
+    pub fn list_workers(&self) -> Result<Vec<WorkerInfo>, ApiError> {
         let loads = self.scheduler.worker_loads();
         let registry = self
             .worker_registry
@@ -799,7 +793,7 @@ impl CiService {
     }
 
     /// Readiness check ensuring core dependencies are reachable.
-    pub(crate) async fn is_ready(&self) -> Result<(), ApiError> {
+    pub async fn is_ready(&self) -> Result<(), ApiError> {
         // Readiness checks that core dependencies are reachable.
         self.storage
             .list_jobs()
@@ -810,7 +804,7 @@ impl CiService {
     }
 
     /// Lists builds sorted by queue time (newest first).
-    pub(crate) async fn list_builds(&self) -> Result<Vec<BuildRecord>, ApiError> {
+    pub async fn list_builds(&self) -> Result<Vec<BuildRecord>, ApiError> {
         let mut builds = self
             .storage
             .list_builds()
@@ -821,7 +815,7 @@ impl CiService {
     }
 
     /// Cancels one build and persists resulting state.
-    pub(crate) async fn cancel_build(&self, build_id: Uuid) -> Result<BuildRecord, ApiError> {
+    pub async fn cancel_build(&self, build_id: Uuid) -> Result<BuildRecord, ApiError> {
         let Some(mut build) = self
             .storage
             .get_build(build_id)

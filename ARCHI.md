@@ -93,7 +93,8 @@ sequenceDiagram
 ## Cartographie des crates
 
 - `crates/server`: bootstrap runtime Axum, montage routes GraphQL et webhook SCM, assets dashboard.
-- `crates/api`: schema GraphQL, etat partage, orchestration metier (service CI).
+- `crates/api`: schema GraphQL, etat partage et mapping adaptateur entrant (HTTP/GraphQL).
+- `crates/application`: use-cases CI et orchestration metier transport-neutre.
 - `crates/core`: modele metier (jobs, builds, pipeline DSL, SCM config, technology profiles).
 - `crates/storage`: persistence abstraite + implementations InMemory et Postgres.
 - `crates/scheduler`: file de builds + backends InMemory, File, Redis, Postgres.
@@ -125,8 +126,8 @@ flowchart TD
   end
 
   subgraph App[Application]
-    USECASE[crates/api/application\nCiUseCases]
-    SERVICE[crates/api/service\nCiService + orchestration]
+    USECASE[crates/application/application\nCiUseCases]
+    SERVICE[crates/application/service\nCiService + orchestration]
   end
 
   subgraph Domain[Domain]
@@ -143,6 +144,7 @@ flowchart TD
   end
 
   SERVER --> GQL
+  SERVER --> USECASE
   GQL --> USECASE
   USECASE --> SERVICE
   SERVICE --> CORE
@@ -157,8 +159,8 @@ flowchart TD
 
 ### Regles de dependance (phase pragmatique)
 
-- Regle 1: les adaptateurs entrants (`server`, `graphql`, `handlers`, `state`) appellent la couche use-case (`api/application`) et ne contiennent pas d orchestration metier longue.
-- Regle 2: la couche application (`api/application` + `api/service`) depend du domaine (`core`) et des ports (`Storage`, `Scheduler`), jamais d un backend concret.
+- Regle 1: les adaptateurs entrants (`server`, `graphql`, `handlers`, `state`) appellent la couche use-case (`application`) et ne contiennent pas d orchestration metier longue.
+- Regle 2: la couche application (`crates/application`) depend du domaine (`core`) et des ports (`Storage`, `Scheduler`), jamais d un backend concret.
 - Regle 3: les backends concrets (`storage`, `scheduler`) sont choisis au bootstrap (`server`) et passes sous forme de trait objects.
 - Regle 4: `worker` consomme des contrats neutres depuis `core` pour les DTO partages; tout couplage restant a `api` doit etre explicite et confine.
 
@@ -170,6 +172,5 @@ flowchart TD
 
 ### Ecarts restants assumes (avant phase stricte)
 
-- L implementation `CiService` reste dans la crate `api` (pas encore extraite dans une crate application dediee).
 - Les operations plugin/policy sont partiellement portees par `ApiState` et seront alignees progressivement via la couche use-case.
 - Le binaire de benchmark worker peut encore activer un couplage API derriere feature gate (`transport-bench`).

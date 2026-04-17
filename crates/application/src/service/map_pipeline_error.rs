@@ -3,7 +3,7 @@ use tardigrade_core::PipelineDslError;
 use crate::ApiError;
 
 /// Converts DSL parser/validator failures into API-level invalid pipeline errors.
-pub(crate) fn map_pipeline_error(error: PipelineDslError) -> ApiError {
+pub fn map_pipeline_error(error: PipelineDslError) -> ApiError {
     match error {
         PipelineDslError::Yaml(message) => ApiError::InvalidPipeline {
             message: format!("invalid pipeline YAML: {message}"),

@@ -2,7 +2,7 @@ use axum::http::StatusCode;
 use tardigrade_core::PipelineValidationIssue;
 
 /// Internal service-layer error taxonomy converted to HTTP codes at the edge.
-pub(crate) enum ApiError {
+pub enum ApiError {
     BadRequest,
     Unauthorized,
     Forbidden,
@@ -17,7 +17,7 @@ pub(crate) enum ApiError {
 
 impl ApiError {
     /// Maps domain/service errors to stable HTTP status codes.
-    pub(crate) fn status_code(&self) -> StatusCode {
+    pub fn status_code(&self) -> StatusCode {
         match self {
             Self::BadRequest => StatusCode::BAD_REQUEST,
             Self::Unauthorized => StatusCode::UNAUTHORIZED,

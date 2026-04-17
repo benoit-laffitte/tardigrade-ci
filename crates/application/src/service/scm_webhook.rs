@@ -9,10 +9,7 @@ use super::{ScmTriggerEvent, ScmWebhookRequest};
 use crate::ApiError;
 
 /// Reads one required header value and trims surrounding spaces.
-pub(crate) fn header_value(
-    request: &ScmWebhookRequest,
-    key: &'static str,
-) -> Result<String, ApiError> {
+pub fn header_value(request: &ScmWebhookRequest, key: &'static str) -> Result<String, ApiError> {
     request
         .header_value(key)
         .map(ToString::to_string)
@@ -20,9 +17,7 @@ pub(crate) fn header_value(
 }
 
 /// Parses provider from unified SCM header.
-pub(crate) fn parse_scm_provider_header(
-    request: &ScmWebhookRequest,
-) -> Result<ScmProvider, ApiError> {
+pub fn parse_scm_provider_header(request: &ScmWebhookRequest) -> Result<ScmProvider, ApiError> {
     let raw = header_value(request, "x-scm-provider")?;
     match raw.to_ascii_lowercase().as_str() {
         "github" => Ok(ScmProvider::Github),
@@ -32,7 +27,7 @@ pub(crate) fn parse_scm_provider_header(
 }
 
 /// Enforces webhook replay protection using `x-scm-timestamp` unix seconds header.
-pub(crate) fn validate_replay_window(
+pub fn validate_replay_window(
     request: &ScmWebhookRequest,
     window: Duration,
 ) -> Result<(), ApiError> {
@@ -47,7 +42,7 @@ pub(crate) fn validate_replay_window(
 }
 
 /// Validates source IP against configured allowlist when list is non-empty.
-pub(crate) fn validate_ip_allowlist(
+pub fn validate_ip_allowlist(
     request: &ScmWebhookRequest,
     allowed_ips: &[String],
 ) -> Result<(), ApiError> {
@@ -72,7 +67,7 @@ pub(crate) fn validate_ip_allowlist(
 }
 
 /// Verifies SCM provider signature semantics for one webhook payload.
-pub(crate) fn verify_signature(
+pub fn verify_signature(
     provider: ScmProvider,
     request: &ScmWebhookRequest,
     body: &[u8],
@@ -85,7 +80,7 @@ pub(crate) fn verify_signature(
 }
 
 /// Verifies GitHub `x-hub-signature-256` value against HMAC-SHA256 over request body.
-pub(crate) fn verify_github_signature(
+pub fn verify_github_signature(
     request: &ScmWebhookRequest,
     body: &[u8],
     secret: &str,
@@ -105,10 +100,7 @@ pub(crate) fn verify_github_signature(
 }
 
 /// Verifies GitLab token-style signature header using constant-time equality.
-pub(crate) fn verify_gitlab_signature(
-    request: &ScmWebhookRequest,
-    secret: &str,
-) -> Result<(), ApiError> {
+pub fn verify_gitlab_signature(request: &ScmWebhookRequest, secret: &str) -> Result<(), ApiError> {
     let provided = header_value(request, "x-gitlab-token").map_err(|_| ApiError::Unauthorized)?;
     if provided.len() != secret.len() {
         return Err(ApiError::Unauthorized);
@@ -128,7 +120,7 @@ pub(crate) fn verify_gitlab_signature(
 }
 
 /// Parses provider event metadata into one internal SCM trigger event.
-pub(crate) fn parse_scm_trigger_event(
+pub fn parse_scm_trigger_event(
     provider: ScmProvider,
     request: &ScmWebhookRequest,
     body: &[u8],
@@ -140,7 +132,7 @@ pub(crate) fn parse_scm_trigger_event(
 }
 
 /// Builds deterministic dedup key from provider event id or fallback tuple.
-pub(crate) fn build_webhook_dedup_key(
+pub fn build_webhook_dedup_key(
     provider: ScmProvider,
     repository_url: &str,
     request: &ScmWebhookRequest,
@@ -169,7 +161,7 @@ pub(crate) fn build_webhook_dedup_key(
 }
 
 /// Extracts provider event identifier from headers when available.
-pub(crate) fn parse_provider_event_id(
+pub fn parse_provider_event_id(
     provider: ScmProvider,
     request: &ScmWebhookRequest,
 ) -> Option<String> {
@@ -183,7 +175,7 @@ pub(crate) fn parse_provider_event_id(
 }
 
 /// Parses commit SHA candidates from provider payload for fallback dedup tuple.
-pub(crate) fn parse_event_commit_sha(provider: ScmProvider, body: &[u8]) -> Option<String> {
+pub fn parse_event_commit_sha(provider: ScmProvider, body: &[u8]) -> Option<String> {
     let payload: JsonValue = serde_json::from_slice(body).ok()?;
     match provider {
         ScmProvider::Github => payload
@@ -218,15 +210,12 @@ pub(crate) fn parse_event_commit_sha(provider: ScmProvider, body: &[u8]) -> Opti
 }
 
 /// Returns lowercased header value when present and non-empty.
-pub(crate) fn optional_header_value(
-    request: &ScmWebhookRequest,
-    key: &'static str,
-) -> Option<String> {
+pub fn optional_header_value(request: &ScmWebhookRequest, key: &'static str) -> Option<String> {
     request.header_value(key).map(|v| v.to_ascii_lowercase())
 }
 
 /// Returns stable provider slug used in dedup key encoding.
-pub(crate) fn provider_slug(provider: ScmProvider) -> &'static str {
+pub fn provider_slug(provider: ScmProvider) -> &'static str {
     match provider {
         ScmProvider::Github => "github",
         ScmProvider::Gitlab => "gitlab",
@@ -234,7 +223,7 @@ pub(crate) fn provider_slug(provider: ScmProvider) -> &'static str {
 }
 
 /// Returns stable trigger family slug used in fallback dedup key encoding.
-pub(crate) fn event_slug(event: ScmTriggerEvent) -> &'static str {
+pub fn event_slug(event: ScmTriggerEvent) -> &'static str {
     match event {
         ScmTriggerEvent::Push => "push",
         ScmTriggerEvent::PullRequest => "pull_request",
@@ -245,7 +234,7 @@ pub(crate) fn event_slug(event: ScmTriggerEvent) -> &'static str {
 }
 
 /// Maps GitHub webhook event headers/payload into internal trigger family.
-pub(crate) fn parse_github_trigger_event(
+pub fn parse_github_trigger_event(
     request: &ScmWebhookRequest,
     body: &[u8],
 ) -> Result<Option<ScmTriggerEvent>, ApiError> {
@@ -276,7 +265,7 @@ pub(crate) fn parse_github_trigger_event(
 }
 
 /// Maps GitLab webhook event headers/payload into internal trigger family.
-pub(crate) fn parse_gitlab_trigger_event(
+pub fn parse_gitlab_trigger_event(
     request: &ScmWebhookRequest,
     body: &[u8],
 ) -> Result<Option<ScmTriggerEvent>, ApiError> {

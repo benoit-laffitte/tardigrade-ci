@@ -7,6 +7,7 @@ use chrono::Utc;
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
+use tardigrade_application::{ApiError, CiService, CiUseCases, ScmWebhookRequest, ServiceSettings};
 use tardigrade_core::{ScmPollingConfig, WebhookSecurityConfig};
 use tardigrade_plugins::{
     Plugin, PluginCapability, PluginLifecycleError, PluginLifecycleState, PluginRegistry,
@@ -14,12 +15,9 @@ use tardigrade_plugins::{
 use tardigrade_scheduler::{InMemoryScheduler, Scheduler};
 use tardigrade_storage::{InMemoryStorage, Storage};
 
-use crate::application::CiUseCases;
-use crate::service::{CiService, ScmWebhookRequest};
 use crate::{
-    ApiError, ApiErrorResponse, PluginAuthorizationCheckResponse, PluginInfo, PluginPolicyResponse,
-    ScmWebhookAcceptedResponse, ServiceSettings, UpsertScmPollingConfigRequest,
-    UpsertWebhookSecurityConfigRequest,
+    ApiErrorResponse, PluginAuthorizationCheckResponse, PluginInfo, PluginPolicyResponse,
+    ScmWebhookAcceptedResponse, UpsertScmPollingConfigRequest, UpsertWebhookSecurityConfigRequest,
 };
 
 const GLOBAL_POLICY_CONTEXT: &str = "global";
