@@ -162,7 +162,7 @@ flowchart TD
 - Regle 1: les adaptateurs entrants (`server`, `graphql`, `handlers`, `state`) appellent la couche use-case (`application`) et ne contiennent pas d orchestration metier longue.
 - Regle 2: la couche application (`crates/application`) depend du domaine (`core`), des ports (`Storage`, `Scheduler`) et des composants de policy (`plugins`, `auth`), jamais d un backend concret.
 - Regle 3: les backends concrets (`storage`, `scheduler`) sont choisis au bootstrap (`server`) et passes sous forme de trait objects.
-- Regle 4: `worker` consomme des contrats neutres depuis `core` pour les DTO partages; tout couplage restant a `api` doit etre explicite et confine.
+- Regle 4: `worker` consomme des contrats neutres depuis `core` pour les DTO partages et ne depend pas de `api`.
 
 ### Regles interdites (phase pragmatique)
 
@@ -172,5 +172,4 @@ flowchart TD
 
 ### Ecarts restants assumes (avant phase stricte)
 
-- Les operations plugin/policy sont partiellement portees par `ApiState` et seront alignees progressivement via la couche use-case.
-- Le binaire de benchmark worker peut encore activer un couplage API derriere feature gate (`transport-bench`).
+- Aucun ecart worker->api n est conserve: le benchmark transport worker utilise un endpoint GraphQL externe optionnel au lieu d importer le routeur API.

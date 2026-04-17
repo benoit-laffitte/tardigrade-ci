@@ -126,7 +126,7 @@ Unified automation entrypoints from repository root:
 - `make dashboard-build` (frontend build via npm)
 - `cd dashboard && npm run e2e` (Playwright admin E2E suite)
 - `make build` (Rust + dashboard build)
-- `make agent d execution-transport-bench` (local HTTP/1 vs HTTP/2 agent d execution transport benchmark)
+- `make agent d execution-transport-bench` (local mock HTTP/1 vs HTTP/2 agent d execution transport benchmark; add `--real-server-url` in direct command for real server scenarios)
 - `make package-platform-zips` (create release zip per platform: mac/windows/linux)
 - `make ci` (local CI-equivalent aggregate)
 

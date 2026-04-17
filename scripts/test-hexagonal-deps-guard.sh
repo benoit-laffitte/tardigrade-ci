@@ -84,15 +84,15 @@ run_case_expect_fail \
     "core" "tardigrade-api = { path = \"../api\" }" \
     "api" ""
 
-# Worker to API is only tolerated for optional benchmark edge.
+# Worker to API is forbidden.
 run_case_expect_fail \
     "forbid-worker-to-api-non-optional" \
     "worker" "tardigrade-api = { path = \"../api\" }" \
     "api" ""
 
-# Optional benchmark edge remains accepted by policy.
-run_case_expect_pass \
-    "allow-worker-to-api-optional" \
+# Optional worker to API edge is also forbidden.
+run_case_expect_fail \
+    "forbid-worker-to-api-optional" \
     "worker" "tardigrade-api = { path = \"../api\", optional = true }" \
     "api" ""
 

@@ -74,10 +74,6 @@ is_allowed_edge() {
                 core)
                     return 0
                     ;;
-                api|storage|scheduler)
-                    # Temporary exception for transport benchmark feature path.
-                    [[ "$optional" == "true" ]] && return 0 || return 1
-                    ;;
                 *)
                     return 1
                     ;;

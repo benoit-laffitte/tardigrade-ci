@@ -52,7 +52,7 @@ Le projet vise une architecture hexagonale stricte, mais le code actuel contient
 - Les DTO worker de completion ont ete deplaces vers `crates/core` pour servir de contrat neutre partage.
 - La crate API conserve des re-exports de compatibilite pour eviter une rupture de surface publique immediate.
 - Le runtime worker n importe plus les DTO depuis la crate API.
-- La dependance `tardigrade-api` cote worker est maintenant optionnelle et reservee au benchmark transport.
+- La dependance `tardigrade-api` cote worker a ete retiree, y compris du benchmark transport.
 
 ### Mise a jour implementation (2026-04-17, HEXA-02)
 
@@ -84,7 +84,21 @@ Le projet vise une architecture hexagonale stricte, mais le code actuel contient
 
 - Un garde-fou de dependances internes a ete introduit pour faire respecter le graphe hexagonal pragmatique.
 - Ce check est desormais integre au workflow standard via `make arch-guard` et execute dans `make lint`/`make ci`.
-- Une exception temporaire explicite est maintenue pour le chemin benchmark worker, uniquement si les dependances concernes restent `optional`.
+- La policy interdit desormais tout couplage `worker -> api`, y compris pour les chemins benchmark.
+
+### Mise a jour implementation (2026-04-17, HEXA-01 completion)
+
+- Le binaire `transport_bench` worker ne demarre plus le routeur API en process; les scenarios reel serveur passent par `--real-server-url` optionnel.
+- Les dependances optionnelles `tardigrade-api`, `tardigrade-storage` et `tardigrade-scheduler` ont ete retirees de la crate worker.
+- Le garde-fou d architecture et ses scenarios de regression interdisent maintenant `worker -> api` meme en optional.
+
+Evidence technique:
+
+- Worker bench decouple: [crates/worker/src/bin/transport_bench.rs](../crates/worker/src/bin/transport_bench.rs)
+- Worker deps nettoyees: [crates/worker/Cargo.toml](../crates/worker/Cargo.toml)
+- Policy guard worker stricte: [scripts/check-hexagonal-deps.sh](../scripts/check-hexagonal-deps.sh)
+- Regression guard update: [scripts/test-hexagonal-deps-guard.sh](../scripts/test-hexagonal-deps-guard.sh)
+- Benchmark runbook update: [docs/worker-transport-benchmark.md](../docs/worker-transport-benchmark.md)
 
 ### Mise a jour implementation (2026-04-17, HEXA-07)
 

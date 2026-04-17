@@ -25,25 +25,29 @@ Equivalent direct command:
 ```bash
 env -u https_proxy -u http_proxy -u PXY_FAB_FONC \
 cargo run -p tardigrade-worker --features transport-bench --bin transport_bench -- --iterations 200
+
+# Optional: include real server scenarios (server started separately)
+env -u https_proxy -u http_proxy -u PXY_FAB_FONC \
+cargo run -p tardigrade-worker --features transport-bench --bin transport_bench -- --iterations 200 --real-server-url http://127.0.0.1:8080
 ```
 
 ## Method
 
-- The benchmark starts two local servers on `127.0.0.1`:
-  - one synthetic Axum mock GraphQL server
-  - one real API router (`build_router(ApiState)`) backed by in-memory storage/scheduler
+- The benchmark always starts one local synthetic Axum mock GraphQL server on `127.0.0.1`.
+- Real-server scopes are optional and run only when `--real-server-url <url>` is provided.
 - The mock server exposes the minimal GraphQL contract needed by the agent d execution:
   - `worker_claim_build`
   - `worker_complete_build`
-- Four benchmark scopes are measured with the same agent d execution client code path:
+- Always measured scopes with the same agent d execution client code path:
   - mock sequential
   - mock concurrent
+- Optional scopes when `--real-server-url` is set:
   - real server sequential
   - real server concurrent
 - Each scope compares protocol variants:
   - HTTP/1
   - HTTP/2 h2c (`http2_enabled=true`, `http2_prior_knowledge=true`)
-- Real-server scopes pre-seed the queue with enough builds so each `claim -> complete` cycle has work.
+- When enabled, real-server scopes pre-seed the queue with enough builds so each `claim -> complete` cycle has work.
 - Output includes total runtime, average latency, p50, p95, and throughput.
 
 ## Local Result

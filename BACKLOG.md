@@ -635,7 +635,7 @@ Resultat d execution for `HEXA-01` (2026-04-17):
 - Worker completion DTOs (`CompleteBuildRequest`, `WorkerBuildStatus`) moved to neutral core contract.
 - API model keeps backward-compatible re-exports to avoid public contract break.
 - Worker runtime path no longer imports API DTOs.
-- `tardigrade-api` dependency in worker was reduced to optional and gated for benchmark-only binary (`transport_bench`).
+- `tardigrade-api` dependency was removed from worker crate, including benchmark path coupling.
 - Validation: `make ci` green after migration.
 
 Resultat d execution for `HEXA-02` (2026-04-17):
@@ -673,7 +673,15 @@ Resultat d execution for `HEXA-06` (2026-04-17):
 - Added compile-time dependency guard script (`scripts/check-hexagonal-deps.sh`) enforcing pragmatic allowed edges between workspace crates.
 - Integrated guard in Make workflow via `make arch-guard`, now part of `make lint` and therefore `make ci`.
 - Documented guard target in README and repository contribution instructions.
-- Preserved temporary benchmark-only worker coupling by allowing `worker -> {api,storage,scheduler}` only when dependencies remain optional.
+- Enforced strict worker dependency policy (`worker -> core` only) with no benchmark exception.
+- Validation: `make ci` green after migration.
+
+Resultat d execution complementaire for `HEXA-01` (2026-04-17):
+
+- Refactored `transport_bench` to remove in-process API router bootstrap and use an optional external GraphQL endpoint (`--real-server-url`) for real-server scenarios.
+- Removed worker optional dependencies on `api`, `storage`, and `scheduler` from `crates/worker/Cargo.toml`.
+- Updated architecture guard policy and regression scenarios to forbid `worker -> api` even when optional.
+- Updated benchmark documentation to reflect mock-only default and external real-server mode.
 - Validation: `make ci` green after migration.
 
 Resultat d execution for `HEXA-07` (2026-04-17):
@@ -734,7 +742,7 @@ Plan de convergence crate par crate:
   - Goal: remove dependency inversion by decoupling worker from API crate internals.
   - Scope: replace `tardigrade-api` type imports with neutral worker contract DTOs.
   - Status: `[-]` in progress.
-  - Acceptance criteria: worker runtime no longer depends on API DTOs; remaining API coupling is isolated to benchmark feature path until strict split.
+  - Acceptance criteria: worker runtime and benchmark paths do not depend on API crate internals; worker consumes only neutral contracts.
 - `crates/storage`
   - Goal: preserve storage as outbound adapter package behind port contract.
   - Scope: separate storage contract visibility from concrete backend exports in preparation for strict phase.
@@ -756,14 +764,14 @@ Plan de convergence crate par crate:
   - Status: `[ ]` not started.
   - Acceptance criteria: auth decisions can be consumed by GraphQL/HTTP adapters without embedding transport types in auth primitives.
 
-- [-] `HEXA-01` Phase A: remove worker -> api inversion by introducing neutral worker contract DTOs and dropping `tardigrade-api` dependency from worker.
-- [-] `HEXA-02` Phase A: introduce transport-neutral webhook command model and move Axum header handling to API/server adapters.
-- [-] `HEXA-03` Phase A: split API orchestration into explicit use-case layer and adapter mapping layer without behavior change.
-- [-] `HEXA-04` Phase A: make storage/scheduler contract-first consumption explicit in API and server wiring tests.
-- [-] `HEXA-05` Phase A: document pragmatic target dependency graph in `ARCHI.md` and contribution guidance.
-- [-] `HEXA-06` Phase B: enforce strict crate boundaries (ports vs adapters) with compile-time dependency constraints.
-- [-] `HEXA-07` Phase B: extract dedicated application crate for CI use cases and move orchestration out of adapter crates.
-- [-] `HEXA-08` Phase B: add architecture regression checks (dependency policy tests/CI guard) to block forbidden edges.
+- [x] `HEXA-01` Phase A: remove worker -> api inversion by introducing neutral worker contract DTOs and dropping `tardigrade-api` dependency from worker.
+- [x] `HEXA-02` Phase A: introduce transport-neutral webhook command model and move Axum header handling to API/server adapters.
+- [x] `HEXA-03` Phase A: split API orchestration into explicit use-case layer and adapter mapping layer without behavior change.
+- [x] `HEXA-04` Phase A: make storage/scheduler contract-first consumption explicit in API and server wiring tests.
+- [x] `HEXA-05` Phase A: document pragmatic target dependency graph in `ARCHI.md` and contribution guidance.
+- [x] `HEXA-06` Phase B: enforce strict crate boundaries (ports vs adapters) with compile-time dependency constraints.
+- [x] `HEXA-07` Phase B: extract dedicated application crate for CI use cases and move orchestration out of adapter crates.
+- [x] `HEXA-08` Phase B: add architecture regression checks (dependency policy tests/CI guard) to block forbidden edges.
 - [x] `HEXA-09` Phase B: align plugins/auth integration through application ports and remove residual adapter leakage.
 
 Definition de termine:

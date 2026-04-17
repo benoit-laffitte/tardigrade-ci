@@ -5,11 +5,7 @@ edition = "2024"
 
 [features]
 default = []
-transport-bench = [
-	"dep:tardigrade-api",
-	"dep:tardigrade-storage",
-	"dep:tardigrade-scheduler",
-]
+transport-bench = []
 
 [dependencies]
 anyhow.workspace = true
@@ -25,9 +21,6 @@ uuid.workspace = true
 async-trait.workspace = true
 toml = "0.8"
 tardigrade-core = { path = "../core" }
-tardigrade-api = { path = "../api", optional = true }
-tardigrade-storage = { path = "../storage", optional = true }
-tardigrade-scheduler = { path = "../scheduler", optional = true }
 
 [[bin]]
 name = "transport_bench"
