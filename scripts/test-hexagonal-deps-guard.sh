@@ -41,7 +41,7 @@ run_case_expect_pass() {
         shift 2
     done
 
-    if ! "$guard_script" "$case_root" >/dev/null; then
+    if ! bash "$guard_script" "$case_root" >/dev/null; then
         echo "[hex-guard-test] expected pass, got failure: $case_name" >&2
         exit 1
     fi
@@ -61,7 +61,7 @@ run_case_expect_fail() {
         shift 2
     done
 
-    if "$guard_script" "$case_root" >/dev/null 2>&1; then
+    if bash "$guard_script" "$case_root" >/dev/null 2>&1; then
         echo "[hex-guard-test] expected failure, got pass: $case_name" >&2
         exit 1
     fi

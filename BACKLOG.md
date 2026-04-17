@@ -684,6 +684,14 @@ Resultat d execution for `HEXA-07` (2026-04-17):
 - Updated dependency guard policy to include `application` edges (`api -> application`, `application -> {core,storage,scheduler}`) and allowed composition-root access from server.
 - Validation: `make ci` green after migration.
 
+Resultat d execution for `HEXA-08` (2026-04-17):
+
+- Added explicit architecture guard regression scenarios script (`scripts/test-hexagonal-deps-guard.sh`) covering allowed and forbidden internal dependency edges.
+- Enhanced dependency guard script to support repository-root override (`scripts/check-hexagonal-deps.sh <path>`) so policy behavior can be validated against synthetic fixtures.
+- Integrated guard regression target into Rust lint pipeline via `make arch-guard-test` and wired it into `make lint` (therefore enforced in `make ci`).
+- Updated command documentation to expose the new target and make architecture policy verification discoverable.
+- Validation: `make ci` green after migration.
+
 Plan de convergence crate par crate:
 
 - `crates/core`
@@ -739,7 +747,7 @@ Plan de convergence crate par crate:
 - [-] `HEXA-05` Phase A: document pragmatic target dependency graph in `ARCHI.md` and contribution guidance.
 - [-] `HEXA-06` Phase B: enforce strict crate boundaries (ports vs adapters) with compile-time dependency constraints.
 - [-] `HEXA-07` Phase B: extract dedicated application crate for CI use cases and move orchestration out of adapter crates.
-- [ ] `HEXA-08` Phase B: add architecture regression checks (dependency policy tests/CI guard) to block forbidden edges.
+- [-] `HEXA-08` Phase B: add architecture regression checks (dependency policy tests/CI guard) to block forbidden edges.
 - [ ] `HEXA-09` Phase B: align plugins/auth integration through application ports and remove residual adapter leakage.
 
 Definition de termine:

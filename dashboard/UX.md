@@ -93,6 +93,19 @@ Le projet vise une architecture hexagonale stricte, mais le code actuel contient
 - Les re-exports de compatibilite de la surface API sont conserves pour eviter une rupture immediate des imports existants.
 - Le garde-fou d architecture a ete etendu pour inclure le nouveau flux de dependances autour de `application`.
 
+### Mise a jour implementation (2026-04-17, HEXA-08)
+
+- Un jeu de scenarios de regression du garde-fou d architecture a ete ajoute pour verifier explicitement les cas autorises/interdits.
+- Le script de policy accepte maintenant un chemin de repository cible, permettant de tester la policy sur des fixtures synthetiques isolees.
+- Le workflow lint/CI execute desormais ces scenarios via `make arch-guard-test` en plus du check de policy nominal.
+
+Evidence technique:
+
+- Regression scenarios: [scripts/test-hexagonal-deps-guard.sh](../scripts/test-hexagonal-deps-guard.sh)
+- Policy script update: [scripts/check-hexagonal-deps.sh](../scripts/check-hexagonal-deps.sh)
+- Make integration: [mk/rust.mk](../mk/rust.mk)
+- Command reference update: [README.md](../README.md)
+
 Evidence technique:
 
 - Nouvelle crate application: [crates/application/Cargo.toml](../crates/application/Cargo.toml)
