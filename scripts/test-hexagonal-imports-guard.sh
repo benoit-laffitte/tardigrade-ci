@@ -54,4 +54,15 @@ run_case_expect_fail() {
 run_case_expect_pass "allow-server-composition-root"
 run_case_expect_fail "forbid-api-adapter-import"
 
+# Source-level tests are no longer in allowlist and must be rejected too.
+run_case_expect_fail "forbid-source-level-test-adapter-import"
+
+case_root="$tmp_root/forbid-source-level-test-adapter-import"
+mkdir -p "$case_root/crates"
+write_case_src_file "$case_root" "crates/server/src/webhook_adapter_tests.rs" 'use tardigrade_storage::adapters::InMemoryStorage;'
+if bash "$guard_script" "$case_root" >/dev/null 2>&1; then
+    echo "[hex-import-guard-test] expected failure, got pass: forbid-source-level-test-adapter-import" >&2
+    exit 1
+fi
+
 echo "[hex-import-guard-test] Regression scenarios passed."

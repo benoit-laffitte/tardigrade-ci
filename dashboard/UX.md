@@ -135,6 +135,7 @@ Evidence technique:
 - Les imports de traits dans les consommateurs internes utilisent maintenant explicitement `ports::Storage` et `ports::Scheduler`.
 - Un garde-fou source-level bloque la reintroduction d imports `adapters::` hors allowlist explicite (composition root server uniquement).
 - L exception transitoire `ApiState` a ete supprimee, puis les tests serveur ont ete migres en integration pour permettre une allowlist stricte composee uniquement de la composition root.
+- Les scenarios de regression du garde-fou couvrent explicitement le rejet des imports `adapters::` dans les modules de test source-level (`src/*_tests.rs`).
 
 Evidence technique:
 

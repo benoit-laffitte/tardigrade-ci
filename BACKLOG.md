@@ -694,6 +694,7 @@ Resultat d execution complementaire for strict ports/adapters separation (2026-0
 - Removed the transitional `ApiState` allowlist exception by migrating tests to explicit `with_components` wiring.
 - Migrated server webhook adapter wiring tests from source-level to integration scope and tightened allowlist to composition root only.
 - Added adapter-import guard regression scenarios (`scripts/test-hexagonal-imports-guard.sh`) wired into `make lint`/`make ci`.
+- Extended adapter-import guard regressions to explicitly fail `src/*_tests.rs` adapter imports.
 - Validation: `make ci` green after migration.
 
 Resultat d execution for `HEXA-07` (2026-04-17):
