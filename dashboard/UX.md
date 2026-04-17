@@ -74,6 +74,17 @@ Le projet vise une architecture hexagonale stricte, mais le code actuel contient
 - Ces tests construisent explicitement `ApiState` avec `Storage`/`Scheduler` en trait objects (`Arc<dyn ...>`) et valident le chemin GraphQL ready.
 - L intention architecturale de composition par ports est maintenant verifiee en test de regression.
 
+### Mise a jour implementation (2026-04-17, HEXA-05)
+
+- Le graphe de dependances cible de la phase pragmatique a ete formalise dans la documentation d architecture.
+- Les regles de dependances autorisees/interdites sont maintenant explicites pour guider les prochaines PR.
+- Les instructions de contribution du depot incluent des regles hexagonales pragmatiques operables.
+
+Evidence technique:
+
+- Graphe cible et regles pragmatiques: [ARCHI.md](../ARCHI.md)
+- Regles de contribution: [.github/copilot-instructions.md](../.github/copilot-instructions.md)
+
 Evidence technique:
 
 - Test API wiring ports: [crates/api/tests/graphql.rs](../crates/api/tests/graphql.rs)

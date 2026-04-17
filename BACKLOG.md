@@ -661,6 +661,13 @@ Resultat d execution for `HEXA-04` (2026-04-17):
 - Kept runtime behavior unchanged while making adapter composition intent executable through tests.
 - Validation: `make ci` green after migration.
 
+Resultat d execution for `HEXA-05` (2026-04-17):
+
+- Documented pragmatic hexagonal target dependency graph in `ARCHI.md`.
+- Added explicit allowed/forbidden dependency rules and known temporary deviations for phase A.
+- Added repository contribution rules for pragmatic hexagonal dependencies in `.github/copilot-instructions.md`.
+- Validation: `make ci` green after migration.
+
 Plan de convergence crate par crate:
 
 - `crates/core`
@@ -708,7 +715,7 @@ Plan de convergence crate par crate:
 - [-] `HEXA-02` Phase A: introduce transport-neutral webhook command model and move Axum header handling to API/server adapters.
 - [-] `HEXA-03` Phase A: split API orchestration into explicit use-case layer and adapter mapping layer without behavior change.
 - [-] `HEXA-04` Phase A: make storage/scheduler contract-first consumption explicit in API and server wiring tests.
-- [ ] `HEXA-05` Phase A: document pragmatic target dependency graph in `ARCHI.md` and contribution guidance.
+- [-] `HEXA-05` Phase A: document pragmatic target dependency graph in `ARCHI.md` and contribution guidance.
 - [ ] `HEXA-06` Phase B: enforce strict crate boundaries (ports vs adapters) with compile-time dependency constraints.
 - [ ] `HEXA-07` Phase B: extract dedicated application crate for CI use cases and move orchestration out of adapter crates.
 - [ ] `HEXA-08` Phase B: add architecture regression checks (dependency policy tests/CI guard) to block forbidden edges.

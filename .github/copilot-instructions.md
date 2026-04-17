@@ -44,3 +44,10 @@
 - Suivre les bonnes pratiques Rust et Axum pour la gestion des erreurs, le code asynchrone et la surete de typage.
 - Maintenir ce fichier d instructions a jour au fil du temps avec les orientations majeures du projet et toute regle de developpement adoptee formellement par l equipe.
 - Tracer toutes les actions dans BACKLOG.md et UX.md.
+
+### Regles de dependance hexagonale (phase pragmatique)
+- Respecter le flux de dependance entrant -> application -> domaine.
+- Les adaptateurs (`crates/server`, `crates/api/graphql`, `crates/api/handlers`, `crates/api/state`) doivent appeler la facade use-case (`crates/api/application`) et eviter de porter l orchestration metier.
+- La couche application/service doit consommer les ports (`Storage`, `Scheduler`) via trait objects, jamais des backends concrets.
+- Le domaine (`crates/core`) ne doit jamais dependre de crates d adaptateurs ou d infrastructure.
+- Tout couplage residuel temporaire accepte pour la phase pragmatique doit etre isole, documente dans `BACKLOG.md`, et planifie pour suppression en phase stricte.
