@@ -26,7 +26,7 @@ impl MutationRoot {
     ) -> Result<GqlJobDefinition, GraphQLError> {
         let state = ctx.data_unchecked::<ApiState>();
         let job = state
-            .service
+            .use_cases
             .create_job(CreateJobRequest {
                 name: input.name,
                 repository_url: input.repository_url,
@@ -43,7 +43,7 @@ impl MutationRoot {
         let state = ctx.data_unchecked::<ApiState>();
         let job_uuid = parse_id_as_uuid(&job_id)?;
         let build = state
-            .service
+            .use_cases
             .run_job(job_uuid)
             .await
             .map_err(gql_err_from_api)?;
@@ -60,7 +60,7 @@ impl MutationRoot {
         let state = ctx.data_unchecked::<ApiState>();
         let build_uuid = parse_id_as_uuid(&build_id)?;
         let build = state
-            .service
+            .use_cases
             .cancel_build(build_uuid)
             .await
             .map_err(gql_err_from_api)?;
@@ -182,7 +182,7 @@ impl MutationRoot {
     ) -> Result<GqlScmPollingTickResponse, GraphQLError> {
         let state = ctx.data_unchecked::<ApiState>();
         let result = state
-            .service
+            .use_cases
             .run_scm_polling_tick()
             .await
             .map_err(gql_err_from_api)?;
@@ -205,16 +205,16 @@ impl MutationRoot {
             .header_value("x-scm-repository")
             .map(ToString::to_string);
 
-        state.service.record_scm_webhook_received();
+        state.use_cases.record_scm_webhook_received();
 
-        match state.service.ingest_scm_webhook(&request).await {
+        match state.use_cases.ingest_scm_webhook(&request).await {
             Ok(()) => {
-                state.service.record_scm_webhook_accepted();
+                state.use_cases.record_scm_webhook_accepted();
                 Ok(true)
             }
             Err(ApiError::BadRequest) => {
-                state.service.record_scm_webhook_rejected();
-                state.service.record_scm_webhook_rejection(
+                state.use_cases.record_scm_webhook_rejected();
+                state.use_cases.record_scm_webhook_rejection(
                     "invalid_webhook_request",
                     provider.as_deref(),
                     repository_url.as_deref(),
@@ -225,8 +225,8 @@ impl MutationRoot {
                 )
             }
             Err(ApiError::Unauthorized) => {
-                state.service.record_scm_webhook_rejected();
-                state.service.record_scm_webhook_rejection(
+                state.use_cases.record_scm_webhook_rejected();
+                state.use_cases.record_scm_webhook_rejection(
                     "invalid_webhook_signature",
                     provider.as_deref(),
                     repository_url.as_deref(),
@@ -237,8 +237,8 @@ impl MutationRoot {
                 )
             }
             Err(ApiError::Forbidden) => {
-                state.service.record_scm_webhook_rejected();
-                state.service.record_scm_webhook_rejection(
+                state.use_cases.record_scm_webhook_rejected();
+                state.use_cases.record_scm_webhook_rejection(
                     "webhook_forbidden",
                     provider.as_deref(),
                     repository_url.as_deref(),
@@ -249,8 +249,8 @@ impl MutationRoot {
                 .extend_with(|_, ext| ext.set("code", "webhook_forbidden")))
             }
             Err(err) => {
-                state.service.record_scm_webhook_rejected();
-                state.service.record_scm_webhook_rejection(
+                state.use_cases.record_scm_webhook_rejected();
+                state.use_cases.record_scm_webhook_rejection(
                     "webhook_internal_error",
                     provider.as_deref(),
                     repository_url.as_deref(),
@@ -268,7 +268,7 @@ impl MutationRoot {
     ) -> Result<Option<GqlBuildRecord>, GraphQLError> {
         let state = ctx.data_unchecked::<ApiState>();
         let build = state
-            .service
+            .use_cases
             .claim_build_for_worker(&worker_id)
             .await
             .map_err(gql_err_from_api)?;
@@ -292,7 +292,7 @@ impl MutationRoot {
         };
 
         let build = state
-            .service
+            .use_cases
             .complete_build_for_worker(&worker_id, build_uuid, status, log_line)
             .await
             .map_err(gql_err_from_api)?;

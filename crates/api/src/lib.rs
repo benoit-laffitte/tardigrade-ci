@@ -1,3 +1,4 @@
+mod application;
 mod events;
 mod graphql;
 mod handlers;

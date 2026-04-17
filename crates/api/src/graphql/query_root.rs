@@ -32,7 +32,7 @@ impl QueryRoot {
     /// Returns readiness status after dependency checks.
     async fn ready(&self, ctx: &Context<'_>) -> Result<GqlReadyResponse, GraphQLError> {
         let state = ctx.data_unchecked::<ApiState>();
-        state.service.is_ready().await.map_err(gql_err_from_api)?;
+        state.use_cases.is_ready().await.map_err(gql_err_from_api)?;
         Ok(GqlReadyResponse {
             status: "ready".to_string(),
         })
@@ -41,7 +41,11 @@ impl QueryRoot {
     /// Returns jobs list sorted by creation time.
     async fn jobs(&self, ctx: &Context<'_>) -> Result<Vec<GqlJobDefinition>, GraphQLError> {
         let state = ctx.data_unchecked::<ApiState>();
-        let jobs = state.service.list_jobs().await.map_err(gql_err_from_api)?;
+        let jobs = state
+            .use_cases
+            .list_jobs()
+            .await
+            .map_err(gql_err_from_api)?;
         Ok(jobs.into_iter().map(Into::into).collect())
     }
 
@@ -49,7 +53,7 @@ impl QueryRoot {
     async fn builds(&self, ctx: &Context<'_>) -> Result<Vec<GqlBuildRecord>, GraphQLError> {
         let state = ctx.data_unchecked::<ApiState>();
         let builds = state
-            .service
+            .use_cases
             .list_builds()
             .await
             .map_err(gql_err_from_api)?;
@@ -59,7 +63,7 @@ impl QueryRoot {
     /// Returns worker telemetry and current load.
     async fn workers(&self, ctx: &Context<'_>) -> Result<Vec<GqlWorkerInfo>, GraphQLError> {
         let state = ctx.data_unchecked::<ApiState>();
-        let workers = state.service.list_workers().map_err(gql_err_from_api)?;
+        let workers = state.use_cases.list_workers().map_err(gql_err_from_api)?;
         Ok(workers.into_iter().map(Into::into).collect())
     }
 
@@ -100,7 +104,7 @@ impl QueryRoot {
     /// Returns runtime reliability counters.
     async fn metrics(&self, ctx: &Context<'_>) -> GqlRuntimeMetrics {
         let state = ctx.data_unchecked::<ApiState>();
-        state.service.metrics_snapshot().into()
+        state.use_cases.metrics_snapshot().into()
     }
 
     /// Returns recent SCM webhook rejection diagnostics.
@@ -114,7 +118,7 @@ impl QueryRoot {
         let state = ctx.data_unchecked::<ApiState>();
         let limit = limit.unwrap_or(20).max(0) as usize;
         state
-            .service
+            .use_cases
             .list_scm_webhook_rejections(provider.as_deref(), repository_url.as_deref(), limit)
             .into_iter()
             .map(Into::into)
@@ -128,7 +132,7 @@ impl QueryRoot {
     ) -> Result<Vec<GqlBuildRecord>, GraphQLError> {
         let state = ctx.data_unchecked::<ApiState>();
         let builds = state
-            .service
+            .use_cases
             .list_dead_letter_builds()
             .await
             .map_err(gql_err_from_api)?;
@@ -141,15 +145,19 @@ impl QueryRoot {
         ctx: &Context<'_>,
     ) -> Result<GqlDashboardSnapshot, GraphQLError> {
         let state = ctx.data_unchecked::<ApiState>();
-        let jobs = state.service.list_jobs().await.map_err(gql_err_from_api)?;
+        let jobs = state
+            .use_cases
+            .list_jobs()
+            .await
+            .map_err(gql_err_from_api)?;
         let builds = state
-            .service
+            .use_cases
             .list_builds()
             .await
             .map_err(gql_err_from_api)?;
-        let workers = state.service.list_workers().map_err(gql_err_from_api)?;
+        let workers = state.use_cases.list_workers().map_err(gql_err_from_api)?;
         let dead_letter_builds = state
-            .service
+            .use_cases
             .list_dead_letter_builds()
             .await
             .map_err(gql_err_from_api)?;
@@ -158,7 +166,7 @@ impl QueryRoot {
             jobs: jobs.into_iter().map(Into::into).collect(),
             builds: builds.into_iter().map(Into::into).collect(),
             workers: workers.into_iter().map(Into::into).collect(),
-            metrics: state.service.metrics_snapshot().into(),
+            metrics: state.use_cases.metrics_snapshot().into(),
             dead_letter_builds: dead_letter_builds.into_iter().map(Into::into).collect(),
         })
     }

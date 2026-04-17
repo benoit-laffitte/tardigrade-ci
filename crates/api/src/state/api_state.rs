@@ -14,6 +14,7 @@ use tardigrade_plugins::{
 use tardigrade_scheduler::{InMemoryScheduler, Scheduler};
 use tardigrade_storage::{InMemoryStorage, Storage};
 
+use crate::application::CiUseCases;
 use crate::service::{CiService, ScmWebhookRequest};
 use crate::{
     ApiError, ApiErrorResponse, PluginAuthorizationCheckResponse, PluginInfo, PluginPolicyResponse,
@@ -27,8 +28,8 @@ const GLOBAL_POLICY_CONTEXT: &str = "global";
 #[derive(Clone)]
 pub struct ApiState {
     pub service_name: String,
-    /// Service owns all domain orchestration (storage, scheduler, metrics, events).
-    pub(crate) service: Arc<CiService>,
+    /// Use-case layer consumed by HTTP/GraphQL adapters.
+    pub(crate) use_cases: Arc<CiUseCases>,
     /// Plugin registry stores loaded lifecycle state for administration endpoints.
     pub(crate) plugin_registry: Arc<Mutex<PluginRegistry>>,
     /// Plugin policy store maps execution context to granted capabilities.
@@ -78,9 +79,10 @@ impl ApiState {
         scheduler: Arc<dyn Scheduler + Send + Sync>,
         settings: ServiceSettings,
     ) -> Self {
+        let service = Arc::new(CiService::new(storage, scheduler, settings));
         Self {
             service_name: service_name.into(),
-            service: Arc::new(CiService::new(storage, scheduler, settings)),
+            use_cases: Arc::new(CiUseCases::new(service)),
             plugin_registry: Arc::new(Mutex::new(PluginRegistry::default())),
             plugin_policy_store: Arc::new(Mutex::new(BTreeMap::new())),
         }
@@ -260,8 +262,7 @@ impl ApiState {
             updated_at: Utc::now(),
         };
 
-        self.service
-            .storage
+        self.use_cases
             .upsert_webhook_security_config(config)
             .await
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
@@ -277,11 +278,11 @@ impl ApiState {
             .header_value("x-scm-repository")
             .map(ToString::to_string);
 
-        self.service.record_scm_webhook_received();
+        self.use_cases.record_scm_webhook_received();
 
-        match self.service.ingest_scm_webhook(&request).await {
+        match self.use_cases.ingest_scm_webhook(&request).await {
             Ok(()) => {
-                self.service.record_scm_webhook_accepted();
+                self.use_cases.record_scm_webhook_accepted();
                 (
                     StatusCode::ACCEPTED,
                     Json(ScmWebhookAcceptedResponse {
@@ -291,8 +292,8 @@ impl ApiState {
                     .into_response()
             }
             Err(ApiError::BadRequest) => {
-                self.service.record_scm_webhook_rejected();
-                self.service.record_scm_webhook_rejection(
+                self.use_cases.record_scm_webhook_rejected();
+                self.use_cases.record_scm_webhook_rejection(
                     "invalid_webhook_request",
                     provider.as_deref(),
                     repository_url.as_deref(),
@@ -308,8 +309,8 @@ impl ApiState {
                     .into_response()
             }
             Err(ApiError::Unauthorized) => {
-                self.service.record_scm_webhook_rejected();
-                self.service.record_scm_webhook_rejection(
+                self.use_cases.record_scm_webhook_rejected();
+                self.use_cases.record_scm_webhook_rejection(
                     "invalid_webhook_signature",
                     provider.as_deref(),
                     repository_url.as_deref(),
@@ -325,8 +326,8 @@ impl ApiState {
                     .into_response()
             }
             Err(ApiError::Forbidden) => {
-                self.service.record_scm_webhook_rejected();
-                self.service.record_scm_webhook_rejection(
+                self.use_cases.record_scm_webhook_rejected();
+                self.use_cases.record_scm_webhook_rejection(
                     "webhook_forbidden",
                     provider.as_deref(),
                     repository_url.as_deref(),
@@ -342,8 +343,8 @@ impl ApiState {
                     .into_response()
             }
             Err(err) => {
-                self.service.record_scm_webhook_rejected();
-                self.service.record_scm_webhook_rejection(
+                self.use_cases.record_scm_webhook_rejected();
+                self.use_cases.record_scm_webhook_rejection(
                     "webhook_internal_error",
                     provider.as_deref(),
                     repository_url.as_deref(),
@@ -372,8 +373,7 @@ impl ApiState {
             updated_at: Utc::now(),
         };
 
-        self.service
-            .storage
+        self.use_cases
             .upsert_scm_polling_config(config)
             .await
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
@@ -381,13 +381,7 @@ impl ApiState {
 
     /// Starts SCM polling background loop with fixed check interval.
     pub fn start_scm_polling_loop(&self, check_interval: Duration) {
-        let service = self.service.clone();
-        tokio::spawn(async move {
-            loop {
-                let _ = service.run_scm_polling_tick().await;
-                tokio::time::sleep(check_interval).await;
-            }
-        });
+        self.use_cases.start_scm_polling_loop(check_interval);
     }
 }
 

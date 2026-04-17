@@ -61,6 +61,21 @@ Le projet vise une architecture hexagonale stricte, mais le code actuel contient
 - Les adaptateurs HTTP et GraphQL convertissent desormais les entrees reseau vers cette commande neutre avant appel du service.
 - Le comportement de validation webhook (signature/replay/allowlist/dedup) est conserve.
 
+### Mise a jour implementation (2026-04-17, HEXA-03)
+
+- Une couche explicite use-case a ete introduite dans la crate API pour materialiser la frontiere application/adaptateurs.
+- Les resolvers GraphQL passent maintenant par cette facade use-case au lieu d appeler directement le service d orchestration.
+- Les chemins API state (webhook/polling) passent egalement par la couche use-case.
+- Le comportement fonctionnel est conserve avec une separation plus nette entre mapping d entrees et orchestration metier.
+
+Evidence technique:
+
+- Couche use-case API: [crates/api/src/application/ci_use_cases.rs](../crates/api/src/application/ci_use_cases.rs)
+- Facade module application: [crates/api/src/application/mod.rs](../crates/api/src/application/mod.rs)
+- Rewiring state: [crates/api/src/state/api_state.rs](../crates/api/src/state/api_state.rs)
+- Rewiring query adapter: [crates/api/src/graphql/query_root.rs](../crates/api/src/graphql/query_root.rs)
+- Rewiring mutation adapter: [crates/api/src/graphql/mutation_root.rs](../crates/api/src/graphql/mutation_root.rs)
+
 Evidence technique:
 
 - Commande webhook neutre: [crates/api/src/service/scm_webhook_request.rs](../crates/api/src/service/scm_webhook_request.rs)

@@ -646,6 +646,14 @@ Resultat d execution for `HEXA-02` (2026-04-17):
 - Preserved webhook behavior (signature checks, replay protection, allowlist, dedup) with neutral request accessors.
 - Validation: `make ci` green after migration.
 
+Resultat d execution for `HEXA-03` (2026-04-17):
+
+- Introduced an explicit application/use-case layer in API crate (`CiUseCases`) as adapter-facing facade.
+- Rewired GraphQL query/mutation resolvers to call use-case layer instead of direct service access.
+- Rewired API state webhook/polling paths to call use-case layer for orchestration.
+- Kept behavior unchanged while making adapter mapping and application orchestration boundaries explicit.
+- Validation: `make ci` green after migration.
+
 Plan de convergence crate par crate:
 
 - `crates/core`
@@ -691,7 +699,7 @@ Plan de convergence crate par crate:
 
 - [-] `HEXA-01` Phase A: remove worker -> api inversion by introducing neutral worker contract DTOs and dropping `tardigrade-api` dependency from worker.
 - [-] `HEXA-02` Phase A: introduce transport-neutral webhook command model and move Axum header handling to API/server adapters.
-- [ ] `HEXA-03` Phase A: split API orchestration into explicit use-case layer and adapter mapping layer without behavior change.
+- [-] `HEXA-03` Phase A: split API orchestration into explicit use-case layer and adapter mapping layer without behavior change.
 - [ ] `HEXA-04` Phase A: make storage/scheduler contract-first consumption explicit in API and server wiring tests.
 - [ ] `HEXA-05` Phase A: document pragmatic target dependency graph in `ARCHI.md` and contribution guidance.
 - [ ] `HEXA-06` Phase B: enforce strict crate boundaries (ports vs adapters) with compile-time dependency constraints.
