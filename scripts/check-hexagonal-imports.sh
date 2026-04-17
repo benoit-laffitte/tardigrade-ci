@@ -31,10 +31,6 @@ is_allowed_file() {
         crates/server/src/main.rs)
             return 0
             ;;
-        # Source-level test modules may wire in-memory adapters explicitly.
-        */src/*_tests.rs)
-            return 0
-            ;;
         *)
             return 1
             ;;
@@ -60,7 +56,7 @@ if (( ${#violations[@]} > 0 )); then
         echo "  - $violation" >&2
     done
     echo >&2
-    echo "[hex-import-guard] Allowed files: crates/server/src/main.rs, */src/*_tests.rs" >&2
+    echo "[hex-import-guard] Allowed files: crates/server/src/main.rs" >&2
     exit 1
 fi
 

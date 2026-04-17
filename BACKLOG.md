@@ -692,6 +692,8 @@ Resultat d execution complementaire for strict ports/adapters separation (2026-0
 - Rewired internal trait imports to explicit `ports::Storage` / `ports::Scheduler` namespaces in application, API, server, and integration tests.
 - Added source-level adapter import guard (`scripts/check-hexagonal-imports.sh`) integrated in `make lint`/`make ci` to block reintroduction outside allowlist.
 - Removed the transitional `ApiState` allowlist exception by migrating tests to explicit `with_components` wiring.
+- Migrated server webhook adapter wiring tests from source-level to integration scope and tightened allowlist to composition root only.
+- Added adapter-import guard regression scenarios (`scripts/test-hexagonal-imports-guard.sh`) wired into `make lint`/`make ci`.
 - Validation: `make ci` green after migration.
 
 Resultat d execution for `HEXA-07` (2026-04-17):

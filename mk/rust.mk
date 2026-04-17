@@ -1,6 +1,6 @@
 # Rust-centric targets.
 
-.PHONY: bootstrap fmt-check clippy dead-code arch-guard arch-guard-test arch-import-guard lint test-fast test-all test build-rust build-rust-release-images package-platform-zips worker-transport-bench
+.PHONY: bootstrap fmt-check clippy dead-code arch-guard arch-guard-test arch-import-guard arch-import-guard-test lint test-fast test-all test build-rust build-rust-release-images package-platform-zips worker-transport-bench
 
 bootstrap: ## Prefetch Rust dependencies for local development
 	$(NO_PROXY_ENV) $(CARGO) fetch
@@ -23,7 +23,10 @@ arch-guard-test: ## Run architecture guard regression scenarios
 arch-import-guard: ## Enforce adapter import policy outside composition root
 	bash ./scripts/check-hexagonal-imports.sh
 
-lint: fmt-check clippy arch-guard arch-guard-test arch-import-guard ## Run Rust lint pipeline
+arch-import-guard-test: ## Run adapter import guard regression scenarios
+	bash ./scripts/test-hexagonal-imports-guard.sh
+
+lint: fmt-check clippy arch-guard arch-guard-test arch-import-guard arch-import-guard-test ## Run Rust lint pipeline
 
 test-fast: ## Run Rust unit tests only (lib + bins)
 	$(NO_PROXY_ENV) $(CARGO) test --workspace --lib --bins

@@ -6,10 +6,9 @@ use serde_json::json;
 use std::sync::Arc;
 use tardigrade_api::{ApiState, build_router};
 use tardigrade_scheduler::{adapters::InMemoryScheduler, ports::Scheduler};
+use tardigrade_server::webhook_adapter::mount_webhook_adapter;
 use tardigrade_storage::{adapters::InMemoryStorage, ports::Storage};
 use tower::ServiceExt;
-
-use crate::webhook_adapter::mount_webhook_adapter;
 
 /// Builds API state with explicit in-memory storage and scheduler trait-object components.
 fn test_state() -> ApiState {

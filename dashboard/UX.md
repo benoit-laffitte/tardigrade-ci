@@ -133,8 +133,8 @@ Evidence technique:
 - Le bootstrap server selectionne les implementations concretes via les namespaces `adapters` au lieu des re-exports crate racine.
 - Les chemins de composition et de test utilisent des imports explicites vers `adapters` tout en gardant les traits `Storage`/`Scheduler` comme ports.
 - Les imports de traits dans les consommateurs internes utilisent maintenant explicitement `ports::Storage` et `ports::Scheduler`.
-- Un garde-fou source-level bloque la reintroduction d imports `adapters::` hors allowlist explicite (composition root server et modules de test source-level).
-- L exception transitoire `ApiState` a ete supprimee: seuls la composition root server et les modules de test source-level restent autorises pour `adapters::`.
+- Un garde-fou source-level bloque la reintroduction d imports `adapters::` hors allowlist explicite (composition root server uniquement).
+- L exception transitoire `ApiState` a ete supprimee, puis les tests serveur ont ete migres en integration pour permettre une allowlist stricte composee uniquement de la composition root.
 
 Evidence technique:
 
@@ -143,7 +143,7 @@ Evidence technique:
 - Server composition-root imports: [crates/server/src/main.rs](../crates/server/src/main.rs)
 - API state explicit component wiring: [crates/api/src/state/api_state.rs](../crates/api/src/state/api_state.rs)
 - API wiring tests: [crates/api/tests/graphql.rs](../crates/api/tests/graphql.rs)
-- Server wiring tests: [crates/server/src/webhook_adapter_tests.rs](../crates/server/src/webhook_adapter_tests.rs)
+- Server wiring tests: [crates/server/tests/webhook_adapter.rs](../crates/server/tests/webhook_adapter.rs)
 - Import guard script: [scripts/check-hexagonal-imports.sh](../scripts/check-hexagonal-imports.sh)
 - Make integration: [mk/rust.mk](../mk/rust.mk)
 
@@ -196,7 +196,7 @@ Evidence technique:
 Evidence technique:
 
 - Test API wiring ports: [crates/api/tests/graphql.rs](../crates/api/tests/graphql.rs)
-- Test server wiring ports: [crates/server/src/webhook_adapter_tests.rs](../crates/server/src/webhook_adapter_tests.rs)
+- Test server wiring ports: [crates/server/tests/webhook_adapter.rs](../crates/server/tests/webhook_adapter.rs)
 - Dev dependency test server: [crates/server/Cargo.toml](../crates/server/Cargo.toml)
 
 Evidence technique:

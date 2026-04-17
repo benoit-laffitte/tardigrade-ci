@@ -20,9 +20,6 @@ mod dashboard;
 mod runtime;
 mod webhook_adapter;
 
-#[cfg(test)]
-mod webhook_adapter_tests;
-
 use config::{RuntimeMode, ServerConfigFile};
 use dashboard::{mount_dashboard_assets, resolve_web_root};
 use runtime::shutdown_signal;
