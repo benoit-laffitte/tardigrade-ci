@@ -684,6 +684,13 @@ Resultat d execution complementaire for `HEXA-01` (2026-04-17):
 - Updated benchmark documentation to reflect mock-only default and external real-server mode.
 - Validation: `make ci` green after migration.
 
+Resultat d execution complementaire for strict ports/adapters separation (2026-04-17):
+
+- Introduced explicit `ports` and `adapters` public namespaces in `crates/storage` and `crates/scheduler` to separate contract visibility from concrete backend implementations.
+- Rewired composition-root imports to adapter namespaces (`server`) while keeping application consumption on port traits.
+- Rewired API state defaults and integration tests to explicit in-memory adapter imports, preserving behavior.
+- Validation: `make ci` green after migration.
+
 Resultat d execution for `HEXA-07` (2026-04-17):
 
 - Extracted a dedicated `crates/application` crate and moved CI use-case and orchestration modules (`CiUseCases`, `CiService`, webhook orchestration helpers) out of `crates/api`.
@@ -746,12 +753,12 @@ Plan de convergence crate par crate:
 - `crates/storage`
   - Goal: preserve storage as outbound adapter package behind port contract.
   - Scope: separate storage contract visibility from concrete backend exports in preparation for strict phase.
-  - Status: `[ ]` not started.
+  - Status: `[-]` in progress.
   - Acceptance criteria: application code depends on storage port only; concrete postgres/in-memory adapters resolved at composition root.
 - `crates/scheduler`
   - Goal: preserve scheduler as outbound adapter package behind queue port contract.
   - Scope: tighten scheduler contract usage and avoid leaking backend-specific concerns upward.
-  - Status: `[ ]` not started.
+  - Status: `[-]` in progress.
   - Acceptance criteria: application code depends on scheduler port only; backend selection remains runtime composition concern.
 - `crates/plugins`
   - Goal: clarify plugin registry role as secondary adapter with explicit policy boundary.

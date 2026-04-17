@@ -11,8 +11,8 @@ use tardigrade_application::{
 };
 use tardigrade_core::{ScmPollingConfig, WebhookSecurityConfig};
 use tardigrade_plugins::PluginLifecycleError;
-use tardigrade_scheduler::{InMemoryScheduler, Scheduler};
-use tardigrade_storage::{InMemoryStorage, Storage};
+use tardigrade_scheduler::{Scheduler, adapters::InMemoryScheduler};
+use tardigrade_storage::{Storage, adapters::InMemoryStorage};
 
 use crate::{
     ApiErrorResponse, PluginAuthorizationCheckResponse, PluginInfo, PluginPolicyResponse,

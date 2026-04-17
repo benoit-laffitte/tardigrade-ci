@@ -127,6 +127,21 @@ Evidence technique:
 - Un descripteur de failure transport-neutre (`ScmWebhookIngestFailure`) formalise les reason codes et messages publics projetes en edge.
 - Un test d integration GraphQL couvre explicitement le cas signature invalide et verifie la coherence des metriques de rejet.
 
+### Mise a jour implementation (2026-04-17, strict storage/scheduler preparation)
+
+- Les crates `storage` et `scheduler` exposent maintenant explicitement des namespaces `ports` (contrats) et `adapters` (backends concrets).
+- Le bootstrap server selectionne les implementations concretes via les namespaces `adapters` au lieu des re-exports crate racine.
+- Les chemins API de construction par defaut (in-memory) et les tests d integration utilisent des imports explicites vers `adapters` tout en gardant les traits `Storage`/`Scheduler` comme ports.
+
+Evidence technique:
+
+- Storage ports/adapters: [crates/storage/src/lib.rs](../crates/storage/src/lib.rs)
+- Scheduler ports/adapters: [crates/scheduler/src/lib.rs](../crates/scheduler/src/lib.rs)
+- Server composition-root imports: [crates/server/src/main.rs](../crates/server/src/main.rs)
+- API state in-memory adapters: [crates/api/src/state/api_state.rs](../crates/api/src/state/api_state.rs)
+- API wiring tests: [crates/api/tests/graphql.rs](../crates/api/tests/graphql.rs)
+- Server wiring tests: [crates/server/src/webhook_adapter_tests.rs](../crates/server/src/webhook_adapter_tests.rs)
+
 Evidence technique:
 
 - Failure model application: [crates/application/src/models/scm_webhook_ingest_failure.rs](../crates/application/src/models/scm_webhook_ingest_failure.rs)

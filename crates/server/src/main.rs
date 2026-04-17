@@ -4,9 +4,13 @@ use std::sync::Arc;
 use std::time::Duration;
 use tardigrade_api::{ApiState, build_router};
 use tardigrade_scheduler::{
-    FileBackedScheduler, InMemoryScheduler, PostgresScheduler, RedisScheduler,
+    Scheduler,
+    adapters::{FileBackedScheduler, InMemoryScheduler, PostgresScheduler, RedisScheduler},
 };
-use tardigrade_storage::{InMemoryStorage, PostgresStorage, Storage};
+use tardigrade_storage::{
+    Storage,
+    adapters::{InMemoryStorage, PostgresStorage},
+};
 use tokio::net::TcpListener;
 use tracing::{info, warn};
 use tracing_subscriber::EnvFilter;
@@ -156,10 +160,7 @@ fn build_scheduler(
     runtime_mode: RuntimeMode,
     queue: &QueueConfig,
     storage_database_url: Option<&str>,
-) -> Result<(
-    Arc<dyn tardigrade_scheduler::Scheduler + Send + Sync>,
-    SchedulerBackend,
-)> {
+) -> Result<(Arc<dyn Scheduler + Send + Sync>, SchedulerBackend)> {
     let configured_backend = queue
         .scheduler_backend
         .as_deref()
@@ -186,7 +187,7 @@ fn build_scheduler(
         },
     };
 
-    let scheduler: Arc<dyn tardigrade_scheduler::Scheduler + Send + Sync> = match selected_backend {
+    let scheduler: Arc<dyn Scheduler + Send + Sync> = match selected_backend {
         SchedulerBackend::InMemory => {
             info!("using in-memory scheduler");
             Arc::new(InMemoryScheduler::default())
