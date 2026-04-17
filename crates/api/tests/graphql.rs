@@ -8,6 +8,14 @@ use tardigrade_scheduler::{adapters::InMemoryScheduler, ports::Scheduler};
 use tardigrade_storage::{adapters::InMemoryStorage, ports::Storage};
 use tower::ServiceExt;
 
+/// Builds one API router with explicit in-memory port implementations.
+fn build_test_router() -> axum::Router {
+    let storage: Arc<dyn Storage + Send + Sync> = Arc::new(InMemoryStorage::default());
+    let scheduler: Arc<dyn Scheduler + Send + Sync> = Arc::new(InMemoryScheduler::default());
+    let state = tardigrade_api::ApiState::with_components("tardigrade-ci-test", storage, scheduler);
+    tardigrade_api::build_router(state)
+}
+
 fn graphql_request(query: &str, variables: Value) -> Request<Body> {
     let body = json!({
         "query": query,
@@ -32,7 +40,7 @@ async fn read_json(response: axum::response::Response) -> Value {
 /// Verifies that legacy REST endpoints are no longer exposed by the API router.
 #[tokio::test]
 async fn graphql_router_does_not_expose_legacy_rest_endpoints() {
-    let app = tardigrade_api::build_router(tardigrade_api::ApiState::new("tardigrade-ci-test"));
+    let app = build_test_router();
 
     let health_response = app
         .clone()
@@ -92,7 +100,7 @@ async fn graphql_router_accepts_port_trait_object_components() {
 
 #[tokio::test]
 async fn graphql_dashboard_snapshot_returns_collections() {
-    let app = tardigrade_api::build_router(tardigrade_api::ApiState::new("tardigrade-ci-test"));
+    let app = build_test_router();
 
     let response = app
         .oneshot(graphql_request(
@@ -127,7 +135,7 @@ async fn graphql_dashboard_snapshot_returns_collections() {
 
 #[tokio::test]
 async fn graphql_create_and_run_job_flow_works() {
-    let app = tardigrade_api::build_router(tardigrade_api::ApiState::new("tardigrade-ci-test"));
+    let app = build_test_router();
 
     let create_response = app
         .clone()
@@ -193,7 +201,7 @@ async fn graphql_create_and_run_job_flow_works() {
 
 #[tokio::test]
 async fn graphql_create_job_with_invalid_pipeline_yaml_returns_error() {
-    let app = tardigrade_api::build_router(tardigrade_api::ApiState::new("tardigrade-ci-test"));
+    let app = build_test_router();
 
     let response = app
         .oneshot(graphql_request(
@@ -228,7 +236,7 @@ async fn graphql_create_job_with_invalid_pipeline_yaml_returns_error() {
 
 #[tokio::test]
 async fn graphql_create_job_with_structurally_invalid_pipeline_yaml_returns_details() {
-    let app = tardigrade_api::build_router(tardigrade_api::ApiState::new("tardigrade-ci-test"));
+    let app = build_test_router();
 
     let response = app
         .oneshot(graphql_request(
@@ -272,7 +280,7 @@ async fn graphql_create_job_with_structurally_invalid_pipeline_yaml_returns_deta
 #[tokio::test]
 /// Ensures blank inline pipeline content returns a bad request style GraphQL error.
 async fn graphql_create_job_with_blank_pipeline_yaml_returns_bad_request_error() {
-    let app = tardigrade_api::build_router(tardigrade_api::ApiState::new("tardigrade-ci-test"));
+    let app = build_test_router();
 
     let response = app
         .oneshot(graphql_request(
@@ -307,7 +315,7 @@ async fn graphql_create_job_with_blank_pipeline_yaml_returns_bad_request_error()
 #[tokio::test]
 /// Ensures retry policy constraint failures are exposed in GraphQL error details.
 async fn graphql_create_job_with_invalid_retry_policy_returns_retry_field_details() {
-    let app = tardigrade_api::build_router(tardigrade_api::ApiState::new("tardigrade-ci-test"));
+    let app = build_test_router();
 
     let response = app
         .oneshot(graphql_request(
@@ -355,7 +363,7 @@ async fn graphql_create_job_with_invalid_retry_policy_returns_retry_field_detail
 /// Ensures plugin lifecycle administration remains available through GraphQL only.
 #[tokio::test]
 async fn graphql_plugin_lifecycle_flow_works() {
-    let app = tardigrade_api::build_router(tardigrade_api::ApiState::new("tardigrade-ci-test"));
+    let app = build_test_router();
 
     let response = app
         .oneshot(graphql_request(
@@ -385,7 +393,7 @@ async fn graphql_plugin_lifecycle_flow_works() {
 /// Ensures SCM configuration, webhook ingestion, and diagnostics remain reachable through GraphQL.
 #[tokio::test]
 async fn graphql_scm_flow_works_without_rest_endpoints() {
-    let app = tardigrade_api::build_router(tardigrade_api::ApiState::new("tardigrade-ci-test"));
+    let app = build_test_router();
 
     let create_job = app
         .clone()
@@ -529,7 +537,7 @@ async fn graphql_scm_flow_works_without_rest_endpoints() {
 /// Ensures invalid webhook signatures still expose the expected GraphQL code and rejection metrics.
 #[tokio::test]
 async fn graphql_scm_webhook_invalid_signature_reports_auth_rejection() {
-    let app = tardigrade_api::build_router(tardigrade_api::ApiState::new("tardigrade-ci-test"));
+    let app = build_test_router();
 
     let secret = "topsecret";
     let body = r#"{"after":"abc123","ref":"refs/heads/main"}"#;

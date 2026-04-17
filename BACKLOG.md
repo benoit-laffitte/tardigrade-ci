@@ -688,9 +688,10 @@ Resultat d execution complementaire for strict ports/adapters separation (2026-0
 
 - Introduced explicit `ports` and `adapters` public namespaces in `crates/storage` and `crates/scheduler` to separate contract visibility from concrete backend implementations.
 - Rewired composition-root imports to adapter namespaces (`server`) while keeping application consumption on port traits.
-- Rewired API state defaults and integration tests to explicit in-memory adapter imports, preserving behavior.
+- Removed `ApiState` default constructors and rewired integration wiring to explicit in-memory adapter imports, preserving behavior.
 - Rewired internal trait imports to explicit `ports::Storage` / `ports::Scheduler` namespaces in application, API, server, and integration tests.
 - Added source-level adapter import guard (`scripts/check-hexagonal-imports.sh`) integrated in `make lint`/`make ci` to block reintroduction outside allowlist.
+- Removed the transitional `ApiState` allowlist exception by migrating tests to explicit `with_components` wiring.
 - Validation: `make ci` green after migration.
 
 Resultat d execution for `HEXA-07` (2026-04-17):

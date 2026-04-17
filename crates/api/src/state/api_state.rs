@@ -11,8 +11,8 @@ use tardigrade_application::{
 };
 use tardigrade_core::{ScmPollingConfig, WebhookSecurityConfig};
 use tardigrade_plugins::PluginLifecycleError;
-use tardigrade_scheduler::{adapters::InMemoryScheduler, ports::Scheduler};
-use tardigrade_storage::{adapters::InMemoryStorage, ports::Storage};
+use tardigrade_scheduler::ports::Scheduler;
+use tardigrade_storage::ports::Storage;
 
 use crate::{
     ApiErrorResponse, PluginAuthorizationCheckResponse, PluginInfo, PluginPolicyResponse,
@@ -30,27 +30,6 @@ pub struct ApiState {
 }
 
 impl ApiState {
-    /// Builds default API state with in-memory storage and scheduler.
-    pub fn new(service_name: impl Into<String>) -> Self {
-        Self::with_components(
-            service_name,
-            Arc::new(InMemoryStorage::default()),
-            Arc::new(InMemoryScheduler::default()),
-        )
-    }
-
-    /// Builds API state overriding storage backend while keeping in-memory scheduler.
-    pub fn with_storage(
-        service_name: impl Into<String>,
-        storage: Arc<dyn Storage + Send + Sync>,
-    ) -> Self {
-        Self::with_components(
-            service_name,
-            storage,
-            Arc::new(InMemoryScheduler::default()),
-        )
-    }
-
     /// Builds API state from explicit storage and scheduler components.
     pub fn with_components(
         service_name: impl Into<String>,

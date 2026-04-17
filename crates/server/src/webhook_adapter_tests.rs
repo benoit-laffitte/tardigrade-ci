@@ -11,14 +11,26 @@ use tower::ServiceExt;
 
 use crate::webhook_adapter::mount_webhook_adapter;
 
+/// Builds API state with explicit in-memory storage and scheduler trait-object components.
+fn test_state() -> ApiState {
+    let storage: Arc<dyn Storage + Send + Sync> = Arc::new(InMemoryStorage::default());
+    let scheduler: Arc<dyn Scheduler + Send + Sync> = Arc::new(InMemoryScheduler::default());
+    ApiState::with_components("test-service", storage, scheduler)
+}
+
+/// Builds the plain API router with explicit in-memory test components.
+fn build_test_router() -> axum::Router {
+    build_router(test_state())
+}
+
 /// Builds the plain API router without the native webhook adapter.
 fn api_only_router() -> axum::Router {
-    build_router(ApiState::new("test-service"))
+    build_test_router()
 }
 
 /// Builds the server router with the native webhook adapter mounted on top.
 fn api_with_webhook_adapter_router() -> axum::Router {
-    let state = ApiState::new("test-service");
+    let state = test_state();
     mount_webhook_adapter(build_router(state.clone()), state)
 }
 
