@@ -12,8 +12,8 @@ use tokio::sync::broadcast;
 use uuid::Uuid;
 
 use super::{
-    RuntimeMetrics, ScmTriggerEvent, build_webhook_dedup_key, header_value, map_pipeline_error,
-    parse_scm_provider_header, parse_scm_trigger_event, validate_ip_allowlist,
+    RuntimeMetrics, ScmTriggerEvent, ScmWebhookRequest, build_webhook_dedup_key, header_value,
+    map_pipeline_error, parse_scm_provider_header, parse_scm_trigger_event, validate_ip_allowlist,
     validate_replay_window, verify_signature,
 };
 use crate::{
@@ -317,11 +317,10 @@ impl CiService {
     /// Validates and accepts one SCM webhook after signature, replay, and allowlist checks.
     pub(crate) async fn ingest_scm_webhook(
         &self,
-        headers: &axum::http::HeaderMap,
-        body: &[u8],
+        request: &ScmWebhookRequest,
     ) -> Result<(), ApiError> {
-        let provider = parse_scm_provider_header(headers)?;
-        let repository_url = header_value(headers, "x-scm-repository")?;
+        let provider = parse_scm_provider_header(request)?;
+        let repository_url = header_value(request, "x-scm-repository")?;
         let config = self
             .storage
             .get_webhook_security_config(&repository_url, provider)
@@ -329,14 +328,14 @@ impl CiService {
             .map_err(|_| ApiError::Internal)?
             .ok_or(ApiError::Forbidden)?;
 
-        validate_replay_window(headers, Duration::from_secs(5 * 60))?;
-        validate_ip_allowlist(headers, &config.allowed_ips)?;
-        verify_signature(provider, headers, body, &config.secret)?;
-        let event = parse_scm_trigger_event(provider, headers, body)?;
+        validate_replay_window(request, Duration::from_secs(5 * 60))?;
+        validate_ip_allowlist(request, &config.allowed_ips)?;
+        verify_signature(provider, request, request.body(), &config.secret)?;
+        let event = parse_scm_trigger_event(provider, request, request.body())?;
 
         if let Some(event) = event {
             if let Some(dedup_key) =
-                build_webhook_dedup_key(provider, &repository_url, headers, body, event)
+                build_webhook_dedup_key(provider, &repository_url, request, request.body(), event)
                 && self.is_duplicate_webhook_event(&dedup_key)
             {
                 if let Ok(mut metrics) = self.metrics.lock() {

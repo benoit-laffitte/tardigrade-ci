@@ -54,6 +54,21 @@ Le projet vise une architecture hexagonale stricte, mais le code actuel contient
 - Le runtime worker n importe plus les DTO depuis la crate API.
 - La dependance `tardigrade-api` cote worker est maintenant optionnelle et reservee au benchmark transport.
 
+### Mise a jour implementation (2026-04-17, HEXA-02)
+
+- Un modele de commande webhook transport-neutre a ete introduit dans la couche service API.
+- Les signatures de la logique applicative webhook ne dependent plus de `axum::http::HeaderMap`.
+- Les adaptateurs HTTP et GraphQL convertissent desormais les entrees reseau vers cette commande neutre avant appel du service.
+- Le comportement de validation webhook (signature/replay/allowlist/dedup) est conserve.
+
+Evidence technique:
+
+- Commande webhook neutre: [crates/api/src/service/scm_webhook_request.rs](../crates/api/src/service/scm_webhook_request.rs)
+- Logique webhook service decouplee: [crates/api/src/service/scm_webhook.rs](../crates/api/src/service/scm_webhook.rs)
+- Orchestration service update: [crates/api/src/service/ci_service.rs](../crates/api/src/service/ci_service.rs)
+- Adaptateur HTTP update: [crates/api/src/state/api_state.rs](../crates/api/src/state/api_state.rs)
+- Adaptateur GraphQL update: [crates/api/src/graphql/mutation_root.rs](../crates/api/src/graphql/mutation_root.rs)
+
 Evidence technique:
 
 - Contrat neutre worker: [crates/core/src/worker/mod.rs](../crates/core/src/worker/mod.rs)

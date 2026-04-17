@@ -14,7 +14,7 @@ use tardigrade_plugins::{
 use tardigrade_scheduler::{InMemoryScheduler, Scheduler};
 use tardigrade_storage::{InMemoryStorage, Storage};
 
-use crate::service::CiService;
+use crate::service::{CiService, ScmWebhookRequest};
 use crate::{
     ApiError, ApiErrorResponse, PluginAuthorizationCheckResponse, PluginInfo, PluginPolicyResponse,
     ScmWebhookAcceptedResponse, ServiceSettings, UpsertScmPollingConfigRequest,
@@ -269,12 +269,17 @@ impl ApiState {
 
     /// Accepts one native SCM webhook over HTTP without restoring the general REST API surface.
     pub async fn ingest_scm_webhook_http(&self, headers: HeaderMap, body: &[u8]) -> Response {
-        let provider = optional_header_value(&headers, "x-scm-provider");
-        let repository_url = optional_header_value(&headers, "x-scm-repository");
+        let request = webhook_request_from_http_headers(&headers, body);
+        let provider = request
+            .header_value("x-scm-provider")
+            .map(ToString::to_string);
+        let repository_url = request
+            .header_value("x-scm-repository")
+            .map(ToString::to_string);
 
         self.service.record_scm_webhook_received();
 
-        match self.service.ingest_scm_webhook(&headers, body).await {
+        match self.service.ingest_scm_webhook(&request).await {
             Ok(()) => {
                 self.service.record_scm_webhook_accepted();
                 (
@@ -386,6 +391,21 @@ impl ApiState {
     }
 }
 
+/// Converts HTTP-native headers/body into transport-neutral webhook command input.
+fn webhook_request_from_http_headers(headers: &HeaderMap, body: &[u8]) -> ScmWebhookRequest {
+    let header_pairs = headers
+        .iter()
+        .filter_map(|(name, value)| {
+            value
+                .to_str()
+                .ok()
+                .map(|raw| (name.as_str().to_string(), raw.to_string()))
+        })
+        .collect::<Vec<_>>();
+
+    ScmWebhookRequest::from_parts(header_pairs, body.to_vec())
+}
+
 /// Builds one API-friendly plugin inventory entry from registry internals.
 fn plugin_info_from_registry(registry: &PluginRegistry, name: &str) -> Option<PluginInfo> {
     let state = registry.state(name)?;
@@ -455,16 +475,6 @@ fn normalize_policy_context(context: Option<&str>) -> String {
     }
 
     trimmed.to_string()
-}
-
-/// Reads one optional string header value and normalizes invalid values to None.
-fn optional_header_value(headers: &HeaderMap, key: &str) -> Option<String> {
-    headers
-        .get(key)
-        .and_then(|value| value.to_str().ok())
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .map(ToString::to_string)
 }
 
 /// Resolves granted capabilities for context with fallback to global default context.

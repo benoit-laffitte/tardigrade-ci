@@ -1,4 +1,3 @@
-use axum::http::HeaderMap;
 use chrono::Utc;
 use hmac::{Hmac, Mac};
 use serde_json::Value as JsonValue;
@@ -6,23 +5,25 @@ use sha2::Sha256;
 use std::time::Duration;
 use tardigrade_core::ScmProvider;
 
-use super::ScmTriggerEvent;
+use super::{ScmTriggerEvent, ScmWebhookRequest};
 use crate::ApiError;
 
 /// Reads one required header value and trims surrounding spaces.
-pub(crate) fn header_value(headers: &HeaderMap, key: &'static str) -> Result<String, ApiError> {
-    headers
-        .get(key)
-        .and_then(|v| v.to_str().ok())
-        .map(str::trim)
-        .filter(|v| !v.is_empty())
+pub(crate) fn header_value(
+    request: &ScmWebhookRequest,
+    key: &'static str,
+) -> Result<String, ApiError> {
+    request
+        .header_value(key)
         .map(ToString::to_string)
         .ok_or(ApiError::BadRequest)
 }
 
 /// Parses provider from unified SCM header.
-pub(crate) fn parse_scm_provider_header(headers: &HeaderMap) -> Result<ScmProvider, ApiError> {
-    let raw = header_value(headers, "x-scm-provider")?;
+pub(crate) fn parse_scm_provider_header(
+    request: &ScmWebhookRequest,
+) -> Result<ScmProvider, ApiError> {
+    let raw = header_value(request, "x-scm-provider")?;
     match raw.to_ascii_lowercase().as_str() {
         "github" => Ok(ScmProvider::Github),
         "gitlab" => Ok(ScmProvider::Gitlab),
@@ -32,10 +33,10 @@ pub(crate) fn parse_scm_provider_header(headers: &HeaderMap) -> Result<ScmProvid
 
 /// Enforces webhook replay protection using `x-scm-timestamp` unix seconds header.
 pub(crate) fn validate_replay_window(
-    headers: &HeaderMap,
+    request: &ScmWebhookRequest,
     window: Duration,
 ) -> Result<(), ApiError> {
-    let raw = header_value(headers, "x-scm-timestamp")?;
+    let raw = header_value(request, "x-scm-timestamp")?;
     let timestamp = raw.parse::<i64>().map_err(|_| ApiError::Unauthorized)?;
     let now = Utc::now().timestamp();
     let drift = (now - timestamp).unsigned_abs();
@@ -47,28 +48,20 @@ pub(crate) fn validate_replay_window(
 
 /// Validates source IP against configured allowlist when list is non-empty.
 pub(crate) fn validate_ip_allowlist(
-    headers: &HeaderMap,
+    request: &ScmWebhookRequest,
     allowed_ips: &[String],
 ) -> Result<(), ApiError> {
     if allowed_ips.is_empty() {
         return Ok(());
     }
 
-    let source_ip = headers
-        .get("x-forwarded-for")
-        .and_then(|v| v.to_str().ok())
+    let source_ip = request
+        .header_value("x-forwarded-for")
         .and_then(|v| v.split(',').next())
         .map(str::trim)
         .filter(|v| !v.is_empty())
         .map(ToString::to_string)
-        .or_else(|| {
-            headers
-                .get("x-real-ip")
-                .and_then(|v| v.to_str().ok())
-                .map(str::trim)
-                .filter(|v| !v.is_empty())
-                .map(ToString::to_string)
-        })
+        .or_else(|| request.header_value("x-real-ip").map(ToString::to_string))
         .ok_or(ApiError::Forbidden)?;
 
     if allowed_ips.iter().any(|ip| ip == &source_ip) {
@@ -81,24 +74,24 @@ pub(crate) fn validate_ip_allowlist(
 /// Verifies SCM provider signature semantics for one webhook payload.
 pub(crate) fn verify_signature(
     provider: ScmProvider,
-    headers: &HeaderMap,
+    request: &ScmWebhookRequest,
     body: &[u8],
     secret: &str,
 ) -> Result<(), ApiError> {
     match provider {
-        ScmProvider::Github => verify_github_signature(headers, body, secret),
-        ScmProvider::Gitlab => verify_gitlab_signature(headers, secret),
+        ScmProvider::Github => verify_github_signature(request, body, secret),
+        ScmProvider::Gitlab => verify_gitlab_signature(request, secret),
     }
 }
 
 /// Verifies GitHub `x-hub-signature-256` value against HMAC-SHA256 over request body.
 pub(crate) fn verify_github_signature(
-    headers: &HeaderMap,
+    request: &ScmWebhookRequest,
     body: &[u8],
     secret: &str,
 ) -> Result<(), ApiError> {
     let header =
-        header_value(headers, "x-hub-signature-256").map_err(|_| ApiError::Unauthorized)?;
+        header_value(request, "x-hub-signature-256").map_err(|_| ApiError::Unauthorized)?;
     let Some(hex_sig) = header.strip_prefix("sha256=") else {
         return Err(ApiError::Unauthorized);
     };
@@ -112,8 +105,11 @@ pub(crate) fn verify_github_signature(
 }
 
 /// Verifies GitLab token-style signature header using constant-time equality.
-pub(crate) fn verify_gitlab_signature(headers: &HeaderMap, secret: &str) -> Result<(), ApiError> {
-    let provided = header_value(headers, "x-gitlab-token").map_err(|_| ApiError::Unauthorized)?;
+pub(crate) fn verify_gitlab_signature(
+    request: &ScmWebhookRequest,
+    secret: &str,
+) -> Result<(), ApiError> {
+    let provided = header_value(request, "x-gitlab-token").map_err(|_| ApiError::Unauthorized)?;
     if provided.len() != secret.len() {
         return Err(ApiError::Unauthorized);
     }
@@ -134,12 +130,12 @@ pub(crate) fn verify_gitlab_signature(headers: &HeaderMap, secret: &str) -> Resu
 /// Parses provider event metadata into one internal SCM trigger event.
 pub(crate) fn parse_scm_trigger_event(
     provider: ScmProvider,
-    headers: &HeaderMap,
+    request: &ScmWebhookRequest,
     body: &[u8],
 ) -> Result<Option<ScmTriggerEvent>, ApiError> {
     match provider {
-        ScmProvider::Github => parse_github_trigger_event(headers, body),
-        ScmProvider::Gitlab => parse_gitlab_trigger_event(headers, body),
+        ScmProvider::Github => parse_github_trigger_event(request, body),
+        ScmProvider::Gitlab => parse_gitlab_trigger_event(request, body),
     }
 }
 
@@ -147,11 +143,11 @@ pub(crate) fn parse_scm_trigger_event(
 pub(crate) fn build_webhook_dedup_key(
     provider: ScmProvider,
     repository_url: &str,
-    headers: &HeaderMap,
+    request: &ScmWebhookRequest,
     body: &[u8],
     event: ScmTriggerEvent,
 ) -> Option<String> {
-    if let Some(event_id) = parse_provider_event_id(provider, headers) {
+    if let Some(event_id) = parse_provider_event_id(provider, request) {
         return Some(format!(
             "event_id:{}:{}:{}",
             provider_slug(provider),
@@ -175,7 +171,7 @@ pub(crate) fn build_webhook_dedup_key(
 /// Extracts provider event identifier from headers when available.
 pub(crate) fn parse_provider_event_id(
     provider: ScmProvider,
-    headers: &HeaderMap,
+    request: &ScmWebhookRequest,
 ) -> Option<String> {
     let keys: &[&str] = match provider {
         ScmProvider::Github => &["x-scm-event-id", "x-github-delivery", "x-request-id"],
@@ -183,7 +179,7 @@ pub(crate) fn parse_provider_event_id(
     };
 
     keys.iter()
-        .find_map(|key| optional_header_value(headers, key))
+        .find_map(|key| optional_header_value(request, key))
 }
 
 /// Parses commit SHA candidates from provider payload for fallback dedup tuple.
@@ -222,13 +218,11 @@ pub(crate) fn parse_event_commit_sha(provider: ScmProvider, body: &[u8]) -> Opti
 }
 
 /// Returns lowercased header value when present and non-empty.
-pub(crate) fn optional_header_value(headers: &HeaderMap, key: &'static str) -> Option<String> {
-    headers
-        .get(key)
-        .and_then(|v| v.to_str().ok())
-        .map(str::trim)
-        .filter(|v| !v.is_empty())
-        .map(|v| v.to_ascii_lowercase())
+pub(crate) fn optional_header_value(
+    request: &ScmWebhookRequest,
+    key: &'static str,
+) -> Option<String> {
+    request.header_value(key).map(|v| v.to_ascii_lowercase())
 }
 
 /// Returns stable provider slug used in dedup key encoding.
@@ -252,10 +246,10 @@ pub(crate) fn event_slug(event: ScmTriggerEvent) -> &'static str {
 
 /// Maps GitHub webhook event headers/payload into internal trigger family.
 pub(crate) fn parse_github_trigger_event(
-    headers: &HeaderMap,
+    request: &ScmWebhookRequest,
     body: &[u8],
 ) -> Result<Option<ScmTriggerEvent>, ApiError> {
-    let event_name = header_value(headers, "x-github-event")?.to_ascii_lowercase();
+    let event_name = header_value(request, "x-github-event")?.to_ascii_lowercase();
     if event_name == "push" {
         let payload: JsonValue = serde_json::from_slice(body).map_err(|_| ApiError::BadRequest)?;
         let is_tag = payload
@@ -283,10 +277,10 @@ pub(crate) fn parse_github_trigger_event(
 
 /// Maps GitLab webhook event headers/payload into internal trigger family.
 pub(crate) fn parse_gitlab_trigger_event(
-    headers: &HeaderMap,
+    request: &ScmWebhookRequest,
     body: &[u8],
 ) -> Result<Option<ScmTriggerEvent>, ApiError> {
-    let event_name = header_value(headers, "x-gitlab-event")?.to_ascii_lowercase();
+    let event_name = header_value(request, "x-gitlab-event")?.to_ascii_lowercase();
     if event_name == "push hook" {
         return Ok(Some(ScmTriggerEvent::Push));
     }

@@ -1,5 +1,5 @@
 use async_graphql::{Context, Error as GraphQLError, ErrorExtensions, ID, Object};
-use axum::http::{HeaderMap, HeaderName, HeaderValue, StatusCode};
+use axum::http::{HeaderName, HeaderValue, StatusCode};
 use tardigrade_plugins::PluginLifecycleError;
 
 use super::{
@@ -7,6 +7,7 @@ use super::{
     GqlScmPollingTickResponse, GqlUpsertScmPollingConfigInput, GqlUpsertWebhookSecurityConfigInput,
     GqlWebhookHeaderInput, GqlWorkerBuildStatus, gql_err_from_api, parse_id_as_uuid,
 };
+use crate::service::ScmWebhookRequest;
 use crate::{
     ApiError, ApiState, CreateJobRequest, UpsertScmPollingConfigRequest,
     UpsertWebhookSecurityConfigRequest, WorkerBuildStatus,
@@ -196,17 +197,17 @@ impl MutationRoot {
         body: String,
     ) -> Result<bool, GraphQLError> {
         let state = ctx.data_unchecked::<ApiState>();
-        let headers = header_map_from_inputs(&headers)?;
-        let provider = header_value_from_graphql_inputs(&headers, "x-scm-provider");
-        let repository_url = header_value_from_graphql_inputs(&headers, "x-scm-repository");
+        let request = webhook_request_from_graphql_inputs(&headers, body.as_bytes())?;
+        let provider = request
+            .header_value("x-scm-provider")
+            .map(ToString::to_string);
+        let repository_url = request
+            .header_value("x-scm-repository")
+            .map(ToString::to_string);
 
         state.service.record_scm_webhook_received();
 
-        match state
-            .service
-            .ingest_scm_webhook(&headers, body.as_bytes())
-            .await
-        {
+        match state.service.ingest_scm_webhook(&request).await {
             Ok(()) => {
                 state.service.record_scm_webhook_accepted();
                 Ok(true)
@@ -336,25 +337,22 @@ fn gql_err_from_status(status: StatusCode) -> GraphQLError {
     GraphQLError::new(format!("request failed with status {}", status.as_u16()))
 }
 
-/// Builds an Axum header map from GraphQL key/value header inputs.
-fn header_map_from_inputs(headers: &[GqlWebhookHeaderInput]) -> Result<HeaderMap, GraphQLError> {
-    let mut header_map = HeaderMap::new();
+/// Builds transport-neutral webhook command input from GraphQL header/body values.
+fn webhook_request_from_graphql_inputs(
+    headers: &[GqlWebhookHeaderInput],
+    body: &[u8],
+) -> Result<ScmWebhookRequest, GraphQLError> {
+    let mut normalized = Vec::with_capacity(headers.len());
     for header in headers {
         let name = HeaderName::from_bytes(header.name.as_bytes())
             .map_err(|_| GraphQLError::new(format!("invalid header name: {}", header.name)))?;
         let value = HeaderValue::from_str(&header.value)
             .map_err(|_| GraphQLError::new(format!("invalid header value for {}", header.name)))?;
-        header_map.append(name, value);
+        let raw_value = value
+            .to_str()
+            .map_err(|_| GraphQLError::new(format!("invalid header value for {}", header.name)))?;
+        normalized.push((name.as_str().to_string(), raw_value.to_string()));
     }
-    Ok(header_map)
-}
 
-/// Returns one optional header value from the reconstructed GraphQL input map.
-fn header_value_from_graphql_inputs(headers: &HeaderMap, key: &str) -> Option<String> {
-    headers
-        .get(key)
-        .and_then(|value| value.to_str().ok())
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .map(ToString::to_string)
+    Ok(ScmWebhookRequest::from_parts(normalized, body.to_vec()))
 }

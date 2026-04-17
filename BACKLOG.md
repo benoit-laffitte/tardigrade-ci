@@ -638,6 +638,14 @@ Resultat d execution for `HEXA-01` (2026-04-17):
 - `tardigrade-api` dependency in worker was reduced to optional and gated for benchmark-only binary (`transport_bench`).
 - Validation: `make ci` green after migration.
 
+Resultat d execution for `HEXA-02` (2026-04-17):
+
+- Introduced a transport-neutral webhook command model in API service layer (`ScmWebhookRequest`).
+- Removed Axum `HeaderMap` from CI service webhook orchestration signatures.
+- Moved HTTP and GraphQL header/body adaptation to adapter boundaries (`ApiState` and GraphQL mutation root).
+- Preserved webhook behavior (signature checks, replay protection, allowlist, dedup) with neutral request accessors.
+- Validation: `make ci` green after migration.
+
 Plan de convergence crate par crate:
 
 - `crates/core`
@@ -648,7 +656,7 @@ Plan de convergence crate par crate:
 - `crates/api`
   - Goal: convert API to pure inbound adapter + application orchestration boundary.
   - Scope: move Axum/GraphQL-specific request/response mapping out of service orchestration paths.
-  - Status: `[ ]` not started.
+  - Status: `[-]` in progress.
   - Acceptance criteria: use-case entrypoints accept transport-neutral command/query inputs; no Axum `HeaderMap` in application service signatures.
 - `crates/server`
   - Goal: keep server as composition root and inbound adapter host only.
@@ -682,7 +690,7 @@ Plan de convergence crate par crate:
   - Acceptance criteria: auth decisions can be consumed by GraphQL/HTTP adapters without embedding transport types in auth primitives.
 
 - [-] `HEXA-01` Phase A: remove worker -> api inversion by introducing neutral worker contract DTOs and dropping `tardigrade-api` dependency from worker.
-- [ ] `HEXA-02` Phase A: introduce transport-neutral webhook command model and move Axum header handling to API/server adapters.
+- [-] `HEXA-02` Phase A: introduce transport-neutral webhook command model and move Axum header handling to API/server adapters.
 - [ ] `HEXA-03` Phase A: split API orchestration into explicit use-case layer and adapter mapping layer without behavior change.
 - [ ] `HEXA-04` Phase A: make storage/scheduler contract-first consumption explicit in API and server wiring tests.
 - [ ] `HEXA-05` Phase A: document pragmatic target dependency graph in `ARCHI.md` and contribution guidance.
