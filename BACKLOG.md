@@ -562,10 +562,10 @@ Sprint planning breakdown (CORECI foundation slice: `CORECI-01` to `CORECI-04`):
 
 `CORECI-01` (5 SP, ~3d) - Canonical API contract and route surface cleanup
 
-- [ ] `CORECI-01a` Inventory mounted routes vs orphan handlers and produce route matrix (`SP:1`, `~0.5d`).
-- [ ] `CORECI-01b` Publish canonical contract note (GraphQL-first + webhook adapter exception) in API docs (`SP:1`, `~0.5d`).
-- [ ] `CORECI-01c` Remove or explicitly quarantine orphan REST handlers from runtime path (`SP:2`, `~1.5d`).
-- [ ] `CORECI-01d` Add contract regression tests asserting mounted route surface (`SP:1`, `~0.5d`).
+- [x] `CORECI-01a` Inventory mounted routes vs orphan handlers and produce route matrix (`SP:1`, `~0.5d`).
+- [x] `CORECI-01b` Publish canonical contract note (GraphQL-first + webhook adapter exception) in API docs (`SP:1`, `~0.5d`).
+- [x] `CORECI-01c` Remove or explicitly quarantine orphan REST handlers from runtime path (`SP:2`, `~1.5d`).
+- [x] `CORECI-01d` Add contract regression tests asserting mounted route surface (`SP:1`, `~0.5d`).
 - Exit criteria: running server exposes only documented control-plane routes and test suite fails on accidental route drift.
 
 `CORECI-02` (8 SP, ~4d) - Authentication enforcement for ecriture operations
@@ -637,6 +637,40 @@ Resultat d execution for `HEXA-01` (2026-04-17):
 - Worker runtime path no longer imports API DTOs.
 - `tardigrade-api` dependency was removed from worker crate, including benchmark path coupling.
 - Validation: `make ci` green after migration.
+
+Resultat d execution for `CORECI-01a` / `CORECI-01b` (2026-04-17):
+
+- Inventoried mounted runtime routes and produced canonical route matrix for server/API composition.
+- Confirmed no REST legacy handlers are mounted in current runtime surface.
+- Published canonical GraphQL-first contract note with explicit webhook adapter exception.
+
+Evidence technique:
+
+- Canonical contract note: [docs/api-contract.md](docs/api-contract.md)
+- API route mount: [crates/api/src/routing/mod.rs](crates/api/src/routing/mod.rs)
+- Server webhook adapter mount: [crates/server/src/webhook_adapter.rs](crates/server/src/webhook_adapter.rs)
+- Dashboard fallback mount: [crates/server/src/dashboard/service.rs](crates/server/src/dashboard/service.rs)
+
+Resultat d execution for `CORECI-01d` (2026-04-17):
+
+- Added one server-level integration regression test that asserts allowed control-plane routes and rejects historical REST paths.
+- Route drift outside canonical contract now fails CI through workspace integration tests.
+
+Evidence technique:
+
+- Route-surface regression test: [crates/server/tests/webhook_adapter.rs](crates/server/tests/webhook_adapter.rs)
+- Canonical contract reference: [docs/api-contract.md](docs/api-contract.md)
+
+Resultat d execution for `CORECI-01c` (2026-04-17):
+
+- Route inventory confirms no legacy REST handler is mounted in runtime composition.
+- No quarantine file was required on current state; closure is recorded by explicit inventory and regression lock.
+
+Evidence technique:
+
+- Handler inventory basis: [crates/api/src/handlers/mod.rs](crates/api/src/handlers/mod.rs)
+- Runtime API mount: [crates/api/src/routing/mod.rs](crates/api/src/routing/mod.rs)
+- Runtime server composition: [crates/server/src/main.rs](crates/server/src/main.rs)
 
 Resultat d execution for `HEXA-02` (2026-04-17):
 

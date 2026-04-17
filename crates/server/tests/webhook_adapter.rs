@@ -113,3 +113,94 @@ async fn server_router_accepts_port_trait_object_components() {
     assert!(payload.get("errors").is_none(), "graphql errors: {payload}");
     assert_eq!(payload["data"]["ready"]["status"], "ready");
 }
+
+/// Verifies runtime route surface stays aligned with the canonical GraphQL-first contract.
+#[tokio::test]
+async fn server_route_surface_matches_canonical_contract() {
+    let app = api_with_webhook_adapter_router();
+
+    let graphql_get = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/graphql")
+                .body(Body::empty())
+                .expect("build graphql get request"),
+        )
+        .await
+        .expect("serve graphql get request");
+    assert_eq!(graphql_get.status(), StatusCode::OK);
+
+    let graphql_post = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/graphql")
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(
+                    json!({
+                        "query": "query Ready { ready { status } }",
+                        "variables": {}
+                    })
+                    .to_string(),
+                ))
+                .expect("build graphql post request"),
+        )
+        .await
+        .expect("serve graphql post request");
+    assert_eq!(graphql_post.status(), StatusCode::OK);
+
+    let webhook_post = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/webhooks/scm")
+                .header("content-type", "application/json")
+                .body(Body::from("{}"))
+                .expect("build webhook post request"),
+        )
+        .await
+        .expect("serve webhook post request");
+    assert_eq!(webhook_post.status(), StatusCode::BAD_REQUEST);
+
+    let health_route = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/health")
+                .body(Body::empty())
+                .expect("build health request"),
+        )
+        .await
+        .expect("serve health request");
+    assert_eq!(health_route.status(), StatusCode::NOT_FOUND);
+
+    let jobs_route = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/jobs")
+                .body(Body::empty())
+                .expect("build jobs request"),
+        )
+        .await
+        .expect("serve jobs request");
+    assert_eq!(jobs_route.status(), StatusCode::NOT_FOUND);
+
+    let metrics_route = app
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/metrics")
+                .body(Body::empty())
+                .expect("build metrics request"),
+        )
+        .await
+        .expect("serve metrics request");
+    assert_eq!(metrics_route.status(), StatusCode::NOT_FOUND);
+}

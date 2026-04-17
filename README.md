@@ -161,6 +161,10 @@ env -u https_proxy -u http_proxy -u PXY_FAB_FONC cargo test --workspace postgres
 - GET /graphql (GraphQL Playground UI)
 - POST /webhooks/scm
 
+Canonical runtime contract and route matrix:
+
+- [docs/api-contract.md](docs/api-contract.md)
+
 GraphQL snapshot example (single request for dashboard panels):
 
 curl -X POST http://127.0.0.1:8080/graphql \

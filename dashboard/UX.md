@@ -148,6 +148,40 @@ Evidence technique:
 - Import guard script: [scripts/check-hexagonal-imports.sh](../scripts/check-hexagonal-imports.sh)
 - Make integration: [mk/rust.mk](../mk/rust.mk)
 
+### Mise a jour implementation (2026-04-17, CORECI-01a/01b)
+
+- Une matrice des routes runtime exposees a ete formalisee pour etablir la surface canonique API.
+- Le contrat public est maintenant explicite: GraphQL-first (`GET/POST /graphql`) avec exception webhook native (`POST /webhooks/scm`).
+- L inventaire confirme l absence de handlers REST legacy montes dans la composition runtime actuelle.
+
+Evidence technique:
+
+- Contrat canonique: [docs/api-contract.md](../docs/api-contract.md)
+- Montage route GraphQL: [crates/api/src/routing/mod.rs](../crates/api/src/routing/mod.rs)
+- Montage webhook natif: [crates/server/src/webhook_adapter.rs](../crates/server/src/webhook_adapter.rs)
+- Montage assets dashboard fallback: [crates/server/src/dashboard/service.rs](../crates/server/src/dashboard/service.rs)
+
+### Mise a jour implementation (2026-04-17, CORECI-01d)
+
+- Un test d integration serveur verrouille maintenant la surface de routes canonique (GET/POST `/graphql`, POST `/webhooks/scm`) et verifie le rejet des routes REST historiques (`/health`, `/jobs`, `/metrics`).
+- Toute derive de montage de routes hors contrat casse desormais la suite de tests workspace.
+
+Evidence technique:
+
+- Test de regression surface routes: [crates/server/tests/webhook_adapter.rs](../crates/server/tests/webhook_adapter.rs)
+- Contrat canonique de reference: [docs/api-contract.md](../docs/api-contract.md)
+
+### Mise a jour implementation (2026-04-17, CORECI-01c)
+
+- L inventaire confirme qu aucun handler REST legacy n est monte dans la composition runtime actuelle.
+- La cloture est actee sans quarantaine supplementaire, sous protection du test de regression de surface routes.
+
+Evidence technique:
+
+- Inventaire handlers API: [crates/api/src/handlers/mod.rs](../crates/api/src/handlers/mod.rs)
+- Montage runtime API: [crates/api/src/routing/mod.rs](../crates/api/src/routing/mod.rs)
+- Composition runtime server: [crates/server/src/main.rs](../crates/server/src/main.rs)
+
 Evidence technique:
 
 - Failure model application: [crates/application/src/models/scm_webhook_ingest_failure.rs](../crates/application/src/models/scm_webhook_ingest_failure.rs)
