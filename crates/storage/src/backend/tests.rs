@@ -1,9 +1,10 @@
-use super::InMemoryStorage;
+use super::{InMemoryStorage, PostgresStorage};
 use crate::Storage;
 use chrono::Utc;
 use tardigrade_core::{
     BuildRecord, JobDefinition, JobStatus, ScmPollingConfig, ScmProvider, WebhookSecurityConfig,
 };
+use uuid::Uuid;
 
 /// Verifies in-memory storage roundtrip for one job and one build.
 #[tokio::test]
@@ -168,4 +169,124 @@ async fn in_memory_storage_roundtrip_scm_polling_config() {
     assert_eq!(listed[0].provider, config.provider);
     assert_eq!(listed[0].interval_secs, 30);
     assert_eq!(listed[0].branches.len(), 2);
+}
+
+/// Verifies in-memory storage persists retry counters and dead-letter registry operations.
+#[tokio::test]
+async fn in_memory_storage_persists_retry_and_dead_letter_runtime_state() {
+    let storage = InMemoryStorage::default();
+    let build_id = Uuid::new_v4();
+
+    let attempt_1 = storage
+        .increment_retry_attempt(build_id)
+        .await
+        .expect("increment retry attempt should succeed");
+    let attempt_2 = storage
+        .increment_retry_attempt(build_id)
+        .await
+        .expect("increment retry attempt should succeed");
+    assert_eq!(attempt_1, 1);
+    assert_eq!(attempt_2, 2);
+
+    storage
+        .add_dead_letter_build(build_id)
+        .await
+        .expect("add dead letter build should succeed");
+    let dead_letter_ids = storage
+        .list_dead_letter_build_ids()
+        .await
+        .expect("list dead letter builds should succeed");
+    assert_eq!(dead_letter_ids, vec![build_id]);
+
+    storage
+        .clear_retry_attempt(build_id)
+        .await
+        .expect("clear retry attempt should succeed");
+    let reset_attempt = storage
+        .increment_retry_attempt(build_id)
+        .await
+        .expect("increment retry attempt should succeed after clear");
+    assert_eq!(reset_attempt, 1);
+
+    storage
+        .remove_dead_letter_build(build_id)
+        .await
+        .expect("remove dead letter build should succeed");
+    let dead_letter_ids = storage
+        .list_dead_letter_build_ids()
+        .await
+        .expect("list dead letter builds should succeed");
+    assert!(dead_letter_ids.is_empty());
+}
+
+/// Verifies postgres storage keeps retry and dead-letter runtime state across state recreation.
+#[tokio::test]
+async fn postgres_storage_persists_retry_and_dead_letter_across_state_recreation() {
+    let database_url = match std::env::var("TARDIGRADE_TEST_DATABASE_URL") {
+        Ok(value) => value,
+        Err(_) => return,
+    };
+
+    let build_id = Uuid::new_v4();
+    let job = JobDefinition::new(
+        format!("coreci05-job-{build_id}"),
+        "https://example.com/repo.git".to_string(),
+        "pipeline.yml".to_string(),
+    );
+    let build = BuildRecord::queued(job.id);
+
+    let storage_a = PostgresStorage::connect(&database_url)
+        .await
+        .expect("connect postgres storage");
+    storage_a
+        .save_job(job.clone())
+        .await
+        .expect("save job should succeed");
+    storage_a
+        .save_build(BuildRecord {
+            id: build_id,
+            ..build.clone()
+        })
+        .await
+        .expect("save build should succeed");
+
+    let attempt_1 = storage_a
+        .increment_retry_attempt(build_id)
+        .await
+        .expect("increment retry attempt should succeed");
+    let attempt_2 = storage_a
+        .increment_retry_attempt(build_id)
+        .await
+        .expect("increment retry attempt should succeed");
+    assert_eq!(attempt_1, 1);
+    assert_eq!(attempt_2, 2);
+
+    storage_a
+        .add_dead_letter_build(build_id)
+        .await
+        .expect("add dead letter build should succeed");
+
+    let storage_b = PostgresStorage::connect(&database_url)
+        .await
+        .expect("reconnect postgres storage");
+    let attempt_3 = storage_b
+        .increment_retry_attempt(build_id)
+        .await
+        .expect("increment retry attempt should continue persisted value");
+    assert_eq!(attempt_3, 3);
+
+    let dead_letter_ids = storage_b
+        .list_dead_letter_build_ids()
+        .await
+        .expect("list dead letter builds should succeed");
+    assert!(dead_letter_ids.contains(&build_id));
+
+    storage_b
+        .clear_retry_attempt(build_id)
+        .await
+        .expect("clear retry attempt should succeed");
+    storage_b
+        .remove_dead_letter_build(build_id)
+        .await
+        .expect("remove dead letter build should succeed");
 }

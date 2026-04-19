@@ -1,6 +1,6 @@
 use anyhow::Result;
 use async_trait::async_trait;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 use tardigrade_core::{
     BuildRecord, JobDefinition, ScmPollingConfig, ScmProvider, WebhookSecurityConfig,
@@ -16,6 +16,8 @@ pub struct InMemoryStorage {
     builds: Arc<Mutex<HashMap<Uuid, BuildRecord>>>,
     webhook_security_configs: Arc<Mutex<HashMap<(String, ScmProvider), WebhookSecurityConfig>>>,
     scm_polling_configs: Arc<Mutex<HashMap<(String, ScmProvider), ScmPollingConfig>>>,
+    retry_attempts: Arc<Mutex<HashMap<Uuid, u32>>>,
+    dead_letter_build_ids: Arc<Mutex<HashSet<Uuid>>>,
 }
 
 #[async_trait]
@@ -100,5 +102,55 @@ impl Storage for InMemoryStorage {
             .lock()
             .expect("scm polling storage poisoned");
         Ok(configs.values().cloned().collect())
+    }
+
+    /// Increments persisted retry attempt counter in process memory.
+    async fn increment_retry_attempt(&self, build_id: Uuid) -> Result<u32> {
+        let mut attempts = self
+            .retry_attempts
+            .lock()
+            .expect("retry attempts storage poisoned");
+        let entry = attempts.entry(build_id).or_insert(0);
+        *entry += 1;
+        Ok(*entry)
+    }
+
+    /// Clears persisted retry attempt counter in process memory.
+    async fn clear_retry_attempt(&self, build_id: Uuid) -> Result<()> {
+        let mut attempts = self
+            .retry_attempts
+            .lock()
+            .expect("retry attempts storage poisoned");
+        let _ = attempts.remove(&build_id);
+        Ok(())
+    }
+
+    /// Marks one build as dead-lettered in process memory.
+    async fn add_dead_letter_build(&self, build_id: Uuid) -> Result<()> {
+        let mut dead_letter = self
+            .dead_letter_build_ids
+            .lock()
+            .expect("dead letter storage poisoned");
+        dead_letter.insert(build_id);
+        Ok(())
+    }
+
+    /// Removes one build from dead-letter registry in process memory.
+    async fn remove_dead_letter_build(&self, build_id: Uuid) -> Result<()> {
+        let mut dead_letter = self
+            .dead_letter_build_ids
+            .lock()
+            .expect("dead letter storage poisoned");
+        let _ = dead_letter.remove(&build_id);
+        Ok(())
+    }
+
+    /// Lists dead-letter build identifiers from process memory.
+    async fn list_dead_letter_build_ids(&self) -> Result<Vec<Uuid>> {
+        let dead_letter = self
+            .dead_letter_build_ids
+            .lock()
+            .expect("dead letter storage poisoned");
+        Ok(dead_letter.iter().copied().collect())
     }
 }

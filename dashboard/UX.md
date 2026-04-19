@@ -265,6 +265,20 @@ Evidence technique:
 - Integration dans `make ci`: [mk/ci.mk](../mk/ci.mk)
 - Documentation commande: [README.md](../README.md)
 
+### Mise a jour implementation (2026-04-19, CORECI-05)
+
+- Les compteurs de retry par build et le registre dead-letter sont maintenant persistes au niveau storage (ports + backends), sans dependre de l etat memoire du processus server.
+- Le service d orchestration CI consomme des operations storage dediees (`increment/clear retry`, `add/remove/list dead-letter`) pour garantir la continuite apres restart.
+- Une migration postgres ajoute des tables runtime-state dediees et des tests de parite valident in-memory + postgres, y compris un scenario de reconnexion postgres.
+
+Evidence technique:
+
+- Contrat storage runtime-state: [crates/storage/src/contract/storage.rs](../crates/storage/src/contract/storage.rs)
+- Backend in-memory: [crates/storage/src/backend/in_memory_storage.rs](../crates/storage/src/backend/in_memory_storage.rs)
+- Backend postgres + migrations: [crates/storage/src/backend/postgres_storage.rs](../crates/storage/src/backend/postgres_storage.rs)
+- Orchestration CI: [crates/application/src/service/ci_service.rs](../crates/application/src/service/ci_service.rs)
+- Tests parite backends: [crates/storage/src/backend/tests.rs](../crates/storage/src/backend/tests.rs)
+
 Evidence technique:
 
 - Failure model application: [crates/application/src/models/scm_webhook_ingest_failure.rs](../crates/application/src/models/scm_webhook_ingest_failure.rs)

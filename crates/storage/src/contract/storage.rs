@@ -41,4 +41,19 @@ pub trait Storage {
 
     /// Lists SCM polling configuration entries.
     async fn list_scm_polling_configs(&self) -> Result<Vec<ScmPollingConfig>>;
+
+    /// Increments persisted retry attempt counter for one build and returns the new value.
+    async fn increment_retry_attempt(&self, build_id: Uuid) -> Result<u32>;
+
+    /// Clears persisted retry attempt counter for one build.
+    async fn clear_retry_attempt(&self, build_id: Uuid) -> Result<()>;
+
+    /// Marks one build as present in persisted dead-letter registry.
+    async fn add_dead_letter_build(&self, build_id: Uuid) -> Result<()>;
+
+    /// Removes one build from persisted dead-letter registry.
+    async fn remove_dead_letter_build(&self, build_id: Uuid) -> Result<()>;
+
+    /// Lists persisted dead-letter build identifiers.
+    async fn list_dead_letter_build_ids(&self) -> Result<Vec<Uuid>>;
 }

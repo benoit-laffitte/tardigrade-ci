@@ -2,7 +2,7 @@ use chrono::{DateTime, Duration as ChronoDuration, Utc};
 use std::cmp::Reverse;
 use std::time::Duration;
 use std::{
-    collections::{HashMap, HashSet, VecDeque},
+    collections::{HashMap, VecDeque},
     sync::{Arc, Mutex},
 };
 use tardigrade_core::{BuildRecord, JobDefinition, JobStatus, PipelineDefinition};
@@ -42,11 +42,7 @@ pub struct CiService {
     pub worker_lease_timeout: Duration,
     pub max_retries: u32,
     pub retry_backoff_ms: u64,
-    /// retry_state tracks attempt count per build until terminal state.
-    pub retry_state: Arc<Mutex<HashMap<Uuid, u32>>>,
     pub metrics: Arc<Mutex<RuntimeMetrics>>,
-    /// dead_letter_builds provides a focused operational view over failed terminal retries.
-    pub dead_letter_builds: Arc<Mutex<HashSet<Uuid>>>,
     /// seen_webhook_events stores recent dedup keys to enforce idempotent ingestion.
     pub seen_webhook_events: Arc<Mutex<HashMap<String, DateTime<Utc>>>>,
     pub webhook_dedup_ttl: Duration,
@@ -72,9 +68,7 @@ impl CiService {
             worker_lease_timeout: Duration::from_secs(settings.worker_lease_timeout_secs),
             max_retries: settings.max_retries,
             retry_backoff_ms: settings.retry_backoff_ms,
-            retry_state: Arc::new(Mutex::new(HashMap::new())),
             metrics: Arc::new(Mutex::new(RuntimeMetrics::default())),
-            dead_letter_builds: Arc::new(Mutex::new(HashSet::new())),
             seen_webhook_events: Arc::new(Mutex::new(HashMap::new())),
             webhook_dedup_ttl: Duration::from_secs(settings.webhook_dedup_ttl_secs),
             webhook_rejections: Arc::new(Mutex::new(VecDeque::new())),
@@ -605,6 +599,14 @@ impl CiService {
                 "Worker {worker_id} completion ignored because build was canceled"
             ));
             self.storage
+                .clear_retry_attempt(build_id)
+                .await
+                .map_err(|_| ApiError::Internal)?;
+            self.storage
+                .remove_dead_letter_build(build_id)
+                .await
+                .map_err(|_| ApiError::Internal)?;
+            self.storage
                 .save_build(build.clone())
                 .await
                 .map_err(|_| ApiError::Internal)?;
@@ -640,12 +642,14 @@ impl CiService {
 
         match status {
             WorkerBuildStatus::Success => {
-                if let Ok(mut retry_state) = self.retry_state.lock() {
-                    retry_state.remove(&build_id);
-                }
-                if let Ok(mut dead_letter) = self.dead_letter_builds.lock() {
-                    dead_letter.remove(&build_id);
-                }
+                self.storage
+                    .clear_retry_attempt(build_id)
+                    .await
+                    .map_err(|_| ApiError::Internal)?;
+                self.storage
+                    .remove_dead_letter_build(build_id)
+                    .await
+                    .map_err(|_| ApiError::Internal)?;
                 if build.mark_success() {
                     build.append_log(format!("Completed successfully by worker {worker_id}"));
                     self.emit_event(
@@ -659,12 +663,11 @@ impl CiService {
                 }
             }
             WorkerBuildStatus::Failed => {
-                let attempt = {
-                    let mut retry_state = self.retry_state.lock().expect("retry state poisoned");
-                    let entry = retry_state.entry(build_id).or_insert(0);
-                    *entry += 1;
-                    *entry
-                };
+                let attempt = self
+                    .storage
+                    .increment_retry_attempt(build_id)
+                    .await
+                    .map_err(|_| ApiError::Internal)?;
 
                 if attempt <= self.max_retries && build.requeue_from_running() {
                     // Exponential backoff caps growth to avoid extreme waits on long retry chains.
@@ -712,18 +715,20 @@ impl CiService {
                     return Ok(build);
                 }
 
-                if let Ok(mut retry_state) = self.retry_state.lock() {
-                    retry_state.remove(&build_id);
-                }
+                self.storage
+                    .clear_retry_attempt(build_id)
+                    .await
+                    .map_err(|_| ApiError::Internal)?;
 
                 if build.mark_failed() {
                     // Build is moved to dead-letter after final retry is exhausted.
                     build.append_log(format!(
                         "Failed by worker {worker_id} after retries (moved to dead-letter)"
                     ));
-                    if let Ok(mut dead_letter) = self.dead_letter_builds.lock() {
-                        dead_letter.insert(build_id);
-                    }
+                    self.storage
+                        .add_dead_letter_build(build_id)
+                        .await
+                        .map_err(|_| ApiError::Internal)?;
                     if let Ok(mut metrics) = self.metrics.lock() {
                         metrics.dead_letter_total += 1;
                     }
@@ -752,12 +757,10 @@ impl CiService {
     /// Materializes dead-letter builds for operator-focused API/dashboard views.
     pub async fn list_dead_letter_builds(&self) -> Result<Vec<BuildRecord>, ApiError> {
         let dead_letter_ids = self
-            .dead_letter_builds
-            .lock()
-            .map_err(|_| ApiError::Internal)?
-            .iter()
-            .copied()
-            .collect::<Vec<_>>();
+            .storage
+            .list_dead_letter_build_ids()
+            .await
+            .map_err(|_| ApiError::Internal)?;
 
         let mut builds = Vec::new();
         for build_id in dead_letter_ids {
@@ -845,12 +848,14 @@ impl CiService {
             self.scheduler
                 .deschedule(build_id)
                 .map_err(|_| ApiError::Internal)?;
-            if let Ok(mut retry_state) = self.retry_state.lock() {
-                retry_state.remove(&build_id);
-            }
-            if let Ok(mut dead_letter) = self.dead_letter_builds.lock() {
-                dead_letter.remove(&build_id);
-            }
+            self.storage
+                .clear_retry_attempt(build_id)
+                .await
+                .map_err(|_| ApiError::Internal)?;
+            self.storage
+                .remove_dead_letter_build(build_id)
+                .await
+                .map_err(|_| ApiError::Internal)?;
             self.emit_event(
                 "build_canceled",
                 "warn",

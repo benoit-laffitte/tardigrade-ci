@@ -538,11 +538,11 @@ Resultat d affinage for Phase 3 (2026-04-16):
 - Critical runtime telemetry (retry/dead-letter/rejections) must survive process restarts.
 - Plugin hooks must be integrated into build flow with policy-enforced safety boundaries.
 
-- [ ] `CORECI-01` Formalize and document canonical public API contract (GraphQL-first) and remove or remount any orphan handler surfaces.
-- [ ] `CORECI-02` Add authentication middleware and enforce API key checks on all ecriture mutations/routes.
-- [ ] `CORECI-03` Fix cancel semantics to deschedule queued builds and release/resolve in-flight ownership safely.
-- [ ] `CORECI-04` Add end-to-end integration tests for health/jobs/run/cancel/build-list/agent d execution-claim/agent d execution-complete on mounted runtime routes.
-- [ ] `CORECI-05` Persist retry counters and dead-letter registry in storage backends (in-memory + postgres parity).
+- [x] `CORECI-01` Formalize and document canonical public API contract (GraphQL-first) and remove or remount any orphan handler surfaces.
+- [x] `CORECI-02` Add authentication middleware and enforce API key checks on all ecriture mutations/routes.
+- [x] `CORECI-03` Fix cancel semantics to deschedule queued builds and release/resolve in-flight ownership safely.
+- [x] `CORECI-04` Add end-to-end integration tests for health/jobs/run/cancel/build-list/agent d execution-claim/agent d execution-complete on mounted runtime routes.
+- [x] `CORECI-05` Persist retry counters and dead-letter registry in storage backends (in-memory + postgres parity).
 - [ ] `CORECI-06` Persist webhook rejection history and reliability counters required for operational diagnostics.
 - [ ] `CORECI-07` Extend job/build model to bind executable pipeline content or revision reference used at run time.
 - [ ] `CORECI-08` Replace simulated executor path with real pipeline step execution (checkout + command stages + exit-code propagation).
@@ -756,6 +756,20 @@ Evidence technique:
 - E2E runtime lane target: [mk/rust.mk](mk/rust.mk)
 - Aggregate CI integration: [mk/ci.mk](mk/ci.mk)
 - Command documentation update: [README.md](README.md)
+
+Resultat d execution for `CORECI-05` (2026-04-19):
+
+- Introduced persisted runtime-state storage operations for retry counters and dead-letter registry in the storage port contract.
+- Reworked CI service retry/dead-letter orchestration to use storage-backed state transitions instead of process-local maps, so state survives process restarts.
+- Added parity coverage in storage backend tests for in-memory and postgres (including postgres reconnect roundtrip).
+
+Evidence technique:
+
+- Storage contract/runtime-state operations: [crates/storage/src/contract/storage.rs](crates/storage/src/contract/storage.rs)
+- In-memory backend persistence: [crates/storage/src/backend/in_memory_storage.rs](crates/storage/src/backend/in_memory_storage.rs)
+- Postgres migrations + persistence: [crates/storage/src/backend/postgres_storage.rs](crates/storage/src/backend/postgres_storage.rs)
+- Service orchestration rewiring: [crates/application/src/service/ci_service.rs](crates/application/src/service/ci_service.rs)
+- Backend parity tests: [crates/storage/src/backend/tests.rs](crates/storage/src/backend/tests.rs)
 
 Resultat d execution for `HEXA-02` (2026-04-17):
 

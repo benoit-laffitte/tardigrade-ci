@@ -65,6 +65,20 @@ const MIGRATIONS: &[(&str, &str)] = &[
         );
         "#,
     ),
+    (
+        "004_init_build_runtime_state",
+        r#"
+        CREATE TABLE IF NOT EXISTS build_retry_attempts (
+            build_id UUID PRIMARY KEY REFERENCES builds(id) ON DELETE CASCADE,
+            attempts INTEGER NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS dead_letter_builds (
+            build_id UUID PRIMARY KEY REFERENCES builds(id) ON DELETE CASCADE,
+            marked_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+        "#,
+    ),
 ];
 
 /// Postgres-backed implementation of the storage contract.
@@ -339,5 +353,80 @@ impl Storage for PostgresStorage {
             .await?;
 
         rows.into_iter().map(row_to_scm_polling_config).collect()
+    }
+
+    /// Increments persisted retry attempt counter for one build row in postgres.
+    async fn increment_retry_attempt(&self, build_id: Uuid) -> Result<u32> {
+        let row = self
+            .client
+            .query_one(
+                r#"
+            INSERT INTO build_retry_attempts (build_id, attempts)
+            VALUES ($1, 1)
+            ON CONFLICT (build_id) DO UPDATE
+            SET attempts = build_retry_attempts.attempts + 1
+            RETURNING attempts
+            "#,
+                &[&build_id],
+            )
+            .await?;
+
+        let attempts: i32 = row.get("attempts");
+        let attempts = u32::try_from(attempts).map_err(|_| anyhow!("invalid attempts value"))?;
+        Ok(attempts)
+    }
+
+    /// Clears persisted retry attempt counter for one build row in postgres.
+    async fn clear_retry_attempt(&self, build_id: Uuid) -> Result<()> {
+        self.client
+            .execute(
+                "DELETE FROM build_retry_attempts WHERE build_id = $1",
+                &[&build_id],
+            )
+            .await?;
+        Ok(())
+    }
+
+    /// Adds one build to persisted dead-letter registry in postgres.
+    async fn add_dead_letter_build(&self, build_id: Uuid) -> Result<()> {
+        self.client
+            .execute(
+                r#"
+            INSERT INTO dead_letter_builds (build_id)
+            VALUES ($1)
+            ON CONFLICT (build_id) DO NOTHING
+            "#,
+                &[&build_id],
+            )
+            .await?;
+        Ok(())
+    }
+
+    /// Removes one build from persisted dead-letter registry in postgres.
+    async fn remove_dead_letter_build(&self, build_id: Uuid) -> Result<()> {
+        self.client
+            .execute(
+                "DELETE FROM dead_letter_builds WHERE build_id = $1",
+                &[&build_id],
+            )
+            .await?;
+        Ok(())
+    }
+
+    /// Lists persisted dead-letter build identifiers from postgres.
+    async fn list_dead_letter_build_ids(&self) -> Result<Vec<Uuid>> {
+        let rows = self
+            .client
+            .query(
+                r#"
+            SELECT build_id
+            FROM dead_letter_builds
+            ORDER BY marked_at DESC
+            "#,
+                &[],
+            )
+            .await?;
+
+        Ok(rows.into_iter().map(|row| row.get("build_id")).collect())
     }
 }
