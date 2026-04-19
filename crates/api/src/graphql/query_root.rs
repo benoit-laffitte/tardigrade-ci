@@ -1,4 +1,5 @@
-use crate::graphql::{GqlScmProvider, GqlWebhookSecurityConfig};
+use crate::graphql::{GqlScmProvider, GqlWebhookSecurityConfig, GqlScmPollingConfig};
+mod gql_scm_polling_config;
 use async_graphql::{Context, Error as GraphQLError, Object};
 use axum::http::StatusCode;
 
@@ -196,6 +197,22 @@ impl QueryRoot {
             },
             allowed_ips: c.allowed_ips,
         }))
+    }
+
+    /// Returns all SCM polling configurations for admin panel.
+    async fn polling_configs(
+        &self,
+        ctx: &Context<'_>,
+    ) -> Result<Vec<GqlScmPollingConfig>, GraphQLError> {
+        let state = ctx.data_unchecked::<ApiState>();
+        let configs = state
+            .use_cases
+            .service
+            .storage
+            .list_scm_polling_configs()
+            .await
+            .map_err(gql_err_from_api)?;
+        Ok(configs.into_iter().map(Into::into).collect())
     }
 }
 
