@@ -62,6 +62,18 @@ impl CiService {
         }
     }
 
+    /// Fetches repository-level webhook security config for a given provider (lecture, pas de secret en clair).
+    pub async fn get_webhook_security_config(
+        &self,
+        repository_url: &str,
+        provider: tardigrade_core::ScmProvider,
+    ) -> Result<Option<tardigrade_core::WebhookSecurityConfig>, ApiError> {
+        self.storage
+            .get_webhook_security_config(repository_url, provider)
+            .await
+            .map_err(|_| ApiError::Internal)
+    }
+
     /// Loads persisted runtime metrics and falls back to zeroed counters on storage failures.
     async fn load_runtime_metrics_safe(&self) -> RuntimeMetricsSnapshot {
         self.storage
@@ -289,7 +301,10 @@ impl CiService {
             return Err(ApiError::BadRequest);
         }
 
-        let pipeline_content = payload.pipeline_yaml.clone().filter(|s| !s.trim().is_empty());
+        let pipeline_content = payload
+            .pipeline_yaml
+            .clone()
+            .filter(|s| !s.trim().is_empty());
         if let Some(ref pipeline_yaml) = pipeline_content {
             PipelineDefinition::from_yaml_str(pipeline_yaml).map_err(map_pipeline_error)?;
         }

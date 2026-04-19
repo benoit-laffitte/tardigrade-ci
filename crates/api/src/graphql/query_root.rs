@@ -1,3 +1,4 @@
+use crate::graphql::{GqlScmProvider, GqlWebhookSecurityConfig};
 use async_graphql::{Context, Error as GraphQLError, Object};
 use axum::http::StatusCode;
 
@@ -170,6 +171,31 @@ impl QueryRoot {
             metrics: state.use_cases.metrics_snapshot().await.into(),
             dead_letter_builds: dead_letter_builds.into_iter().map(Into::into).collect(),
         })
+    }
+
+    /// Returns webhook security config for a repository/provider (secret masked).
+    async fn webhook_security_config(
+        &self,
+        ctx: &Context<'_>,
+        repository_url: String,
+        provider: GqlScmProvider,
+    ) -> Result<Option<GqlWebhookSecurityConfig>, GraphQLError> {
+        let state = ctx.data_unchecked::<ApiState>();
+        let config = state
+            .use_cases
+            .get_webhook_security_config(&repository_url, provider.into())
+            .await
+            .map_err(gql_err_from_api)?;
+        Ok(config.map(|c| GqlWebhookSecurityConfig {
+            repository_url: c.repository_url,
+            provider,
+            secret_masked: if c.secret.is_empty() {
+                "".to_string()
+            } else {
+                "****".to_string()
+            },
+            allowed_ips: c.allowed_ips,
+        }))
     }
 }
 

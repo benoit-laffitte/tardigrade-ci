@@ -1,5 +1,4 @@
 use anyhow::Result;
-use chrono::{DateTime, Utc};
 use serde_json::Value;
 use tardigrade_core::BuildRecord;
 use tokio_postgres::Row;

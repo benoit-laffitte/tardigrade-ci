@@ -19,6 +19,16 @@ pub struct CiUseCases {
 }
 
 impl CiUseCases {
+    /// Fetches repository-level webhook security config for a given provider (lecture, pas de secret en clair).
+    pub async fn get_webhook_security_config(
+        &self,
+        repository_url: &str,
+        provider: tardigrade_core::ScmProvider,
+    ) -> Result<Option<WebhookSecurityConfig>, ApiError> {
+        self.service
+            .get_webhook_security_config(repository_url, provider)
+            .await
+    }
     /// Creates use-case facade from one orchestrator service instance.
     pub fn new(service: Arc<CiService>) -> Self {
         Self { service }
