@@ -4,7 +4,7 @@
 
 build: build-rust dashboard-build ## Build project deliverables (Rust + dashboard)
 
-ci: lint test-all dashboard-install build  ## Run local CI-equivalent pipeline
+ci: lint test-all e2e-runtime dashboard-install build  ## Run local CI-equivalent pipeline
 
 help: ## Show available Make targets
 	@echo "Tardigrade CI Make targets"

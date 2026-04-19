@@ -253,6 +253,18 @@ Evidence technique:
 - Failure-path GraphQL server tests: [crates/server/tests/api_key_auth_middleware.rs](../crates/server/tests/api_key_auth_middleware.rs)
 - Test settings wiring: [crates/server/Cargo.toml](../crates/server/Cargo.toml)
 
+### Mise a jour implementation (2026-04-19, CORECI-04d)
+
+- Une lane CI explicite et proxy-safe `make e2e-runtime` execute maintenant les tests d integration runtime GraphQL deterministes (fixture API + scenarios server sous middleware auth).
+- La pipeline aggregate `make ci` inclut desormais cette lane E2E, ce qui rend la couverture de regression end-to-end obligatoire au meme niveau que lint/arch-guard/tests workspace.
+- La commande est documentee dans le README pour aligner execution locale et execution CI.
+
+Evidence technique:
+
+- Target E2E runtime: [mk/rust.mk](../mk/rust.mk)
+- Integration dans `make ci`: [mk/ci.mk](../mk/ci.mk)
+- Documentation commande: [README.md](../README.md)
+
 Evidence technique:
 
 - Failure model application: [crates/application/src/models/scm_webhook_ingest_failure.rs](../crates/application/src/models/scm_webhook_ingest_failure.rs)

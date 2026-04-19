@@ -124,6 +124,7 @@ Unified automation entrypoints from repository root:
 - `make arch-import-guard-test` (adapter import guard regression scenarios)
 - `make test-fast` (Rust unit tests only)
 - `make test-all` (full Rust workspace tests)
+- `make e2e-runtime` (deterministic GraphQL runtime E2E integration lane: api fixture + server auth/failure paths)
 - `make dashboard-install` (frontend dependencies via npm)
 - `make dashboard-lint` (frontend lint via npm)
 - `make dashboard-build` (frontend build via npm)

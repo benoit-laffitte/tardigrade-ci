@@ -1,6 +1,6 @@
 # Rust-centric targets.
 
-.PHONY: bootstrap fmt-check clippy dead-code arch-guard arch-guard-test arch-import-guard arch-import-guard-test lint test-fast test-all test build-rust build-rust-release-images package-platform-zips worker-transport-bench
+.PHONY: bootstrap fmt-check clippy dead-code arch-guard arch-guard-test arch-import-guard arch-import-guard-test lint test-fast test-all e2e-runtime test build-rust build-rust-release-images package-platform-zips worker-transport-bench
 
 bootstrap: ## Prefetch Rust dependencies for local development
 	$(NO_PROXY_ENV) $(CARGO) fetch
@@ -33,6 +33,10 @@ test-fast: ## Run Rust unit tests only (lib + bins)
 
 test-all: ## Run full Rust workspace test suite
 	$(NO_PROXY_ENV) $(CARGO) test --workspace
+
+e2e-runtime: ## Run deterministic GraphQL runtime E2E integration lanes
+	$(NO_PROXY_ENV) $(CARGO) test -p tardigrade-api --test e2e_graphql_fixture
+	$(NO_PROXY_ENV) $(CARGO) test -p tardigrade-server --test api_key_auth_middleware
 
 test: test-all ## Alias for full test suite
 

@@ -586,10 +586,10 @@ Sprint planning breakdown (CORECI foundation slice: `CORECI-01` to `CORECI-04`):
 
 `CORECI-04` (8 SP, ~5d) - End-to-end runtime flow tests
 
-- [ ] `CORECI-04a` Create deterministic E2E test fixture for server + agent d execution GraphQL flows (`SP:2`, `~1d`).
+- [x] `CORECI-04a` Create deterministic E2E test fixture for server + agent d execution GraphQL flows (`SP:2`, `~1d`).
 - [x] `CORECI-04b` Cover happy path: health, create job, run job, agent d execution claim, agent d execution complete, list builds (`SP:2`, `~1.5d`).
 - [x] `CORECI-04c` Cover failure path: auth denied, ownership conflict, cancel interactions, dead-letter entry (`SP:3`, `~2d`).
-- [ ] `CORECI-04d` Add CI lane integration for these E2E tests with stable proxy-safe command invocation (`SP:1`, `~0.5d`).
+- [x] `CORECI-04d` Add CI lane integration for these E2E tests with stable proxy-safe command invocation (`SP:1`, `~0.5d`).
 - Exit criteria: CI enforces end-to-end runtime correctness on mounted routes and agent d execution flow critical paths.
 
 Dependency map (execution order recommendation):
@@ -744,6 +744,18 @@ Evidence technique:
 
 - Failure-path integration tests (auth, conflict, cancel, dead-letter): [crates/server/tests/api_key_auth_middleware.rs](crates/server/tests/api_key_auth_middleware.rs)
 - Deterministic retry settings in tests: [crates/server/Cargo.toml](crates/server/Cargo.toml)
+
+Resultat d execution for `CORECI-04d` (2026-04-19):
+
+- Added an explicit proxy-safe CI lane (`make e2e-runtime`) dedicated to deterministic GraphQL runtime E2E integration tests.
+- Wired the lane into aggregate `make ci` so route/auth/lifecycle E2E regression coverage is now enforced as a first-class CI step.
+- Published the new command in project documentation to keep local and CI invocation paths aligned.
+
+Evidence technique:
+
+- E2E runtime lane target: [mk/rust.mk](mk/rust.mk)
+- Aggregate CI integration: [mk/ci.mk](mk/ci.mk)
+- Command documentation update: [README.md](README.md)
 
 Resultat d execution for `HEXA-02` (2026-04-17):
 
