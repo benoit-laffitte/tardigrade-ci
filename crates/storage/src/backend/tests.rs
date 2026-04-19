@@ -14,8 +14,9 @@ async fn in_memory_storage_roundtrip_job_and_build() {
         "build-api".to_string(),
         "https://example.com/repo.git".to_string(),
         "pipeline.yml".to_string(),
+        None,
     );
-    let mut build = BuildRecord::queued(job.id);
+    let mut build = BuildRecord::queued(job.id, None);
     build.append_log("queued");
 
     storage
@@ -91,6 +92,7 @@ async fn in_memory_storage_overwrites_existing_job_by_id() {
         "build-api".to_string(),
         "https://example.com/repo.git".to_string(),
         "pipeline.yml".to_string(),
+        None,
     );
     let mut updated = original.clone();
     updated.name = "build-api-updated".to_string();
@@ -308,8 +310,9 @@ async fn postgres_storage_persists_retry_and_dead_letter_across_state_recreation
         format!("coreci05-job-{build_id}"),
         "https://example.com/repo.git".to_string(),
         "pipeline.yml".to_string(),
+        None,
     );
-    let build = BuildRecord::queued(job.id);
+    let build = BuildRecord::queued(job.id, None);
 
     let storage_a = PostgresStorage::connect(&database_url)
         .await

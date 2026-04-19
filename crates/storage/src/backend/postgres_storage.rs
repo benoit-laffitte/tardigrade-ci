@@ -23,7 +23,8 @@ const MIGRATIONS: &[(&str, &str)] = &[
             name TEXT NOT NULL,
             repository_url TEXT NOT NULL,
             pipeline_path TEXT NOT NULL,
-            created_at TIMESTAMPTZ NOT NULL
+            created_at TIMESTAMPTZ NOT NULL,
+            pipeline_content TEXT NULL
         );
 
         CREATE TABLE IF NOT EXISTS builds (
@@ -33,7 +34,8 @@ const MIGRATIONS: &[(&str, &str)] = &[
             queued_at TIMESTAMPTZ NOT NULL,
             started_at TIMESTAMPTZ NULL,
             finished_at TIMESTAMPTZ NULL,
-            logs JSONB NOT NULL DEFAULT '[]'::jsonb
+            logs JSONB NOT NULL DEFAULT '[]'::jsonb,
+            pipeline_used TEXT NULL
         );
         "#,
     ),
@@ -195,13 +197,14 @@ impl Storage for PostgresStorage {
         self.client
             .execute(
                 r#"
-            INSERT INTO jobs (id, name, repository_url, pipeline_path, created_at)
-            VALUES ($1, $2, $3, $4, $5)
+            INSERT INTO jobs (id, name, repository_url, pipeline_path, created_at, pipeline_content)
+            VALUES ($1, $2, $3, $4, $5, $6)
             ON CONFLICT (id) DO UPDATE
             SET name = EXCLUDED.name,
                 repository_url = EXCLUDED.repository_url,
                 pipeline_path = EXCLUDED.pipeline_path,
-                created_at = EXCLUDED.created_at
+                created_at = EXCLUDED.created_at,
+                pipeline_content = EXCLUDED.pipeline_content
             "#,
                 &[
                     &job.id,
@@ -209,6 +212,7 @@ impl Storage for PostgresStorage {
                     &job.repository_url,
                     &job.pipeline_path,
                     &job.created_at,
+                    &job.pipeline_content,
                 ],
             )
             .await?;
@@ -221,7 +225,7 @@ impl Storage for PostgresStorage {
         let row = self
             .client
             .query_opt(
-                "SELECT id, name, repository_url, pipeline_path, created_at FROM jobs WHERE id = $1",
+                "SELECT id, name, repository_url, pipeline_path, created_at, pipeline_content FROM jobs WHERE id = $1",
                 &[&id],
             )
             .await?;
@@ -234,7 +238,7 @@ impl Storage for PostgresStorage {
         let rows = self
             .client
             .query(
-                "SELECT id, name, repository_url, pipeline_path, created_at FROM jobs",
+                "SELECT id, name, repository_url, pipeline_path, created_at, pipeline_content FROM jobs",
                 &[],
             )
             .await?;
@@ -250,15 +254,16 @@ impl Storage for PostgresStorage {
         self.client
             .execute(
                 r#"
-            INSERT INTO builds (id, job_id, status, queued_at, started_at, finished_at, logs)
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            INSERT INTO builds (id, job_id, status, queued_at, started_at, finished_at, logs, pipeline_used)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             ON CONFLICT (id) DO UPDATE
             SET job_id = EXCLUDED.job_id,
                 status = EXCLUDED.status,
                 queued_at = EXCLUDED.queued_at,
                 started_at = EXCLUDED.started_at,
                 finished_at = EXCLUDED.finished_at,
-                logs = EXCLUDED.logs
+                logs = EXCLUDED.logs,
+                pipeline_used = EXCLUDED.pipeline_used
             "#,
                 &[
                     &build.id,
@@ -268,6 +273,7 @@ impl Storage for PostgresStorage {
                     &build.started_at,
                     &build.finished_at,
                     &logs,
+                    &build.pipeline_used,
                 ],
             )
             .await?;
@@ -280,7 +286,7 @@ impl Storage for PostgresStorage {
         let row = self
             .client
             .query_opt(
-                "SELECT id, job_id, status, queued_at, started_at, finished_at, logs FROM builds WHERE id = $1",
+                "SELECT id, job_id, status, queued_at, started_at, finished_at, logs, pipeline_used FROM builds WHERE id = $1",
                 &[&id],
             )
             .await?;
@@ -293,7 +299,7 @@ impl Storage for PostgresStorage {
         let rows = self
             .client
             .query(
-                "SELECT id, job_id, status, queued_at, started_at, finished_at, logs FROM builds",
+                "SELECT id, job_id, status, queued_at, started_at, finished_at, logs, pipeline_used FROM builds",
                 &[],
             )
             .await?;

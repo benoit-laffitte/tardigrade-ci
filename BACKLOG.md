@@ -990,3 +990,14 @@ Resultat d affinage for transport strategy (2026-04-16):
 8. Epic 0 (`INDUS-*`) hardening follow-ups.
 9. Epic 5 (`CLOUD-*`) cloud/container delivery track (deferred).
 10. Epic 8 (`UXREAL-*`) mockup-to-real-dashboard rollout.
+
+## [2026-04-19] CORECI-07: Pipeline content/revision tracking
+
+- Goal: Ensure every job/build records the pipeline YAML or revision used at execution time for full reproducibility and traceability.
+- Scope: Propagation of `pipeline_content` (JobDefinition) and `pipeline_used` (BuildRecord) through domain, persistence, service, API, and tests.
+- Status: Delivered
+- Acceptance:
+  - New fields present in domain, persisted in memory and Postgres.
+  - API GraphQL exposes these fields for job/build queries.
+  - Tests and documentation updated.
+  - Example usage and migration notes provided.

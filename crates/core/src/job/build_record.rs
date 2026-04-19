@@ -14,11 +14,13 @@ pub struct BuildRecord {
     pub started_at: Option<DateTime<Utc>>,
     pub finished_at: Option<DateTime<Utc>>,
     pub logs: Vec<String>,
+    /// Stores the pipeline YAML content or revision reference actually used for this build.
+    pub pipeline_used: Option<String>,
 }
 
 impl BuildRecord {
     /// Creates a newly queued build record tied to a job id.
-    pub fn queued(job_id: Uuid) -> Self {
+    pub fn queued(job_id: Uuid, pipeline_used: Option<String>) -> Self {
         Self {
             id: Uuid::new_v4(),
             job_id,
@@ -27,6 +29,7 @@ impl BuildRecord {
             started_at: None,
             finished_at: None,
             logs: Vec::new(),
+            pipeline_used,
         }
     }
 

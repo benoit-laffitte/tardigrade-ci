@@ -199,3 +199,33 @@ Local helper scripts under `scripts/` remain available for developer workflows w
 Roadmap items are now decomposed into an actionable backlog in:
 
 - [BACKLOG.md](BACKLOG.md)
+
+## Make Command Matrix
+
+| Command                | Description                                              | Typical Usage                |
+|------------------------|---------------------------------------------------------|------------------------------|
+| make help              | List all available Make targets                         | Discover automation surface  |
+| make ci                | Run full local CI pipeline (lint, test, build, e2e)     | Pre-push/full validation     |
+| make lint              | Rust formatting and clippy checks                       | Code hygiene                 |
+| make dead-code         | Dead code detection (clippy)                            | Cleanup/maintenance          |
+| make test-fast         | Rust unit tests only                                    | Fast feedback                |
+| make test-all          | All Rust workspace tests (unit + integration)           | Full validation              |
+| make e2e-runtime       | GraphQL E2E integration tests                           | API regression check         |
+| make dashboard-install | Install dashboard npm dependencies                      | Frontend setup               |
+| make dashboard-lint    | Lint dashboard frontend (npm)                           | Frontend hygiene             |
+| make dashboard-build   | Build dashboard frontend (npm)                          | Frontend build               |
+| make build             | Build Rust + dashboard deliverables                     | Release/packaging            |
+| make package-platform-zips | Create release zips for all platforms                | Release artifact             |
+
+> Utilisez `make help` pour la liste dynamique et les descriptions à jour.
+
+### Exemples
+
+- Lancer la CI locale complète :
+  ```sh
+  make ci
+  ```
+- Découvrir toutes les cibles disponibles :
+  ```sh
+  make help
+  ```

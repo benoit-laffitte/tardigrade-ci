@@ -10,6 +10,8 @@ pub struct JobDefinition {
     pub repository_url: String,
     pub pipeline_path: String,
     pub created_at: DateTime<Utc>,
+    /// Optionally stores the pipeline YAML content or revision reference for reproducibility.
+    pub pipeline_content: Option<String>,
 }
 
 impl JobDefinition {
@@ -18,6 +20,7 @@ impl JobDefinition {
         name: impl Into<String>,
         repository_url: impl Into<String>,
         pipeline_path: impl Into<String>,
+        pipeline_content: Option<String>,
     ) -> Self {
         Self {
             id: Uuid::new_v4(),
@@ -25,6 +28,7 @@ impl JobDefinition {
             repository_url: repository_url.into(),
             pipeline_path: pipeline_path.into(),
             created_at: Utc::now(),
+            pipeline_content,
         }
     }
 }

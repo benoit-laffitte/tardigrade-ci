@@ -103,7 +103,7 @@ async fn claim_step_returns_no_build_when_queue_is_empty() {
 /// Confirms claim step returns claimed build when payload carries one.
 #[tokio::test]
 async fn claim_step_returns_build_when_payload_contains_one() {
-    let build = BuildRecord::queued(Uuid::new_v4());
+    let build = BuildRecord::queued(Uuid::new_v4(), None);
     let api = MockWorkerApi::with_claim_results(vec![Ok(Some(build.clone()))]);
     let step = claim_step(&api, "http://127.0.0.1:8080/graphql", "worker-a").await;
 

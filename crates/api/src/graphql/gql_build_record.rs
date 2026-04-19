@@ -14,6 +14,8 @@ pub(crate) struct GqlBuildRecord {
     pub(crate) started_at: Option<String>,
     pub(crate) finished_at: Option<String>,
     pub(crate) logs: Vec<String>,
+    /// Pipeline YAML ou None (si pipeline_path utilisé)
+    pub(crate) pipeline_used: Option<String>,
 }
 
 impl From<BuildRecord> for GqlBuildRecord {
@@ -27,6 +29,7 @@ impl From<BuildRecord> for GqlBuildRecord {
             started_at: value.started_at.map(|dt| dt.to_rfc3339()),
             finished_at: value.finished_at.map(|dt| dt.to_rfc3339()),
             logs: value.logs,
+            pipeline_used: value.pipeline_used,
         }
     }
 }

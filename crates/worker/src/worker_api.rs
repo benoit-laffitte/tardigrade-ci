@@ -230,6 +230,7 @@ impl TryFrom<GraphqlBuildRecord> for BuildRecord {
                 .map(parse_datetime)
                 .transpose()?,
             logs: value.logs,
+            pipeline_used: None, // Not provided by GraphQL worker payload
         })
     }
 }

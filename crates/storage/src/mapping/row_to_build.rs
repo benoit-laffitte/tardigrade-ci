@@ -17,8 +17,9 @@ pub(crate) fn row_to_build(row: Row) -> Result<BuildRecord> {
         job_id: row.try_get("job_id")?,
         status: parse_status(&status_raw)?,
         queued_at: row.try_get("queued_at")?,
-        started_at: row.try_get::<_, Option<DateTime<Utc>>>("started_at")?,
-        finished_at: row.try_get::<_, Option<DateTime<Utc>>>("finished_at")?,
+        started_at: row.try_get("started_at")?,
+        finished_at: row.try_get("finished_at")?,
         logs,
+        pipeline_used: row.try_get("pipeline_used").ok(),
     })
 }

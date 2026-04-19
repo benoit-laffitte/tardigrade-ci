@@ -10,5 +10,6 @@ pub(crate) fn row_to_job(row: Row) -> Result<JobDefinition> {
         repository_url: row.try_get("repository_url")?,
         pipeline_path: row.try_get("pipeline_path")?,
         created_at: row.try_get("created_at")?,
+        pipeline_content: row.try_get("pipeline_content").ok(),
     })
 }

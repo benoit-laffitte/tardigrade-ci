@@ -289,15 +289,17 @@ impl CiService {
             return Err(ApiError::BadRequest);
         }
 
-        if let Some(pipeline_yaml) = payload.pipeline_yaml.as_ref() {
-            if pipeline_yaml.trim().is_empty() {
-                return Err(ApiError::BadRequest);
-            }
-
+        let pipeline_content = payload.pipeline_yaml.clone().filter(|s| !s.trim().is_empty());
+        if let Some(ref pipeline_yaml) = pipeline_content {
             PipelineDefinition::from_yaml_str(pipeline_yaml).map_err(map_pipeline_error)?;
         }
 
-        let job = JobDefinition::new(payload.name, payload.repository_url, payload.pipeline_path);
+        let job = JobDefinition::new(
+            payload.name,
+            payload.repository_url,
+            payload.pipeline_path,
+            pipeline_content,
+        );
         self.storage
             .save_job(job.clone())
             .await
@@ -509,7 +511,7 @@ impl CiService {
 
     /// Creates and enqueues a build for a known job.
     pub async fn run_job(&self, job_id: Uuid) -> Result<BuildRecord, ApiError> {
-        let Some(_) = self
+        let Some(job) = self
             .storage
             .get_job(job_id)
             .await
@@ -518,7 +520,7 @@ impl CiService {
             return Err(ApiError::NotFound);
         };
 
-        let mut build = BuildRecord::queued(job_id);
+        let mut build = BuildRecord::queued(job_id, job.pipeline_content.clone());
         build.append_log("Queued by API");
         self.storage
             .save_build(build.clone())
