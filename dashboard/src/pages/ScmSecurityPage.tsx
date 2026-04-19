@@ -1,6 +1,7 @@
 import type { ScmSecurityPageProps } from "./types";
 import { useScmDomain } from "../hooks/scm/domain";
 import { useWebhookSecurityConfig } from "../hooks/scm/useWebhookSecurityConfig";
+import { useState } from "react";
 
 // Renders the SCM Security page in roadmap/read-only mode.
 export function ScmSecurityPage({
@@ -18,6 +19,14 @@ export function ScmSecurityPage({
     audit,
     refreshAll
   });
+
+  // Ajout d'un état local pour l'édition (par job)
+  const [editConfigJobId, setEditConfigJobId] = useState<string | null>(null);
+  const [editSecret, setEditSecret] = useState("");
+  const [editAllowedIps, setEditAllowedIps] = useState("");
+  const [editMessage, setEditMessage] = useState("");
+  // Ajout d'un état pour le chargement de la soumission
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   return (
     <>
@@ -73,8 +82,8 @@ export function ScmSecurityPage({
             <p className="hint">Aucun job disponible pour le moment.</p>
           ) : (
             scmSecurityReadOnlySummary.recentJobs.map((job) => {
-              // On suppose provider = "Github" pour démo, à adapter si info disponible côté job
               const { config, loading, error } = useWebhookSecurityConfig(job.repository_url, "Github");
+              const isEditing = editConfigJobId === job.id;
               return (
                 <div className="list-item" key={`scm-source-${job.id}`}>
                   <div>
@@ -84,12 +93,62 @@ export function ScmSecurityPage({
                     <div className="item-subtitle">
                       {loading && <span>Chargement config webhook…</span>}
                       {error && <span style={{ color: "red" }}>Erreur: {String(error)}</span>}
-                      {config && (
+                      {config && !isEditing && (
                         <>
                           <span>Webhook: <b>{config.repository_url}</b> [{config.provider}]</span><br />
                           <span>Secret: <b>{config.secret_masked || "(non défini)"}</b></span><br />
-                          <span>IPs autorisées: {config.allowed_ips.length > 0 ? config.allowed_ips.join(", ") : "(aucune)"}</span>
+                          <span>IPs autorisées: {config.allowed_ips.length > 0 ? config.allowed_ips.join(", ") : "(aucune)"}</span><br />
+                          {roleCapabilities.can_mutate_sensitive && (
+                            <button className="btn ghost" onClick={() => {
+                              setEditConfigJobId(job.id);
+                              setEditSecret("");
+                              setEditAllowedIps(config.allowed_ips.join(", "));
+                              setEditMessage("");
+                            }}>
+                              Modifier
+                            </button>
+                          )}
                         </>
+                      )}
+                      {isEditing && (
+                        <form
+                          onSubmit={async (e) => {
+                            e.preventDefault();
+                            setIsSubmitting(true);
+                            setEditMessage("");
+                            try {
+                              await scmDomain.saveWebhookSecurityConfig({
+                                preventDefault: () => {} // déjà géré
+                              }, {
+                                repository_url: job.repository_url,
+                                provider: "github",
+                                secret: editSecret,
+                                allowed_ips_text: editAllowedIps
+                              }, setEditMessage);
+                              setEditMessage("Configuration enregistrée.");
+                              setEditConfigJobId(null);
+                              setEditSecret("");
+                              setEditAllowedIps("");
+                              await scmDomain.refreshAll();
+                            } catch (err) {
+                              setEditMessage("Erreur lors de l'enregistrement: " + (err instanceof Error ? err.message : String(err)));
+                            } finally {
+                              setIsSubmitting(false);
+                            }
+                          }}
+                        >
+                          <label>
+                            Secret:
+                            <input type="text" value={editSecret} onChange={e => setEditSecret(e.target.value)} required disabled={isSubmitting} />
+                          </label>
+                          <label>
+                            IPs autorisées (séparées par virgule):
+                            <input type="text" value={editAllowedIps} onChange={e => setEditAllowedIps(e.target.value)} disabled={isSubmitting} />
+                          </label>
+                          <button className="btn" type="submit" disabled={isSubmitting}>Enregistrer</button>
+                          <button className="btn ghost" type="button" onClick={() => setEditConfigJobId(null)} disabled={isSubmitting}>Annuler</button>
+                          {editMessage && <span className="hint">{editMessage}</span>}
+                        </form>
                       )}
                     </div>
                   </div>
