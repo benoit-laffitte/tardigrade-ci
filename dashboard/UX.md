@@ -241,6 +241,18 @@ Evidence technique:
 
 - Happy path E2E GraphQL: [crates/api/tests/e2e_graphql_fixture.rs](../crates/api/tests/e2e_graphql_fixture.rs)
 
+### Mise a jour implementation (2026-04-19, CORECI-04c)
+
+- Les scenarios failure-path E2E sont couverts au niveau server sous middleware API key actif: mutations sans cle (`unauthorized`) et avec cle invalide (`forbidden`).
+- Un scenario de conflit d ownership est verrouille: completion par un worker non proprietaire retourne une erreur GraphQL de type `409` et incremente `ownership_conflicts_total`.
+- Les interactions d annulation sont verifiees sous auth: une completion tardive apres `cancel_build` reste idempotente sur l etat `CANCELED`.
+- Le flux dead-letter est rendu deterministe en test via `max_retries = 0`: un echec de completion place immediatement le build en dead-letter et incremente `dead_letter_total`.
+
+Evidence technique:
+
+- Failure-path GraphQL server tests: [crates/server/tests/api_key_auth_middleware.rs](../crates/server/tests/api_key_auth_middleware.rs)
+- Test settings wiring: [crates/server/Cargo.toml](../crates/server/Cargo.toml)
+
 Evidence technique:
 
 - Failure model application: [crates/application/src/models/scm_webhook_ingest_failure.rs](../crates/application/src/models/scm_webhook_ingest_failure.rs)

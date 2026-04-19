@@ -588,7 +588,7 @@ Sprint planning breakdown (CORECI foundation slice: `CORECI-01` to `CORECI-04`):
 
 - [ ] `CORECI-04a` Create deterministic E2E test fixture for server + agent d execution GraphQL flows (`SP:2`, `~1d`).
 - [x] `CORECI-04b` Cover happy path: health, create job, run job, agent d execution claim, agent d execution complete, list builds (`SP:2`, `~1.5d`).
-- [ ] `CORECI-04c` Cover failure path: auth denied, ownership conflict, cancel interactions, dead-letter entry (`SP:3`, `~2d`).
+- [x] `CORECI-04c` Cover failure path: auth denied, ownership conflict, cancel interactions, dead-letter entry (`SP:3`, `~2d`).
 - [ ] `CORECI-04d` Add CI lane integration for these E2E tests with stable proxy-safe command invocation (`SP:1`, `~0.5d`).
 - Exit criteria: CI enforces end-to-end runtime correctness on mounted routes and agent d execution flow critical paths.
 
@@ -732,6 +732,18 @@ Resultat d execution for `CORECI-04b` (2026-04-19):
 Evidence technique:
 
 - Happy path lifecycle coverage: [crates/api/tests/e2e_graphql_fixture.rs](crates/api/tests/e2e_graphql_fixture.rs)
+
+Resultat d execution for `CORECI-04c` (2026-04-19):
+
+- Extended server-level GraphQL integration coverage for failure-path runtime behavior under mounted API key middleware.
+- Added deterministic ownership-conflict assertions (wrong worker completion -> `409` style GraphQL error and conflict metric increment).
+- Added cancel-interaction assertion (late completion after cancellation remains idempotently `CANCELED`).
+- Added deterministic dead-letter assertion with `max_retries = 0` settings (failed completion immediately enters dead-letter set and increments dead-letter metric).
+
+Evidence technique:
+
+- Failure-path integration tests (auth, conflict, cancel, dead-letter): [crates/server/tests/api_key_auth_middleware.rs](crates/server/tests/api_key_auth_middleware.rs)
+- Deterministic retry settings in tests: [crates/server/Cargo.toml](crates/server/Cargo.toml)
 
 Resultat d execution for `HEXA-02` (2026-04-17):
 
