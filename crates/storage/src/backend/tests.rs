@@ -1,6 +1,6 @@
 use super::{InMemoryStorage, PostgresStorage};
-use crate::Storage;
-use chrono::Utc;
+use crate::ports::{RuntimeMetricsSnapshot, ScmWebhookRejectionRecord, Storage};
+use chrono::{Duration as ChronoDuration, Utc};
 use tardigrade_core::{
     BuildRecord, JobDefinition, JobStatus, ScmPollingConfig, ScmProvider, WebhookSecurityConfig,
 };
@@ -219,6 +219,82 @@ async fn in_memory_storage_persists_retry_and_dead_letter_runtime_state() {
     assert!(dead_letter_ids.is_empty());
 }
 
+/// Verifies in-memory storage persists runtime metrics snapshot and webhook rejection history.
+#[tokio::test]
+async fn in_memory_storage_persists_runtime_metrics_and_webhook_rejections() {
+    let storage = InMemoryStorage::default();
+    let now = Utc::now();
+    let metrics = RuntimeMetricsSnapshot {
+        reclaimed_total: 3,
+        retry_requeued_total: 5,
+        ownership_conflicts_total: 7,
+        dead_letter_total: 11,
+        scm_webhook_received_total: 13,
+        scm_webhook_accepted_total: 17,
+        scm_webhook_rejected_total: 19,
+        scm_webhook_duplicate_total: 23,
+        scm_trigger_enqueued_builds_total: 29,
+        scm_polling_ticks_total: 31,
+        scm_polling_repositories_total: 37,
+        scm_polling_enqueued_builds_total: 41,
+    };
+
+    storage
+        .save_runtime_metrics(metrics.clone())
+        .await
+        .expect("save runtime metrics should succeed");
+    let loaded = storage
+        .load_runtime_metrics()
+        .await
+        .expect("load runtime metrics should succeed");
+    assert_eq!(loaded, metrics);
+
+    storage
+        .append_scm_webhook_rejection(
+            ScmWebhookRejectionRecord {
+                reason_code: "forbidden".to_string(),
+                provider: Some("github".to_string()),
+                repository_url: Some("https://example.com/repo.git".to_string()),
+                at: now,
+            },
+            2,
+        )
+        .await
+        .expect("append webhook rejection should succeed");
+    storage
+        .append_scm_webhook_rejection(
+            ScmWebhookRejectionRecord {
+                reason_code: "invalid_signature".to_string(),
+                provider: Some("github".to_string()),
+                repository_url: Some("https://example.com/repo.git".to_string()),
+                at: now + ChronoDuration::seconds(1),
+            },
+            2,
+        )
+        .await
+        .expect("append webhook rejection should succeed");
+    storage
+        .append_scm_webhook_rejection(
+            ScmWebhookRejectionRecord {
+                reason_code: "duplicate".to_string(),
+                provider: Some("github".to_string()),
+                repository_url: Some("https://example.com/repo.git".to_string()),
+                at: now + ChronoDuration::seconds(2),
+            },
+            2,
+        )
+        .await
+        .expect("append webhook rejection should prune oldest rows");
+
+    let rows = storage
+        .list_scm_webhook_rejections(10)
+        .await
+        .expect("list webhook rejections should succeed");
+    assert_eq!(rows.len(), 2);
+    assert_eq!(rows[0].reason_code, "duplicate");
+    assert_eq!(rows[1].reason_code, "invalid_signature");
+}
+
 /// Verifies postgres storage keeps retry and dead-letter runtime state across state recreation.
 #[tokio::test]
 async fn postgres_storage_persists_retry_and_dead_letter_across_state_recreation() {
@@ -289,4 +365,90 @@ async fn postgres_storage_persists_retry_and_dead_letter_across_state_recreation
         .remove_dead_letter_build(build_id)
         .await
         .expect("remove dead letter build should succeed");
+}
+
+/// Verifies postgres storage persists runtime metrics and webhook rejection history across reconnect.
+#[tokio::test]
+async fn postgres_storage_persists_metrics_and_webhook_rejections_across_state_recreation() {
+    let database_url = match std::env::var("TARDIGRADE_TEST_DATABASE_URL") {
+        Ok(value) => value,
+        Err(_) => return,
+    };
+
+    let now = Utc::now();
+    let storage_a = PostgresStorage::connect(&database_url)
+        .await
+        .expect("connect postgres storage");
+    let metrics = RuntimeMetricsSnapshot {
+        reclaimed_total: 2,
+        retry_requeued_total: 3,
+        ownership_conflicts_total: 5,
+        dead_letter_total: 7,
+        scm_webhook_received_total: 11,
+        scm_webhook_accepted_total: 13,
+        scm_webhook_rejected_total: 17,
+        scm_webhook_duplicate_total: 19,
+        scm_trigger_enqueued_builds_total: 23,
+        scm_polling_ticks_total: 29,
+        scm_polling_repositories_total: 31,
+        scm_polling_enqueued_builds_total: 37,
+    };
+    storage_a
+        .save_runtime_metrics(metrics.clone())
+        .await
+        .expect("save runtime metrics should succeed");
+
+    storage_a
+        .append_scm_webhook_rejection(
+            ScmWebhookRejectionRecord {
+                reason_code: "forbidden".to_string(),
+                provider: Some("github".to_string()),
+                repository_url: Some("https://example.com/repo.git".to_string()),
+                at: now,
+            },
+            2,
+        )
+        .await
+        .expect("append webhook rejection should succeed");
+    storage_a
+        .append_scm_webhook_rejection(
+            ScmWebhookRejectionRecord {
+                reason_code: "invalid_signature".to_string(),
+                provider: Some("gitlab".to_string()),
+                repository_url: Some("https://example.com/repo2.git".to_string()),
+                at: now + ChronoDuration::seconds(1),
+            },
+            2,
+        )
+        .await
+        .expect("append webhook rejection should succeed");
+    storage_a
+        .append_scm_webhook_rejection(
+            ScmWebhookRejectionRecord {
+                reason_code: "duplicate".to_string(),
+                provider: Some("github".to_string()),
+                repository_url: Some("https://example.com/repo.git".to_string()),
+                at: now + ChronoDuration::seconds(2),
+            },
+            2,
+        )
+        .await
+        .expect("append webhook rejection should prune oldest rows");
+
+    let storage_b = PostgresStorage::connect(&database_url)
+        .await
+        .expect("reconnect postgres storage");
+    let loaded_metrics = storage_b
+        .load_runtime_metrics()
+        .await
+        .expect("load runtime metrics should succeed");
+    assert_eq!(loaded_metrics, metrics);
+
+    let rows = storage_b
+        .list_scm_webhook_rejections(10)
+        .await
+        .expect("list webhook rejections should succeed");
+    assert_eq!(rows.len(), 2);
+    assert_eq!(rows[0].reason_code, "duplicate");
+    assert_eq!(rows[1].reason_code, "invalid_signature");
 }

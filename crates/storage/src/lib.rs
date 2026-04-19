@@ -10,7 +10,7 @@ pub mod adapters {
 
 /// Port contracts consumed by the application layer.
 pub mod ports {
-    pub use crate::contract::Storage;
+    pub use crate::contract::{RuntimeMetricsSnapshot, ScmWebhookRejectionRecord, Storage};
 }
 
 pub use ports::Storage;

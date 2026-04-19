@@ -7,11 +7,11 @@ use tardigrade_core::{
 use tokio_postgres::NoTls;
 use uuid::Uuid;
 
-use crate::Storage;
 use crate::codec::{scm_provider_to_str, status_to_str};
 use crate::mapping::{
     row_to_build, row_to_job, row_to_scm_polling_config, row_to_webhook_security_config,
 };
+use crate::ports::{RuntimeMetricsSnapshot, ScmWebhookRejectionRecord, Storage};
 
 /// Ordered schema migrations applied at startup for postgres-backed persistence.
 const MIGRATIONS: &[(&str, &str)] = &[
@@ -77,6 +77,55 @@ const MIGRATIONS: &[(&str, &str)] = &[
             build_id UUID PRIMARY KEY REFERENCES builds(id) ON DELETE CASCADE,
             marked_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         );
+        "#,
+    ),
+    (
+        "005_init_runtime_metrics_and_webhook_rejections",
+        r#"
+        CREATE TABLE IF NOT EXISTS runtime_metrics (
+            id SMALLINT PRIMARY KEY,
+            reclaimed_total BIGINT NOT NULL,
+            retry_requeued_total BIGINT NOT NULL,
+            ownership_conflicts_total BIGINT NOT NULL,
+            dead_letter_total BIGINT NOT NULL,
+            scm_webhook_received_total BIGINT NOT NULL,
+            scm_webhook_accepted_total BIGINT NOT NULL,
+            scm_webhook_rejected_total BIGINT NOT NULL,
+            scm_webhook_duplicate_total BIGINT NOT NULL,
+            scm_trigger_enqueued_builds_total BIGINT NOT NULL,
+            scm_polling_ticks_total BIGINT NOT NULL,
+            scm_polling_repositories_total BIGINT NOT NULL,
+            scm_polling_enqueued_builds_total BIGINT NOT NULL
+        );
+
+        INSERT INTO runtime_metrics (
+            id,
+            reclaimed_total,
+            retry_requeued_total,
+            ownership_conflicts_total,
+            dead_letter_total,
+            scm_webhook_received_total,
+            scm_webhook_accepted_total,
+            scm_webhook_rejected_total,
+            scm_webhook_duplicate_total,
+            scm_trigger_enqueued_builds_total,
+            scm_polling_ticks_total,
+            scm_polling_repositories_total,
+            scm_polling_enqueued_builds_total
+        )
+        VALUES (1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+        ON CONFLICT (id) DO NOTHING;
+
+        CREATE TABLE IF NOT EXISTS scm_webhook_rejections (
+            id BIGSERIAL PRIMARY KEY,
+            reason_code TEXT NOT NULL,
+            provider TEXT NULL,
+            repository_url TEXT NULL,
+            at TIMESTAMPTZ NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_scm_webhook_rejections_at_desc
+            ON scm_webhook_rejections (at DESC, id DESC);
         "#,
     ),
 ];
@@ -428,5 +477,219 @@ impl Storage for PostgresStorage {
             .await?;
 
         Ok(rows.into_iter().map(|row| row.get("build_id")).collect())
+    }
+
+    /// Persists runtime metrics snapshot in postgres singleton row.
+    async fn save_runtime_metrics(&self, metrics: RuntimeMetricsSnapshot) -> Result<()> {
+        self.client
+            .execute(
+                r#"
+            INSERT INTO runtime_metrics (
+                id,
+                reclaimed_total,
+                retry_requeued_total,
+                ownership_conflicts_total,
+                dead_letter_total,
+                scm_webhook_received_total,
+                scm_webhook_accepted_total,
+                scm_webhook_rejected_total,
+                scm_webhook_duplicate_total,
+                scm_trigger_enqueued_builds_total,
+                scm_polling_ticks_total,
+                scm_polling_repositories_total,
+                scm_polling_enqueued_builds_total
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+            ON CONFLICT (id) DO UPDATE
+            SET reclaimed_total = EXCLUDED.reclaimed_total,
+                retry_requeued_total = EXCLUDED.retry_requeued_total,
+                ownership_conflicts_total = EXCLUDED.ownership_conflicts_total,
+                dead_letter_total = EXCLUDED.dead_letter_total,
+                scm_webhook_received_total = EXCLUDED.scm_webhook_received_total,
+                scm_webhook_accepted_total = EXCLUDED.scm_webhook_accepted_total,
+                scm_webhook_rejected_total = EXCLUDED.scm_webhook_rejected_total,
+                scm_webhook_duplicate_total = EXCLUDED.scm_webhook_duplicate_total,
+                scm_trigger_enqueued_builds_total = EXCLUDED.scm_trigger_enqueued_builds_total,
+                scm_polling_ticks_total = EXCLUDED.scm_polling_ticks_total,
+                scm_polling_repositories_total = EXCLUDED.scm_polling_repositories_total,
+                scm_polling_enqueued_builds_total = EXCLUDED.scm_polling_enqueued_builds_total
+            "#,
+                &[
+                    &1_i16,
+                    &i64::try_from(metrics.reclaimed_total)
+                        .map_err(|_| anyhow!("reclaimed_total exceeds i64 range"))?,
+                    &i64::try_from(metrics.retry_requeued_total)
+                        .map_err(|_| anyhow!("retry_requeued_total exceeds i64 range"))?,
+                    &i64::try_from(metrics.ownership_conflicts_total)
+                        .map_err(|_| anyhow!("ownership_conflicts_total exceeds i64 range"))?,
+                    &i64::try_from(metrics.dead_letter_total)
+                        .map_err(|_| anyhow!("dead_letter_total exceeds i64 range"))?,
+                    &i64::try_from(metrics.scm_webhook_received_total)
+                        .map_err(|_| anyhow!("scm_webhook_received_total exceeds i64 range"))?,
+                    &i64::try_from(metrics.scm_webhook_accepted_total)
+                        .map_err(|_| anyhow!("scm_webhook_accepted_total exceeds i64 range"))?,
+                    &i64::try_from(metrics.scm_webhook_rejected_total)
+                        .map_err(|_| anyhow!("scm_webhook_rejected_total exceeds i64 range"))?,
+                    &i64::try_from(metrics.scm_webhook_duplicate_total)
+                        .map_err(|_| anyhow!("scm_webhook_duplicate_total exceeds i64 range"))?,
+                    &i64::try_from(metrics.scm_trigger_enqueued_builds_total).map_err(|_| {
+                        anyhow!("scm_trigger_enqueued_builds_total exceeds i64 range")
+                    })?,
+                    &i64::try_from(metrics.scm_polling_ticks_total)
+                        .map_err(|_| anyhow!("scm_polling_ticks_total exceeds i64 range"))?,
+                    &i64::try_from(metrics.scm_polling_repositories_total)
+                        .map_err(|_| anyhow!("scm_polling_repositories_total exceeds i64 range"))?,
+                    &i64::try_from(metrics.scm_polling_enqueued_builds_total).map_err(|_| {
+                        anyhow!("scm_polling_enqueued_builds_total exceeds i64 range")
+                    })?,
+                ],
+            )
+            .await?;
+        Ok(())
+    }
+
+    /// Loads persisted runtime metrics snapshot from postgres singleton row.
+    async fn load_runtime_metrics(&self) -> Result<RuntimeMetricsSnapshot> {
+        let row = self
+            .client
+            .query_opt(
+                r#"
+            SELECT
+                reclaimed_total,
+                retry_requeued_total,
+                ownership_conflicts_total,
+                dead_letter_total,
+                scm_webhook_received_total,
+                scm_webhook_accepted_total,
+                scm_webhook_rejected_total,
+                scm_webhook_duplicate_total,
+                scm_trigger_enqueued_builds_total,
+                scm_polling_ticks_total,
+                scm_polling_repositories_total,
+                scm_polling_enqueued_builds_total
+            FROM runtime_metrics
+            WHERE id = 1
+            "#,
+                &[],
+            )
+            .await?;
+
+        let Some(row) = row else {
+            return Ok(RuntimeMetricsSnapshot::default());
+        };
+
+        Ok(RuntimeMetricsSnapshot {
+            reclaimed_total: u64::try_from(row.get::<_, i64>("reclaimed_total"))
+                .map_err(|_| anyhow!("invalid reclaimed_total"))?,
+            retry_requeued_total: u64::try_from(row.get::<_, i64>("retry_requeued_total"))
+                .map_err(|_| anyhow!("invalid retry_requeued_total"))?,
+            ownership_conflicts_total: u64::try_from(
+                row.get::<_, i64>("ownership_conflicts_total"),
+            )
+            .map_err(|_| anyhow!("invalid ownership_conflicts_total"))?,
+            dead_letter_total: u64::try_from(row.get::<_, i64>("dead_letter_total"))
+                .map_err(|_| anyhow!("invalid dead_letter_total"))?,
+            scm_webhook_received_total: u64::try_from(
+                row.get::<_, i64>("scm_webhook_received_total"),
+            )
+            .map_err(|_| anyhow!("invalid scm_webhook_received_total"))?,
+            scm_webhook_accepted_total: u64::try_from(
+                row.get::<_, i64>("scm_webhook_accepted_total"),
+            )
+            .map_err(|_| anyhow!("invalid scm_webhook_accepted_total"))?,
+            scm_webhook_rejected_total: u64::try_from(
+                row.get::<_, i64>("scm_webhook_rejected_total"),
+            )
+            .map_err(|_| anyhow!("invalid scm_webhook_rejected_total"))?,
+            scm_webhook_duplicate_total: u64::try_from(
+                row.get::<_, i64>("scm_webhook_duplicate_total"),
+            )
+            .map_err(|_| anyhow!("invalid scm_webhook_duplicate_total"))?,
+            scm_trigger_enqueued_builds_total: u64::try_from(
+                row.get::<_, i64>("scm_trigger_enqueued_builds_total"),
+            )
+            .map_err(|_| anyhow!("invalid scm_trigger_enqueued_builds_total"))?,
+            scm_polling_ticks_total: u64::try_from(row.get::<_, i64>("scm_polling_ticks_total"))
+                .map_err(|_| anyhow!("invalid scm_polling_ticks_total"))?,
+            scm_polling_repositories_total: u64::try_from(
+                row.get::<_, i64>("scm_polling_repositories_total"),
+            )
+            .map_err(|_| anyhow!("invalid scm_polling_repositories_total"))?,
+            scm_polling_enqueued_builds_total: u64::try_from(
+                row.get::<_, i64>("scm_polling_enqueued_builds_total"),
+            )
+            .map_err(|_| anyhow!("invalid scm_polling_enqueued_builds_total"))?,
+        })
+    }
+
+    /// Appends one webhook rejection diagnostic row and prunes oldest rows above max_entries.
+    async fn append_scm_webhook_rejection(
+        &self,
+        entry: ScmWebhookRejectionRecord,
+        max_entries: usize,
+    ) -> Result<()> {
+        self.client
+            .execute(
+                r#"
+            INSERT INTO scm_webhook_rejections (reason_code, provider, repository_url, at)
+            VALUES ($1, $2, $3, $4)
+            "#,
+                &[
+                    &entry.reason_code,
+                    &entry.provider,
+                    &entry.repository_url,
+                    &entry.at,
+                ],
+            )
+            .await?;
+
+        let max_entries =
+            i64::try_from(max_entries).map_err(|_| anyhow!("max_entries exceeds i64 range"))?;
+        self.client
+            .execute(
+                r#"
+            DELETE FROM scm_webhook_rejections
+            WHERE id IN (
+                SELECT id
+                FROM scm_webhook_rejections
+                ORDER BY at DESC, id DESC
+                OFFSET $1
+            )
+            "#,
+                &[&max_entries],
+            )
+            .await?;
+
+        Ok(())
+    }
+
+    /// Lists recent webhook rejection diagnostics from postgres in reverse chronological order.
+    async fn list_scm_webhook_rejections(
+        &self,
+        limit: usize,
+    ) -> Result<Vec<ScmWebhookRejectionRecord>> {
+        let limit = i64::try_from(limit).map_err(|_| anyhow!("limit exceeds i64 range"))?;
+        let rows = self
+            .client
+            .query(
+                r#"
+            SELECT reason_code, provider, repository_url, at
+            FROM scm_webhook_rejections
+            ORDER BY at DESC, id DESC
+            LIMIT $1
+            "#,
+                &[&limit],
+            )
+            .await?;
+
+        Ok(rows
+            .into_iter()
+            .map(|row| ScmWebhookRejectionRecord {
+                reason_code: row.get("reason_code"),
+                provider: row.get("provider"),
+                repository_url: row.get("repository_url"),
+                at: row.get("at"),
+            })
+            .collect())
     }
 }

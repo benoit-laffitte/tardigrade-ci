@@ -1,5 +1,7 @@
 use anyhow::Result;
 use async_trait::async_trait;
+use chrono::Utc;
+use std::collections::VecDeque;
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 use tardigrade_core::{
@@ -7,7 +9,7 @@ use tardigrade_core::{
 };
 use uuid::Uuid;
 
-use crate::Storage;
+use crate::ports::{RuntimeMetricsSnapshot, ScmWebhookRejectionRecord, Storage};
 
 /// In-memory implementation used for tests and bootstrap mode.
 #[derive(Clone, Default)]
@@ -18,6 +20,8 @@ pub struct InMemoryStorage {
     scm_polling_configs: Arc<Mutex<HashMap<(String, ScmProvider), ScmPollingConfig>>>,
     retry_attempts: Arc<Mutex<HashMap<Uuid, u32>>>,
     dead_letter_build_ids: Arc<Mutex<HashSet<Uuid>>>,
+    runtime_metrics: Arc<Mutex<RuntimeMetricsSnapshot>>,
+    scm_webhook_rejections: Arc<Mutex<VecDeque<ScmWebhookRejectionRecord>>>,
 }
 
 #[async_trait]
@@ -152,5 +156,59 @@ impl Storage for InMemoryStorage {
             .lock()
             .expect("dead letter storage poisoned");
         Ok(dead_letter.iter().copied().collect())
+    }
+
+    /// Persists runtime metrics snapshot in process memory.
+    async fn save_runtime_metrics(&self, metrics: RuntimeMetricsSnapshot) -> Result<()> {
+        let mut snapshot = self
+            .runtime_metrics
+            .lock()
+            .expect("runtime metrics storage poisoned");
+        *snapshot = metrics;
+        Ok(())
+    }
+
+    /// Loads runtime metrics snapshot from process memory.
+    async fn load_runtime_metrics(&self) -> Result<RuntimeMetricsSnapshot> {
+        let snapshot = self
+            .runtime_metrics
+            .lock()
+            .expect("runtime metrics storage poisoned");
+        Ok(snapshot.clone())
+    }
+
+    /// Appends one webhook rejection diagnostic entry and prunes oldest entries in process memory.
+    async fn append_scm_webhook_rejection(
+        &self,
+        mut entry: ScmWebhookRejectionRecord,
+        max_entries: usize,
+    ) -> Result<()> {
+        if entry.at.timestamp() == 0 {
+            entry.at = Utc::now();
+        }
+
+        let mut history = self
+            .scm_webhook_rejections
+            .lock()
+            .expect("scm webhook rejection storage poisoned");
+        history.push_front(entry);
+
+        while history.len() > max_entries {
+            let _ = history.pop_back();
+        }
+
+        Ok(())
+    }
+
+    /// Lists recent webhook rejection diagnostics from process memory.
+    async fn list_scm_webhook_rejections(
+        &self,
+        limit: usize,
+    ) -> Result<Vec<ScmWebhookRejectionRecord>> {
+        let history = self
+            .scm_webhook_rejections
+            .lock()
+            .expect("scm webhook rejection storage poisoned");
+        Ok(history.iter().take(limit).cloned().collect())
     }
 }

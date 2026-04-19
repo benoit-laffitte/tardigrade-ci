@@ -104,7 +104,7 @@ impl QueryRoot {
     /// Returns runtime reliability counters.
     async fn metrics(&self, ctx: &Context<'_>) -> GqlRuntimeMetrics {
         let state = ctx.data_unchecked::<ApiState>();
-        state.use_cases.metrics_snapshot().into()
+        state.use_cases.metrics_snapshot().await.into()
     }
 
     /// Returns recent SCM webhook rejection diagnostics.
@@ -120,6 +120,7 @@ impl QueryRoot {
         state
             .use_cases
             .list_scm_webhook_rejections(provider.as_deref(), repository_url.as_deref(), limit)
+            .await
             .into_iter()
             .map(Into::into)
             .collect()
@@ -166,7 +167,7 @@ impl QueryRoot {
             jobs: jobs.into_iter().map(Into::into).collect(),
             builds: builds.into_iter().map(Into::into).collect(),
             workers: workers.into_iter().map(Into::into).collect(),
-            metrics: state.use_cases.metrics_snapshot().into(),
+            metrics: state.use_cases.metrics_snapshot().await.into(),
             dead_letter_builds: dead_letter_builds.into_iter().map(Into::into).collect(),
         })
     }

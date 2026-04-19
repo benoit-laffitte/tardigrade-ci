@@ -82,50 +82,53 @@ impl CiUseCases {
             .header_value("x-scm-repository")
             .map(ToString::to_string);
 
-        self.service.record_scm_webhook_received();
+        self.service.record_scm_webhook_received().await;
 
         match self.service.ingest_scm_webhook(request).await {
             Ok(()) => {
-                self.service.record_scm_webhook_accepted();
+                self.service.record_scm_webhook_accepted().await;
                 Ok(())
             }
             Err(api_error) => {
                 let failure = ScmWebhookIngestFailure::from_api_error(api_error);
-                self.service.record_scm_webhook_rejected();
-                self.service.record_scm_webhook_rejection(
-                    failure.reason_code,
-                    provider.as_deref(),
-                    repository_url.as_deref(),
-                );
+                self.service.record_scm_webhook_rejected().await;
+                self.service
+                    .record_scm_webhook_rejection(
+                        failure.reason_code,
+                        provider.as_deref(),
+                        repository_url.as_deref(),
+                    )
+                    .await;
                 Err(failure)
             }
         }
     }
 
     /// Records that one SCM webhook request was received.
-    pub fn record_scm_webhook_received(&self) {
-        self.service.record_scm_webhook_received();
+    pub async fn record_scm_webhook_received(&self) {
+        self.service.record_scm_webhook_received().await;
     }
 
     /// Records that one SCM webhook request was accepted.
-    pub fn record_scm_webhook_accepted(&self) {
-        self.service.record_scm_webhook_accepted();
+    pub async fn record_scm_webhook_accepted(&self) {
+        self.service.record_scm_webhook_accepted().await;
     }
 
     /// Records that one SCM webhook request was rejected.
-    pub fn record_scm_webhook_rejected(&self) {
-        self.service.record_scm_webhook_rejected();
+    pub async fn record_scm_webhook_rejected(&self) {
+        self.service.record_scm_webhook_rejected().await;
     }
 
     /// Stores one SCM webhook rejection diagnostic entry.
-    pub fn record_scm_webhook_rejection(
+    pub async fn record_scm_webhook_rejection(
         &self,
         reason_code: &str,
         provider: Option<&str>,
         repository_url: Option<&str>,
     ) {
         self.service
-            .record_scm_webhook_rejection(reason_code, provider, repository_url);
+            .record_scm_webhook_rejection(reason_code, provider, repository_url)
+            .await;
     }
 
     /// Upserts repository-level webhook security configuration.
@@ -191,12 +194,12 @@ impl CiUseCases {
     }
 
     /// Returns current runtime metrics snapshot.
-    pub fn metrics_snapshot(&self) -> RuntimeMetricsResponse {
-        self.service.metrics_snapshot()
+    pub async fn metrics_snapshot(&self) -> RuntimeMetricsResponse {
+        self.service.metrics_snapshot().await
     }
 
     /// Lists recent SCM webhook rejections for diagnostics.
-    pub fn list_scm_webhook_rejections(
+    pub async fn list_scm_webhook_rejections(
         &self,
         provider: Option<&str>,
         repository_url: Option<&str>,
@@ -204,5 +207,6 @@ impl CiUseCases {
     ) -> Vec<ScmWebhookRejectionEntry> {
         self.service
             .list_scm_webhook_rejections(provider, repository_url, limit)
+            .await
     }
 }

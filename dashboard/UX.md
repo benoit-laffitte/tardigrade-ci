@@ -279,6 +279,24 @@ Evidence technique:
 - Orchestration CI: [crates/application/src/service/ci_service.rs](../crates/application/src/service/ci_service.rs)
 - Tests parite backends: [crates/storage/src/backend/tests.rs](../crates/storage/src/backend/tests.rs)
 
+### Mise a jour implementation (2026-04-19, CORECI-06)
+
+- Les compteurs de fiabilite runtime (reclaim/retry/conflicts/dead-letter/webhook/polling) sont maintenant lus et persistes via le port storage, ce qui supprime la dependance a un etat memoire local process.
+- L historique des rejets webhook est desormais durable (in-memory + postgres), borne par taille, et conserve apres redemarrage pour les diagnostics operateurs.
+- Les projections GraphQL `metrics` et `scm_webhook_rejections` consomment maintenant la couche use-case async qui s appuie sur cet etat persiste.
+- La migration postgres `005` introduit les tables runtime diagnostics et l index de consultation chrono pour l historique des rejets.
+
+Evidence technique:
+
+- Contrat storage diagnostics: [crates/storage/src/contract/storage.rs](../crates/storage/src/contract/storage.rs)
+- Re-export ports storage: [crates/storage/src/lib.rs](../crates/storage/src/lib.rs)
+- Backend in-memory: [crates/storage/src/backend/in_memory_storage.rs](../crates/storage/src/backend/in_memory_storage.rs)
+- Backend postgres + migration 005: [crates/storage/src/backend/postgres_storage.rs](../crates/storage/src/backend/postgres_storage.rs)
+- Orchestration CI: [crates/application/src/service/ci_service.rs](../crates/application/src/service/ci_service.rs)
+- Facade use-case: [crates/application/src/application/ci_use_cases.rs](../crates/application/src/application/ci_use_cases.rs)
+- Projection GraphQL queries: [crates/api/src/graphql/query_root.rs](../crates/api/src/graphql/query_root.rs)
+- Tests parite storage: [crates/storage/src/backend/tests.rs](../crates/storage/src/backend/tests.rs)
+
 Evidence technique:
 
 - Failure model application: [crates/application/src/models/scm_webhook_ingest_failure.rs](../crates/application/src/models/scm_webhook_ingest_failure.rs)

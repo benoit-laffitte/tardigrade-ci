@@ -2,18 +2,18 @@ use chrono::{DateTime, Duration as ChronoDuration, Utc};
 use std::cmp::Reverse;
 use std::time::Duration;
 use std::{
-    collections::{HashMap, VecDeque},
+    collections::HashMap,
     sync::{Arc, Mutex},
 };
 use tardigrade_core::{BuildRecord, JobDefinition, JobStatus, PipelineDefinition};
 use tardigrade_scheduler::ports::Scheduler;
-use tardigrade_storage::ports::Storage;
+use tardigrade_storage::ports::{RuntimeMetricsSnapshot, ScmWebhookRejectionRecord, Storage};
 use tokio::sync::broadcast;
 use uuid::Uuid;
 
 use super::{
-    RuntimeMetrics, ScmTriggerEvent, ScmWebhookRequest, build_webhook_dedup_key, header_value,
-    map_pipeline_error, parse_scm_provider_header, parse_scm_trigger_event, validate_ip_allowlist,
+    ScmTriggerEvent, ScmWebhookRequest, build_webhook_dedup_key, header_value, map_pipeline_error,
+    parse_scm_provider_header, parse_scm_trigger_event, validate_ip_allowlist,
     validate_replay_window, verify_signature,
 };
 use crate::{
@@ -22,15 +22,6 @@ use crate::{
 };
 
 const WEBHOOK_REJECTION_HISTORY_LIMIT: usize = 100;
-
-/// Internal diagnostics entry for one rejected SCM webhook request.
-#[derive(Clone)]
-struct WebhookRejectionRecord {
-    reason_code: String,
-    provider: Option<String>,
-    repository_url: Option<String>,
-    at: DateTime<Utc>,
-}
 
 /// Service owns all domain orchestration (storage, scheduler, metrics, events).
 #[derive(Clone)]
@@ -42,12 +33,9 @@ pub struct CiService {
     pub worker_lease_timeout: Duration,
     pub max_retries: u32,
     pub retry_backoff_ms: u64,
-    pub metrics: Arc<Mutex<RuntimeMetrics>>,
     /// seen_webhook_events stores recent dedup keys to enforce idempotent ingestion.
     pub seen_webhook_events: Arc<Mutex<HashMap<String, DateTime<Utc>>>>,
     pub webhook_dedup_ttl: Duration,
-    /// webhook_rejections stores recent rejection diagnostics for operator troubleshooting.
-    webhook_rejections: Arc<Mutex<VecDeque<WebhookRejectionRecord>>>,
     /// Internal broadcast bus feeding the SSE /events endpoint.
     pub event_tx: broadcast::Sender<LiveEvent>,
 }
@@ -68,12 +56,28 @@ impl CiService {
             worker_lease_timeout: Duration::from_secs(settings.worker_lease_timeout_secs),
             max_retries: settings.max_retries,
             retry_backoff_ms: settings.retry_backoff_ms,
-            metrics: Arc::new(Mutex::new(RuntimeMetrics::default())),
             seen_webhook_events: Arc::new(Mutex::new(HashMap::new())),
             webhook_dedup_ttl: Duration::from_secs(settings.webhook_dedup_ttl_secs),
-            webhook_rejections: Arc::new(Mutex::new(VecDeque::new())),
             event_tx,
         }
+    }
+
+    /// Loads persisted runtime metrics and falls back to zeroed counters on storage failures.
+    async fn load_runtime_metrics_safe(&self) -> RuntimeMetricsSnapshot {
+        self.storage
+            .load_runtime_metrics()
+            .await
+            .unwrap_or_default()
+    }
+
+    /// Applies one metrics update and persists the resulting snapshot.
+    async fn apply_runtime_metrics_update<F>(&self, update: F)
+    where
+        F: FnOnce(&mut RuntimeMetricsSnapshot),
+    {
+        let mut metrics = self.load_runtime_metrics_safe().await;
+        update(&mut metrics);
+        let _ = self.storage.save_runtime_metrics(metrics).await;
     }
 
     /// Emits one operational event to all connected live subscribers.
@@ -105,10 +109,11 @@ impl CiService {
             .reclaim_stale(self.worker_lease_timeout)
             .map_err(|_| ApiError::Internal)?;
 
-        if !reclaimed.is_empty()
-            && let Ok(mut metrics) = self.metrics.lock()
-        {
-            metrics.reclaimed_total += reclaimed.len() as u64;
+        if !reclaimed.is_empty() {
+            self.apply_runtime_metrics_update(|metrics| {
+                metrics.reclaimed_total += reclaimed.len() as u64;
+            })
+            .await;
         }
 
         for build_id in reclaimed {
@@ -142,8 +147,8 @@ impl CiService {
     }
 
     /// Returns a consistent snapshot of runtime counters.
-    pub fn metrics_snapshot(&self) -> RuntimeMetricsResponse {
-        let metrics = self.metrics.lock().expect("metrics poisoned");
+    pub async fn metrics_snapshot(&self) -> RuntimeMetricsResponse {
+        let metrics = self.load_runtime_metrics_safe().await;
         RuntimeMetricsResponse {
             reclaimed_total: metrics.reclaimed_total,
             retry_requeued_total: metrics.retry_requeued_total,
@@ -161,57 +166,62 @@ impl CiService {
     }
 
     /// Records one received SCM webhook request before validation outcome is known.
-    pub fn record_scm_webhook_received(&self) {
-        if let Ok(mut metrics) = self.metrics.lock() {
+    pub async fn record_scm_webhook_received(&self) {
+        self.apply_runtime_metrics_update(|metrics| {
             metrics.scm_webhook_received_total += 1;
-        }
+        })
+        .await;
     }
 
     /// Records one accepted SCM webhook request (`202`) after ingestion succeeded.
-    pub fn record_scm_webhook_accepted(&self) {
-        if let Ok(mut metrics) = self.metrics.lock() {
+    pub async fn record_scm_webhook_accepted(&self) {
+        self.apply_runtime_metrics_update(|metrics| {
             metrics.scm_webhook_accepted_total += 1;
-        }
+        })
+        .await;
     }
 
     /// Records one rejected SCM webhook request after validation or processing error.
-    pub fn record_scm_webhook_rejected(&self) {
-        if let Ok(mut metrics) = self.metrics.lock() {
+    pub async fn record_scm_webhook_rejected(&self) {
+        self.apply_runtime_metrics_update(|metrics| {
             metrics.scm_webhook_rejected_total += 1;
-        }
+        })
+        .await;
     }
 
     /// Stores one rejected webhook diagnostic entry for UI troubleshooting filters.
-    pub fn record_scm_webhook_rejection(
+    pub async fn record_scm_webhook_rejection(
         &self,
         reason_code: &str,
         provider: Option<&str>,
         repository_url: Option<&str>,
     ) {
-        let Ok(mut history) = self.webhook_rejections.lock() else {
-            return;
-        };
-
-        history.push_front(WebhookRejectionRecord {
-            reason_code: reason_code.to_string(),
-            provider: provider.map(ToString::to_string),
-            repository_url: repository_url.map(ToString::to_string),
-            at: Utc::now(),
-        });
-
-        while history.len() > WEBHOOK_REJECTION_HISTORY_LIMIT {
-            let _ = history.pop_back();
-        }
+        let _ = self
+            .storage
+            .append_scm_webhook_rejection(
+                ScmWebhookRejectionRecord {
+                    reason_code: reason_code.to_string(),
+                    provider: provider.map(ToString::to_string),
+                    repository_url: repository_url.map(ToString::to_string),
+                    at: Utc::now(),
+                },
+                WEBHOOK_REJECTION_HISTORY_LIMIT,
+            )
+            .await;
     }
 
     /// Lists recent rejection diagnostics, optionally filtered by provider/repository and limit.
-    pub fn list_scm_webhook_rejections(
+    pub async fn list_scm_webhook_rejections(
         &self,
         provider: Option<&str>,
         repository_url: Option<&str>,
         limit: usize,
     ) -> Vec<ScmWebhookRejectionEntry> {
-        let Ok(history) = self.webhook_rejections.lock() else {
+        let Ok(history) = self
+            .storage
+            .list_scm_webhook_rejections(WEBHOOK_REJECTION_HISTORY_LIMIT)
+            .await
+        else {
             return Vec::new();
         };
 
@@ -326,9 +336,10 @@ impl CiService {
                 build_webhook_dedup_key(provider, &repository_url, request, request.body(), event)
                 && self.is_duplicate_webhook_event(&dedup_key)
             {
-                if let Ok(mut metrics) = self.metrics.lock() {
+                self.apply_runtime_metrics_update(|metrics| {
                     metrics.scm_webhook_duplicate_total += 1;
-                }
+                })
+                .await;
                 self.emit_event(
                     "scm_webhook_duplicate_ignored",
                     "info",
@@ -412,10 +423,11 @@ impl CiService {
             None,
         );
 
-        if triggered > 0
-            && let Ok(mut metrics) = self.metrics.lock()
-        {
-            metrics.scm_trigger_enqueued_builds_total += triggered as u64;
+        if triggered > 0 {
+            self.apply_runtime_metrics_update(|metrics| {
+                metrics.scm_trigger_enqueued_builds_total += triggered as u64;
+            })
+            .await;
         }
 
         Ok(())
@@ -424,9 +436,10 @@ impl CiService {
     /// Runs one SCM polling tick and enqueues builds for due repository configs.
     pub async fn run_scm_polling_tick(&self) -> Result<ScmPollingTickResponse, ApiError> {
         let now = Utc::now();
-        if let Ok(mut metrics) = self.metrics.lock() {
+        self.apply_runtime_metrics_update(|metrics| {
             metrics.scm_polling_ticks_total += 1;
-        }
+        })
+        .await;
         let configs = self
             .storage
             .list_scm_polling_configs()
@@ -471,10 +484,11 @@ impl CiService {
                 .map_err(|_| ApiError::Internal)?;
         }
 
-        if let Ok(mut metrics) = self.metrics.lock() {
+        self.apply_runtime_metrics_update(|metrics| {
             metrics.scm_polling_repositories_total += polled_repositories as u64;
             metrics.scm_polling_enqueued_builds_total += enqueued_builds as u64;
-        }
+        })
+        .await;
 
         Ok(ScmPollingTickResponse {
             polled_repositories,
@@ -622,9 +636,10 @@ impl CiService {
             .map_err(|_| ApiError::Internal)?;
         // Ownership is enforced so one worker cannot complete another worker's build.
         if owner.as_deref() != Some(worker_id) {
-            if let Ok(mut metrics) = self.metrics.lock() {
+            self.apply_runtime_metrics_update(|metrics| {
                 metrics.ownership_conflicts_total += 1;
-            }
+            })
+            .await;
             self.emit_event(
                 "ownership_conflict",
                 "warn",
@@ -689,9 +704,10 @@ impl CiService {
                         .ack(build_id)
                         .map_err(|_| ApiError::Internal)?;
 
-                    if let Ok(mut metrics) = self.metrics.lock() {
+                    self.apply_runtime_metrics_update(|metrics| {
                         metrics.retry_requeued_total += 1;
-                    }
+                    })
+                    .await;
 
                     self.emit_event(
                         "build_requeued",
@@ -729,9 +745,10 @@ impl CiService {
                         .add_dead_letter_build(build_id)
                         .await
                         .map_err(|_| ApiError::Internal)?;
-                    if let Ok(mut metrics) = self.metrics.lock() {
+                    self.apply_runtime_metrics_update(|metrics| {
                         metrics.dead_letter_total += 1;
-                    }
+                    })
+                    .await;
                     self.emit_event(
                         "build_dead_lettered",
                         "error",

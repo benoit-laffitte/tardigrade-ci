@@ -543,7 +543,7 @@ Resultat d affinage for Phase 3 (2026-04-16):
 - [x] `CORECI-03` Fix cancel semantics to deschedule queued builds and release/resolve in-flight ownership safely.
 - [x] `CORECI-04` Add end-to-end integration tests for health/jobs/run/cancel/build-list/agent d execution-claim/agent d execution-complete on mounted runtime routes.
 - [x] `CORECI-05` Persist retry counters and dead-letter registry in storage backends (in-memory + postgres parity).
-- [ ] `CORECI-06` Persist webhook rejection history and reliability counters required for operational diagnostics.
+- [x] `CORECI-06` Persist webhook rejection history and reliability counters required for operational diagnostics.
 - [ ] `CORECI-07` Extend job/build model to bind executable pipeline content or revision reference used at run time.
 - [ ] `CORECI-08` Replace simulated executor path with real pipeline step execution (checkout + command stages + exit-code propagation).
 - [ ] `CORECI-09` Upgrade agent d execution completion flow to submit real execution status, logs, and structured failure reasons.
@@ -769,6 +769,24 @@ Evidence technique:
 - In-memory backend persistence: [crates/storage/src/backend/in_memory_storage.rs](crates/storage/src/backend/in_memory_storage.rs)
 - Postgres migrations + persistence: [crates/storage/src/backend/postgres_storage.rs](crates/storage/src/backend/postgres_storage.rs)
 - Service orchestration rewiring: [crates/application/src/service/ci_service.rs](crates/application/src/service/ci_service.rs)
+- Backend parity tests: [crates/storage/src/backend/tests.rs](crates/storage/src/backend/tests.rs)
+
+Resultat d execution for `CORECI-06` (2026-04-19):
+
+- Added durable storage contract models and operations for runtime reliability counters and webhook rejection history snapshots.
+- Implemented parity persistence in in-memory and postgres backends, with postgres migration `005_init_runtime_metrics_and_webhook_rejections` and bounded rejection-history pruning.
+- Rewired CI orchestration and GraphQL query projections to load/update diagnostics from storage-backed state instead of process-local memory.
+- Added backend parity tests validating runtime metrics persistence and webhook rejection-history persistence, including postgres reconnect roundtrip.
+
+Evidence technique:
+
+- Storage contract diagnostics models and operations: [crates/storage/src/contract/storage.rs](crates/storage/src/contract/storage.rs)
+- Storage public ports re-exports: [crates/storage/src/lib.rs](crates/storage/src/lib.rs)
+- In-memory backend persistence: [crates/storage/src/backend/in_memory_storage.rs](crates/storage/src/backend/in_memory_storage.rs)
+- Postgres migration + persistence: [crates/storage/src/backend/postgres_storage.rs](crates/storage/src/backend/postgres_storage.rs)
+- Service orchestration rewiring: [crates/application/src/service/ci_service.rs](crates/application/src/service/ci_service.rs)
+- Use-case async diagnostics wiring: [crates/application/src/application/ci_use_cases.rs](crates/application/src/application/ci_use_cases.rs)
+- GraphQL query projection rewiring: [crates/api/src/graphql/query_root.rs](crates/api/src/graphql/query_root.rs)
 - Backend parity tests: [crates/storage/src/backend/tests.rs](crates/storage/src/backend/tests.rs)
 
 Resultat d execution for `HEXA-02` (2026-04-17):
