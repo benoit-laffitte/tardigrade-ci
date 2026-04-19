@@ -221,6 +221,16 @@ Evidence technique:
 - Tests backend scheduler: [crates/scheduler/src/backend/tests.rs](../crates/scheduler/src/backend/tests.rs)
 - Tests integration GraphQL cancel: [crates/api/tests/graphql.rs](../crates/api/tests/graphql.rs)
 
+### Mise a jour implementation (2026-04-19, CORECI-04a)
+
+- Une fixture E2E GraphQL deterministe (`GraphqlE2eFixture`) est introduite avec un wiring in-memory explicite storage/scheduler pour stabiliser les scenarios server+agent d execution.
+- Un test d integration dedie valide le cycle nominal minimum create -> run -> claim -> complete -> list ainsi que le vidage de file apres completion.
+- La fixture expose des helpers reutilisables pour accelerer la couverture `CORECI-04b` (happy path complet) et `CORECI-04c` (failure path).
+
+Evidence technique:
+
+- Fixture E2E + smoke lifecycle: [crates/api/tests/e2e_graphql_fixture.rs](../crates/api/tests/e2e_graphql_fixture.rs)
+
 Evidence technique:
 
 - Failure model application: [crates/application/src/models/scm_webhook_ingest_failure.rs](../crates/application/src/models/scm_webhook_ingest_failure.rs)
