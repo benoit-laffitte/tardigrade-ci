@@ -231,6 +231,16 @@ Evidence technique:
 
 - Fixture E2E + smoke lifecycle: [crates/api/tests/e2e_graphql_fixture.rs](../crates/api/tests/e2e_graphql_fixture.rs)
 
+### Mise a jour implementation (2026-04-19, CORECI-04b)
+
+- Le scenario happy path E2E est maintenant verrouille de bout en bout: `health` -> `ready` -> `create_job` -> `run_job` -> `worker_claim_build` -> `worker_complete_build` -> `builds`.
+- Les assertions valident l etat terminal `SUCCESS` dans la projection `builds` et le vidage de file apres completion worker.
+- La couverture repose sur la fixture deterministe CORECI-04a, sans couplage supplementaire aux backends concrets.
+
+Evidence technique:
+
+- Happy path E2E GraphQL: [crates/api/tests/e2e_graphql_fixture.rs](../crates/api/tests/e2e_graphql_fixture.rs)
+
 Evidence technique:
 
 - Failure model application: [crates/application/src/models/scm_webhook_ingest_failure.rs](../crates/application/src/models/scm_webhook_ingest_failure.rs)

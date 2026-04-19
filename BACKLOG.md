@@ -587,8 +587,7 @@ Sprint planning breakdown (CORECI foundation slice: `CORECI-01` to `CORECI-04`):
 `CORECI-04` (8 SP, ~5d) - End-to-end runtime flow tests
 
 - [ ] `CORECI-04a` Create deterministic E2E test fixture for server + agent d execution GraphQL flows (`SP:2`, `~1d`).
-- [x] `CORECI-04a` Create deterministic E2E test fixture for server + agent d execution GraphQL flows (`SP:2`, `~1d`).
-- [ ] `CORECI-04b` Cover happy path: health, create job, run job, agent d execution claim, agent d execution complete, list builds (`SP:2`, `~1.5d`).
+- [x] `CORECI-04b` Cover happy path: health, create job, run job, agent d execution claim, agent d execution complete, list builds (`SP:2`, `~1.5d`).
 - [ ] `CORECI-04c` Cover failure path: auth denied, ownership conflict, cancel interactions, dead-letter entry (`SP:3`, `~2d`).
 - [ ] `CORECI-04d` Add CI lane integration for these E2E tests with stable proxy-safe command invocation (`SP:1`, `~0.5d`).
 - Exit criteria: CI enforces end-to-end runtime correctness on mounted routes and agent d execution flow critical paths.
@@ -723,6 +722,16 @@ Resultat d execution for `CORECI-04a` (2026-04-19):
 Evidence technique:
 
 - Deterministic E2E fixture + smoke flow test: [crates/api/tests/e2e_graphql_fixture.rs](crates/api/tests/e2e_graphql_fixture.rs)
+
+Resultat d execution for `CORECI-04b` (2026-04-19):
+
+- Extended the deterministic E2E fixture assertions to lock the happy path contract from service health through worker completion.
+- Added explicit GraphQL checks for `health`, `ready`, `create_job`, `run_job`, `worker_claim_build`, `worker_complete_build`, and `builds` list projection.
+- Happy path now validates final build terminal state (`SUCCESS`) and confirms queue drain after completion.
+
+Evidence technique:
+
+- Happy path lifecycle coverage: [crates/api/tests/e2e_graphql_fixture.rs](crates/api/tests/e2e_graphql_fixture.rs)
 
 Resultat d execution for `HEXA-02` (2026-04-17):
 

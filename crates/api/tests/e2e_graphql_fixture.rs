@@ -16,6 +16,14 @@ struct GraphqlE2eFixture {
     worker_id: String,
 }
 
+/// Minimal build projection returned by fixture list helpers.
+struct BuildSnapshot {
+    /// Build identifier.
+    id: String,
+    /// Build lifecycle status.
+    status: String,
+}
+
 impl GraphqlE2eFixture {
     /// Builds a new deterministic fixture with explicit in-memory wiring.
     fn new(worker_id: &str) -> Self {
@@ -77,6 +85,26 @@ impl GraphqlE2eFixture {
         payload["data"]["ready"]["status"]
             .as_str()
             .expect("ready status string")
+            .to_string()
+    }
+
+    /// Queries service health status.
+    async fn health_status(&self) -> String {
+        let payload = self
+            .graphql(
+                r#"
+                query Health {
+                  health { status }
+                }
+                "#,
+                json!({}),
+            )
+            .await;
+
+        assert!(payload.get("errors").is_none(), "graphql errors: {payload}");
+        payload["data"]["health"]["status"]
+            .as_str()
+            .expect("health status string")
             .to_string()
     }
 
@@ -175,13 +203,13 @@ impl GraphqlE2eFixture {
         payload
     }
 
-    /// Lists build identifiers currently visible through GraphQL.
-    async fn list_build_ids(&self) -> Vec<String> {
+    /// Lists build snapshots currently visible through GraphQL.
+    async fn list_builds(&self) -> Vec<BuildSnapshot> {
         let payload = self
             .graphql(
                 r#"
                 query Builds {
-                  builds { id }
+                  builds { id status }
                 }
                 "#,
                 json!({}),
@@ -193,15 +221,24 @@ impl GraphqlE2eFixture {
             .as_array()
             .expect("build list array")
             .iter()
-            .map(|entry| entry["id"].as_str().expect("build id string").to_string())
+            .map(|entry| BuildSnapshot {
+                id: entry["id"].as_str().expect("build id string").to_string(),
+                status: entry["status"]
+                    .as_str()
+                    .expect("build status string")
+                    .to_string(),
+            })
             .collect()
     }
 }
 
-/// Verifies deterministic server+worker lifecycle fixture behavior for GraphQL flows.
+/// Verifies deterministic GraphQL happy path for health/create/run/claim/complete/list lifecycle.
 #[tokio::test]
-async fn graphql_e2e_fixture_runs_deterministic_server_worker_lifecycle() {
+async fn graphql_e2e_happy_path_covers_health_create_run_claim_complete_and_list_builds() {
     let fixture = GraphqlE2eFixture::new("worker-e2e");
+
+    let health = fixture.health_status().await;
+    assert_eq!(health, "ok");
 
     let ready = fixture.ready_status().await;
     assert_eq!(ready, "ready");
@@ -221,8 +258,10 @@ async fn graphql_e2e_fixture_runs_deterministic_server_worker_lifecycle() {
         "SUCCESS"
     );
 
-    let build_ids = fixture.list_build_ids().await;
-    assert_eq!(build_ids, vec![build_id]);
+    let builds = fixture.list_builds().await;
+    assert_eq!(builds.len(), 1);
+    assert_eq!(builds[0].id, build_id);
+    assert_eq!(builds[0].status, "SUCCESS");
 
     let second_claim = fixture.claim_build().await;
     assert!(
