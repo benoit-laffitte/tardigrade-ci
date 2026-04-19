@@ -1,5 +1,6 @@
 import type { ScmSecurityPageProps } from "./types";
 import { useScmDomain } from "../hooks/scm/domain";
+import { useWebhookSecurityConfig } from "../hooks/scm/useWebhookSecurityConfig";
 
 // Renders the SCM Security page in roadmap/read-only mode.
 export function ScmSecurityPage({
@@ -71,15 +72,30 @@ export function ScmSecurityPage({
           {scmSecurityReadOnlySummary.recentJobs.length === 0 ? (
             <p className="hint">Aucun job disponible pour le moment.</p>
           ) : (
-            scmSecurityReadOnlySummary.recentJobs.map((job) => (
-              <div className="list-item" key={`scm-source-${job.id}`}>
-                <div>
-                  <p className="item-title">{job.name}</p>
-                  <p className="item-subtitle">{job.repository_url}</p>
-                  <p className="item-subtitle">Pipeline: {job.pipeline_path}</p>
+            scmSecurityReadOnlySummary.recentJobs.map((job) => {
+              // On suppose provider = "Github" pour démo, à adapter si info disponible côté job
+              const { config, loading, error } = useWebhookSecurityConfig(job.repository_url, "Github");
+              return (
+                <div className="list-item" key={`scm-source-${job.id}`}>
+                  <div>
+                    <p className="item-title">{job.name}</p>
+                    <p className="item-subtitle">{job.repository_url}</p>
+                    <p className="item-subtitle">Pipeline: {job.pipeline_path}</p>
+                    <div className="item-subtitle">
+                      {loading && <span>Chargement config webhook…</span>}
+                      {error && <span style={{ color: "red" }}>Erreur: {String(error)}</span>}
+                      {config && (
+                        <>
+                          <span>Webhook: <b>{config.repository_url}</b> [{config.provider}]</span><br />
+                          <span>Secret: <b>{config.secret_masked || "(non défini)"}</b></span><br />
+                          <span>IPs autorisées: {config.allowed_ips.length > 0 ? config.allowed_ips.join(", ") : "(aucune)"}</span>
+                        </>
+                      )}
+                    </div>
+                  </div>
                 </div>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
       </article>
