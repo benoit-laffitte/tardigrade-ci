@@ -23,6 +23,9 @@ pub trait Scheduler: Send + Sync {
     /// requeue pushes one build back to queue for retry.
     fn requeue(&self, build_id: Uuid) -> Result<()>;
 
+    /// deschedule removes one build from queue and in-flight ownership when canceled.
+    fn deschedule(&self, build_id: Uuid) -> Result<()>;
+
     /// worker_loads powers dashboard visibility and readiness checks.
     fn worker_loads(&self) -> HashMap<String, usize>;
 }

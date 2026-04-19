@@ -146,6 +146,15 @@ impl Scheduler for FileBackedScheduler {
         Ok(())
     }
 
+    /// Removes one canceled build from queue and in-flight map, then persists state.
+    fn deschedule(&self, build_id: Uuid) -> Result<()> {
+        let mut state = self.state.lock().expect("scheduler queue poisoned");
+        state.in_flight.remove(&build_id);
+        state.queue.retain(|queued| *queued != build_id);
+        self.persist_state(&state)?;
+        Ok(())
+    }
+
     /// Aggregates active build count by worker id.
     fn worker_loads(&self) -> HashMap<String, usize> {
         let state = self.state.lock().expect("scheduler queue poisoned");

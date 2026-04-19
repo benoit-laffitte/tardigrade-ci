@@ -638,3 +638,216 @@ async fn graphql_scm_webhook_invalid_signature_reports_auth_rejection() {
         0
     );
 }
+
+/// Verifies canceling a queued build removes it from scheduler claim path.
+#[tokio::test]
+async fn graphql_cancel_build_deschedules_queued_build_before_claim() {
+    let app = build_test_router();
+
+    let create_payload = read_json(
+        app.clone()
+            .oneshot(graphql_request(
+                r#"
+                mutation Create($input: GqlCreateJobInput!) {
+                  create_job(input: $input) { id }
+                }
+                "#,
+                json!({
+                    "input": {
+                        "name": "cancel-queued",
+                        "repository_url": "https://example.com/repo.git",
+                        "pipeline_path": "pipeline.yml"
+                    }
+                }),
+            ))
+            .await
+            .expect("create job response"),
+    )
+    .await;
+    let job_id = create_payload["data"]["create_job"]["id"]
+        .as_str()
+        .expect("job id")
+        .to_string();
+
+    let run_payload = read_json(
+        app.clone()
+            .oneshot(graphql_request(
+                r#"
+                mutation Run($jobId: ID!) {
+                  run_job(jobId: $jobId) { id }
+                }
+                "#,
+                json!({ "jobId": job_id }),
+            ))
+            .await
+            .expect("run job response"),
+    )
+    .await;
+    let build_id = run_payload["data"]["run_job"]["id"]
+        .as_str()
+        .expect("build id")
+        .to_string();
+
+    let cancel_response = app
+        .clone()
+        .oneshot(graphql_request(
+            r#"
+            mutation Cancel($buildId: ID!) {
+              cancel_build(buildId: $buildId) { id status }
+            }
+            "#,
+            json!({ "buildId": build_id }),
+        ))
+        .await
+        .expect("cancel response");
+    assert_eq!(cancel_response.status(), StatusCode::OK);
+    let cancel_payload = read_json(cancel_response).await;
+    assert!(cancel_payload.get("errors").is_none());
+    assert_eq!(cancel_payload["data"]["cancel_build"]["status"], "CANCELED");
+
+    let claim_response = app
+        .oneshot(graphql_request(
+            r#"
+            mutation Claim($workerId: String!) {
+              worker_claim_build(workerId: $workerId) { id status }
+            }
+            "#,
+            json!({ "workerId": "worker-a" }),
+        ))
+        .await
+        .expect("claim response");
+    assert_eq!(claim_response.status(), StatusCode::OK);
+    let claim_payload = read_json(claim_response).await;
+    assert!(claim_payload.get("errors").is_none());
+    assert!(claim_payload["data"]["worker_claim_build"].is_null());
+}
+
+/// Verifies canceling a running build releases ownership and late completion stays idempotently canceled.
+#[tokio::test]
+async fn graphql_cancel_running_build_releases_ownership_without_conflict() {
+    let app = build_test_router();
+
+    let create_payload = read_json(
+        app.clone()
+            .oneshot(graphql_request(
+                r#"
+                mutation Create($input: GqlCreateJobInput!) {
+                  create_job(input: $input) { id }
+                }
+                "#,
+                json!({
+                    "input": {
+                        "name": "cancel-running",
+                        "repository_url": "https://example.com/repo.git",
+                        "pipeline_path": "pipeline.yml"
+                    }
+                }),
+            ))
+            .await
+            .expect("create job response"),
+    )
+    .await;
+    let job_id = create_payload["data"]["create_job"]["id"]
+        .as_str()
+        .expect("job id")
+        .to_string();
+
+    let run_payload = read_json(
+        app.clone()
+            .oneshot(graphql_request(
+                r#"
+                mutation Run($jobId: ID!) {
+                  run_job(jobId: $jobId) { id }
+                }
+                "#,
+                json!({ "jobId": job_id }),
+            ))
+            .await
+            .expect("run job response"),
+    )
+    .await;
+    let build_id = run_payload["data"]["run_job"]["id"]
+        .as_str()
+        .expect("build id")
+        .to_string();
+
+    let claim_payload = read_json(
+        app.clone()
+            .oneshot(graphql_request(
+                r#"
+                mutation Claim($workerId: String!) {
+                  worker_claim_build(workerId: $workerId) { id status }
+                }
+                "#,
+                json!({ "workerId": "worker-a" }),
+            ))
+            .await
+            .expect("claim response"),
+    )
+    .await;
+    assert_eq!(
+        claim_payload["data"]["worker_claim_build"]["status"],
+        "RUNNING"
+    );
+
+    let cancel_payload = read_json(
+        app.clone()
+            .oneshot(graphql_request(
+                r#"
+                mutation Cancel($buildId: ID!) {
+                  cancel_build(buildId: $buildId) { id status }
+                }
+                "#,
+                json!({ "buildId": build_id }),
+            ))
+            .await
+            .expect("cancel response"),
+    )
+    .await;
+    assert_eq!(cancel_payload["data"]["cancel_build"]["status"], "CANCELED");
+
+    let complete_payload = read_json(
+        app.clone()
+            .oneshot(graphql_request(
+                r#"
+                mutation Complete($workerId: String!, $buildId: ID!, $status: GqlWorkerBuildStatus!) {
+                  worker_complete_build(workerId: $workerId, buildId: $buildId, status: $status) { id status }
+                }
+                "#,
+                json!({
+                    "workerId": "worker-a",
+                    "buildId": build_id,
+                    "status": "FAILED"
+                }),
+            ))
+            .await
+            .expect("complete response"),
+    )
+    .await;
+    assert!(
+        complete_payload.get("errors").is_none(),
+        "{complete_payload}"
+    );
+    assert_eq!(
+        complete_payload["data"]["worker_complete_build"]["status"],
+        "CANCELED"
+    );
+
+    let metrics_payload = read_json(
+        app.oneshot(graphql_request(
+            r#"
+            query Metrics {
+              metrics { ownership_conflicts_total }
+            }
+            "#,
+            json!({}),
+        ))
+        .await
+        .expect("metrics response"),
+    )
+    .await;
+    assert_eq!(
+        metrics_payload["data"]["metrics"]["ownership_conflicts_total"],
+        0
+    );
+}

@@ -5,7 +5,7 @@ use std::{
     collections::{HashMap, HashSet, VecDeque},
     sync::{Arc, Mutex},
 };
-use tardigrade_core::{BuildRecord, JobDefinition, PipelineDefinition};
+use tardigrade_core::{BuildRecord, JobDefinition, JobStatus, PipelineDefinition};
 use tardigrade_scheduler::ports::Scheduler;
 use tardigrade_storage::ports::Storage;
 use tokio::sync::broadcast;
@@ -591,6 +591,29 @@ impl CiService {
     ) -> Result<BuildRecord, ApiError> {
         self.touch_worker(worker_id);
 
+        let Some(mut build) = self
+            .storage
+            .get_build(build_id)
+            .await
+            .map_err(|_| ApiError::Internal)?
+        else {
+            return Err(ApiError::NotFound);
+        };
+
+        if build.status == JobStatus::Canceled {
+            build.append_log(format!(
+                "Worker {worker_id} completion ignored because build was canceled"
+            ));
+            self.storage
+                .save_build(build.clone())
+                .await
+                .map_err(|_| ApiError::Internal)?;
+            self.scheduler
+                .ack(build_id)
+                .map_err(|_| ApiError::Internal)?;
+            return Ok(build);
+        }
+
         let owner = self
             .scheduler
             .in_flight_owner(build_id)
@@ -610,15 +633,6 @@ impl CiService {
             );
             return Err(ApiError::Conflict);
         }
-
-        let Some(mut build) = self
-            .storage
-            .get_build(build_id)
-            .await
-            .map_err(|_| ApiError::Internal)?
-        else {
-            return Err(ApiError::NotFound);
-        };
 
         if let Some(line) = log_line {
             build.append_log(line);
@@ -827,6 +841,16 @@ impl CiService {
 
         if build.cancel() {
             build.append_log("Canceled by API");
+            // Deschedule immediately so canceled builds cannot be claimed or remain in-flight.
+            self.scheduler
+                .deschedule(build_id)
+                .map_err(|_| ApiError::Internal)?;
+            if let Ok(mut retry_state) = self.retry_state.lock() {
+                retry_state.remove(&build_id);
+            }
+            if let Ok(mut dead_letter) = self.dead_letter_builds.lock() {
+                dead_letter.remove(&build_id);
+            }
             self.emit_event(
                 "build_canceled",
                 "warn",

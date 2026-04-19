@@ -279,3 +279,40 @@ fn postgres_scheduler_supports_claim_requeue_and_ack() {
         None
     );
 }
+
+/// Verifies deschedule removes queued builds so they are never claimed.
+#[test]
+fn in_memory_scheduler_deschedule_removes_queued_build() {
+    let scheduler = InMemoryScheduler::default();
+    let build_id = Uuid::new_v4();
+
+    scheduler.enqueue(build_id).expect("enqueue should succeed");
+    scheduler
+        .deschedule(build_id)
+        .expect("deschedule should succeed");
+
+    assert_eq!(scheduler.claim_next("worker-a"), None);
+}
+
+/// Verifies deschedule releases in-flight ownership for running builds.
+#[test]
+fn in_memory_scheduler_deschedule_releases_in_flight_owner() {
+    let scheduler = InMemoryScheduler::default();
+    let build_id = Uuid::new_v4();
+
+    scheduler.enqueue(build_id).expect("enqueue should succeed");
+    let claimed = scheduler
+        .claim_next("worker-a")
+        .expect("claim should return build");
+    assert_eq!(claimed, build_id);
+
+    scheduler
+        .deschedule(build_id)
+        .expect("deschedule should succeed");
+    assert_eq!(
+        scheduler
+            .in_flight_owner(build_id)
+            .expect("in_flight_owner should succeed"),
+        None
+    );
+}

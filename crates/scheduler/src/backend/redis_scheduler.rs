@@ -122,6 +122,15 @@ impl Scheduler for RedisScheduler {
         Ok(())
     }
 
+    /// Removes one canceled build from redis queue and in-flight lease hash.
+    fn deschedule(&self, build_id: Uuid) -> Result<()> {
+        let build_id_str = build_id.to_string();
+        let mut connection = self.connection.lock().expect("redis queue poisoned");
+        let _: usize = connection.hdel(self.in_flight_key.as_str(), &build_id_str)?;
+        let _: usize = connection.lrem(self.queue_key.as_str(), 0, build_id_str)?;
+        Ok(())
+    }
+
     /// Computes per-worker active loads from redis in-flight hash values.
     fn worker_loads(&self) -> HashMap<String, usize> {
         let mut connection = self.connection.lock().expect("redis queue poisoned");

@@ -208,6 +208,19 @@ Evidence technique:
 - Modele contexte auth partage: [crates/api/src/models/api_auth_context.rs](../crates/api/src/models/api_auth_context.rs)
 - Tests unauthorized/forbidden: [crates/server/tests/api_key_auth_middleware.rs](../crates/server/tests/api_key_auth_middleware.rs)
 
+### Mise a jour implementation (2026-04-19, CORECI-03)
+
+- L annulation des builds deschedule maintenant explicitement la file scheduler et libere les ownership in-flight.
+- Les completions worker recues apres annulation sont traitees de maniere idempotente (retour build `CANCELED`) sans faux conflit d ownership.
+- La couverture de regression inclut cancel-before-claim et cancel-while-running avec completion tardive.
+
+Evidence technique:
+
+- Orchestration cancel service: [crates/application/src/service/ci_service.rs](../crates/application/src/service/ci_service.rs)
+- Contrat scheduler + backends: [crates/scheduler/src/contract/scheduler.rs](../crates/scheduler/src/contract/scheduler.rs)
+- Tests backend scheduler: [crates/scheduler/src/backend/tests.rs](../crates/scheduler/src/backend/tests.rs)
+- Tests integration GraphQL cancel: [crates/api/tests/graphql.rs](../crates/api/tests/graphql.rs)
+
 Evidence technique:
 
 - Failure model application: [crates/application/src/models/scm_webhook_ingest_failure.rs](../crates/application/src/models/scm_webhook_ingest_failure.rs)

@@ -578,10 +578,10 @@ Sprint planning breakdown (CORECI foundation slice: `CORECI-01` to `CORECI-04`):
 
 `CORECI-03` (5 SP, ~3d) - Correct cancel semantics with scheduler cleanup
 
-- [ ] `CORECI-03a` Specify cancel state transitions for queued, running, and already terminal builds (`SP:1`, `~0.5d`).
-- [ ] `CORECI-03b` Implement scheduler-side deschedule/release behavior in service flow (`SP:2`, `~1.5d`).
-- [ ] `CORECI-03c` Update Redis/Postgres/InMemory scheduler contracts where needed for deterministic cancellation (`SP:1`, `~0.5d`).
-- [ ] `CORECI-03d` Add tests for cancel-before-claim, cancel-while-running, and race with completion (`SP:1`, `~0.5d`).
+- [x] `CORECI-03a` Specify cancel state transitions for queued, running, and already terminal builds (`SP:1`, `~0.5d`).
+- [x] `CORECI-03b` Implement scheduler-side deschedule/release behavior in service flow (`SP:2`, `~1.5d`).
+- [x] `CORECI-03c` Update Redis/Postgres/InMemory scheduler contracts where needed for deterministic cancellation (`SP:1`, `~0.5d`).
+- [x] `CORECI-03d` Add tests for cancel-before-claim, cancel-while-running, and race with completion (`SP:1`, `~0.5d`).
 - Exit criteria: canceled builds are not re-claimed, ownership is resolved safely, and race behavior is deterministic.
 
 `CORECI-04` (8 SP, ~5d) - End-to-end runtime flow tests
@@ -698,6 +698,20 @@ Evidence technique:
 - GraphQL auth context injection: [crates/api/src/handlers/graphql.rs](crates/api/src/handlers/graphql.rs)
 - Shared auth context model: [crates/api/src/models/api_auth_context.rs](crates/api/src/models/api_auth_context.rs)
 - Middleware integration + unauthorized/forbidden tests: [crates/server/tests/api_key_auth_middleware.rs](crates/server/tests/api_key_auth_middleware.rs)
+
+Resultat d execution for `CORECI-03a` / `CORECI-03b` / `CORECI-03c` / `CORECI-03d` (2026-04-19):
+
+- Cancel transitions are now explicit: queued builds are descheduled immediately, running builds are canceled and ownership is released, terminal builds remain no-op.
+- Scheduler contract gained `deschedule(build_id)` and all backends now remove canceled builds from queue and in-flight ownership deterministically.
+- Worker completion arriving after cancellation is treated as idempotent and returns the canceled build instead of ownership conflict.
+- Regression tests cover cancel-before-claim and cancel-while-running with late completion.
+
+Evidence technique:
+
+- Cancel flow orchestration: [crates/application/src/service/ci_service.rs](crates/application/src/service/ci_service.rs)
+- Scheduler contract update: [crates/scheduler/src/contract/scheduler.rs](crates/scheduler/src/contract/scheduler.rs)
+- Backends deschedule implementation/tests: [crates/scheduler/src/backend/tests.rs](crates/scheduler/src/backend/tests.rs)
+- GraphQL cancellation regressions: [crates/api/tests/graphql.rs](crates/api/tests/graphql.rs)
 
 Resultat d execution for `HEXA-02` (2026-04-17):
 

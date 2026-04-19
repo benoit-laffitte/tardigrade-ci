@@ -224,6 +224,31 @@ impl Scheduler for PostgresScheduler {
         Ok(())
     }
 
+    /// Removes one canceled build from queue and in-flight lease tables.
+    fn deschedule(&self, build_id: Uuid) -> Result<()> {
+        let mut connection = self.connection.lock().expect("postgres queue poisoned");
+        let mut tx = connection.transaction()?;
+
+        tx.execute(
+            r#"
+            DELETE FROM scheduler_in_flight_entries
+            WHERE namespace = $1 AND build_id = $2
+            "#,
+            &[&self.namespace.as_str(), &build_id],
+        )?;
+
+        tx.execute(
+            r#"
+            DELETE FROM scheduler_queue_entries
+            WHERE namespace = $1 AND build_id = $2
+            "#,
+            &[&self.namespace.as_str(), &build_id],
+        )?;
+
+        tx.commit()?;
+        Ok(())
+    }
+
     /// Computes active in-flight load grouped by worker id.
     fn worker_loads(&self) -> HashMap<String, usize> {
         let mut connection = self.connection.lock().expect("postgres queue poisoned");

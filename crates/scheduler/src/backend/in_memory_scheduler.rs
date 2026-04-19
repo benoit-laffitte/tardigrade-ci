@@ -90,6 +90,14 @@ impl Scheduler for InMemoryScheduler {
         Ok(())
     }
 
+    /// Removes one build from queue and in-flight state when cancellation is requested.
+    fn deschedule(&self, build_id: Uuid) -> Result<()> {
+        let mut state = self.state.lock().expect("scheduler queue poisoned");
+        state.in_flight.remove(&build_id);
+        state.queue.retain(|queued| *queued != build_id);
+        Ok(())
+    }
+
     /// Aggregates active build count by worker id.
     fn worker_loads(&self) -> HashMap<String, usize> {
         let state = self.state.lock().expect("scheduler queue poisoned");
