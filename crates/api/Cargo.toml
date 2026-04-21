@@ -15,7 +15,7 @@ uuid.workspace = true
 tokio.workspace = true
 tokio-stream = { version = "0.1", features = ["sync"] }
 hmac = "0.12"
-sha2 = "0.10"
+sha2 = "0.11"
 hex = "0.4"
 tardigrade-application = { path = "../application" }
 tardigrade-core = { path = "../core" }
